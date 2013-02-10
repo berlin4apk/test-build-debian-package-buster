@@ -1,3 +1,10 @@
+edk2 (0~20121205.edae8d2d-0ubuntu1) raring; urgency=low
+
+  * No-change reupload to raring, because the Debian NEW queue is backed up
+    at the moment.
+
+ -- Steve Langasek <steve.langasek@ubuntu.com>  Sun, 10 Feb 2013 13:11:25 -0800
+
 edk2 (0~20121205.edae8d2d-1) unstable; urgency=low
 
   * Initial release.
