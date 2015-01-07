@@ -32,7 +32,7 @@ Index: edk2-0~20121205.edae8d2d/Conf/target.txt
  #                                             If not specified, all applicable TagName tools will be
  #                                             used for the build.  The list uses space character separation.
 -TOOL_CHAIN_TAG        = MYTOOLS
-+TOOL_CHAIN_TAG        = GCC47
++TOOL_CHAIN_TAG        = GCC49
  
  # MAX_CONCURRENT_THREAD_NUMBER  NUMBER  Optional  The number of concurrent threads. Recommend to set this
  #                                                 value to one more than the number of your compurter

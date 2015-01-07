@@ -19,7 +19,7 @@ else
 	ARCH=IA32
 endif
 
-EDK2_TOOLCHAIN = GCC47
+EDK2_TOOLCHAIN = GCC49
 
 ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
 
