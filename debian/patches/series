@@ -4,3 +4,4 @@ enable-nvme
 gcc-4.9-align.patch
 #773492 (from upstream)
 fix-undefined-behavior-in-vfrcompiler.patch
+no-missing-braces.diff
