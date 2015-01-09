@@ -14,9 +14,9 @@ SHELL_REV  = 64
 # Only used for creating our build tools.
 DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
 ifeq ($(DEB_BUILD_ARCH),amd64)
-	ARCH=X64
+	EDK2_ARCH=X64
 else
-	ARCH=IA32
+	EDK2_ARCH=IA32
 endif
 
 EDK2_TOOLCHAIN = GCC49
@@ -27,7 +27,7 @@ ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
 	dh $@
 
 override_dh_auto_build:
-	make -C BaseTools ARCH=$(ARCH)
+	make -C BaseTools ARCH=$(EDK2_ARCH)
 	# We call this twice because it modifies the shell environment,
 	# and it's excessively awkward to do all the subsequent work in a
 	# single shell invocation
