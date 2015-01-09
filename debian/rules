@@ -19,6 +19,8 @@ else
 	ARCH=IA32
 endif
 
+EDK2_TOOLCHAIN = GCC47
+
 ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
 
 %:
@@ -36,11 +38,11 @@ override_dh_auto_build:
 	mkdir -p EdkShellBinPkg/FullShell/X64 FatBinPkg/EnhancedFatDxe/X64
 	set -e; . ./edksetup.sh; build -p EdkShellPkg/EdkShellPkg.dsc \
 			-m Shell/ShellFull.inf -b RELEASE; \
-		cp -a Build/EdkShellPkg/RELEASE_GCC47/X64/ShellFull.efi \
+		cp -a Build/EdkShellPkg/RELEASE_$(EDK2_TOOLCHAIN)/X64/ShellFull.efi \
 			EdkShellBinPkg/FullShell/X64/Shell_Full.efi; \
 		build -p FatPkg/FatPkg.dsc -m FatPkg/EnhancedFatDxe/Fat.inf \
 			-b RELEASE; \
-		cp -a Build/Fat/RELEASE_GCC47/X64/Fat.efi \
+		cp -a Build/Fat/RELEASE_$(EDK2_TOOLCHAIN)/X64/Fat.efi \
 			FatBinPkg/EnhancedFatDxe/X64/Fat.efi; \
 		build -DSECURE_BOOT_ENABLE=TRUE -DFD_SIZE_2MB -b RELEASE
 
