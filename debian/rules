@@ -15,11 +15,16 @@ SHELL_REV  = 64
 DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
 ifeq ($(DEB_BUILD_ARCH),amd64)
 	EDK2_ARCH=X64
-else
-	EDK2_ARCH=IA32
+	EDK2_ARCH_DIR=X64
 endif
-
-EDK2_ARCH_DIR = X64
+ifeq ($(DEB_BUILD_ARCH),i386)
+	EDK2_ARCH=IA32
+	EDK2_ARCH_DIR=X64
+endif
+ifeq ($(DEB_BUILD_ARCH),arm64)
+	EDK2_ARCH=AARCH64
+	EDK2_ARCH_DIR=AArch64
+endif
 EDK2_TOOLCHAIN = GCC49
 
 ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
@@ -47,6 +52,18 @@ ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 		cp -a Build/Fat/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_ARCH_DIR)/Fat.efi \
 			FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)/Fat.efi; \
 		build -DSECURE_BOOT_ENABLE=TRUE -DFD_SIZE_2MB -b RELEASE
+endif
+ifeq ($(DEB_BUILD_ARCH),arm64)
+	mkdir -p ShellBinPkg/UefiShell/$(EDK2_ARCH_DIR) FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
+	set -e; . ./edksetup.sh; \
+		build -a $(EDK2_ARCH) -p ShellPkg/ShellPkg.dsc -b RELEASE; \
+		cp -a Build/Shell/RELEASE_$(EDK2_TOOLCHAIN)/AARCH64/Shell.efi \
+			ShellBinPkg/UefiShell/$(EDK2_ARCH_DIR)/Shell.efi; \
+		build -a $(EDK2_ARCH) -p FatPkg/FatPkg.dsc -m FatPkg/EnhancedFatDxe/Fat.inf \
+			-b RELEASE; \
+		cp -a Build/Fat/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_ARCH)/Fat.efi \
+			FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)/Fat.efi; \
+		build -a $(EDK2_ARCH) -t $(EDK2_TOOLCHAIN) -p ArmPlatformPkg/ArmVirtualizationPkg/ArmVirtualizationQemu.dsc -b RELEASE
 endif
 
 override_dh_auto_clean:

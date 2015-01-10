@@ -17,3 +17,10 @@ Description: UEFI firmware for virtual machines
  Open Virtual Machine Firmware is a build of EDK II for virtual machines.
  It includes full support for UEFI, including Secure Boot, allowing use
  of UEFI in place of a traditional BIOS in your VM.
+
+Package: qemu-efi
+Architecture: arm64
+Depends: ${misc:Depends}
+Description: UEFI firmware for virtual machines
+ qemu-efi is a build of EDK II for virtual machines. It allows virtual machines
+ to run in a UEFI environment.

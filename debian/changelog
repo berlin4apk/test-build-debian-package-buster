@@ -14,6 +14,9 @@ edk2 (0~20150106.5c2d456b-1) UNRELEASED; urgency=medium
     preparation for enabling other architecture builds (which currently can't
     be Arch: all due to lack of cross-compilers in the Debian archive).
 
+  [ dann frazier ]
+  * Add new qemu-efi package for arm64.  Closes: #775308.
+
  -- Steve Langasek <vorlon@debian.org>  Tue, 03 Feb 2015 16:47:08 +0200
 
 edk2 (0~20131112.2590861a-3) unstable; urgency=medium
