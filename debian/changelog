@@ -1,6 +1,11 @@
 edk2 (0~20150106.5c2d456b-1) UNRELEASED; urgency=medium
 
   * New upstream release, for arm64 support.
+  * debian/patches/no-missing-braces.diff: Add -Wno-missing-braces to
+    CFLAGS to avoid build failures.  Thanks to dann frazier
+    <dannf@debian.org>.
+  * debian/patches/FatPkg-AARCH64.diff: AARCH64 support.  Thanks to dann
+    frazier <dannf@debian.org>.
 
  -- Steve Langasek <vorlon@debian.org>  Tue, 03 Feb 2015 16:47:08 +0200
 
