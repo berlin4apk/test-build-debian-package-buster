@@ -1,6 +1,6 @@
 /** @file
 
- Copyright (c) 2011, ARM Ltd. All rights reserved.<BR>
+ Copyright (c) 2011-2014, ARM Ltd. All rights reserved.<BR>
  This program and the accompanying materials
  are licensed and made available under the terms and conditions of the BSD License
  which accompanies this distribution.  The full text of the license may be found at
@@ -43,7 +43,7 @@ LCD_INSTANCE mLcdTemplate = {
     0, // HorizontalResolution
     0, // VerticalResolution
     PixelBltOnly, // PixelFormat
-    0, // PixelInformation
+    { 0 }, // PixelInformation
     0, // PixelsPerScanLine
   },
   {
@@ -64,8 +64,7 @@ LCD_INSTANCE mLcdTemplate = {
     {
       {
         HARDWARE_DEVICE_PATH, HW_VENDOR_DP,
-        (UINT8) (sizeof(VENDOR_DEVICE_PATH)),
-        (UINT8) ((sizeof(VENDOR_DEVICE_PATH)) >> 8),
+        { (UINT8) (sizeof(VENDOR_DEVICE_PATH)), (UINT8) ((sizeof(VENDOR_DEVICE_PATH)) >> 8) },
       },
       // Hardware Device Path for Lcd
       EFI_CALLER_ID_GUID // Use the driver's GUID
@@ -74,8 +73,7 @@ LCD_INSTANCE mLcdTemplate = {
     {
       END_DEVICE_PATH_TYPE,
       END_ENTIRE_DEVICE_PATH_SUBTYPE,
-      sizeof(EFI_DEVICE_PATH_PROTOCOL),
-      0
+      { sizeof(EFI_DEVICE_PATH_PROTOCOL), 0 }
     }
   },
   (EFI_EVENT) NULL // ExitBootServicesEvent
@@ -163,52 +161,52 @@ LcdGraphicsOutputDxeInitialize (
     goto EXIT;
   }
 
-	// Install the Graphics Output Protocol and the Device Path
-	Status = gBS->InstallMultipleProtocolInterfaces(
-			&Instance->Handle,
-			&gEfiGraphicsOutputProtocolGuid, &Instance->Gop,
-			&gEfiDevicePathProtocolGuid,     &Instance->DevicePath,
-			NULL
-	   );
+  // Install the Graphics Output Protocol and the Device Path
+  Status = gBS->InstallMultipleProtocolInterfaces(
+            &Instance->Handle,
+            &gEfiGraphicsOutputProtocolGuid, &Instance->Gop,
+            &gEfiDevicePathProtocolGuid,     &Instance->DevicePath,
+            NULL
+            );
 
-	if (EFI_ERROR(Status)) {
-	  DEBUG((DEBUG_ERROR, "GraphicsOutputDxeInitialize: Can not install the protocol. Exit Status=%r\n", Status));
-		goto EXIT;
-	}
+  if (EFI_ERROR(Status)) {
+    DEBUG((DEBUG_ERROR, "GraphicsOutputDxeInitialize: Can not install the protocol. Exit Status=%r\n", Status));
+    goto EXIT;
+  }
 
-	// Register for an ExitBootServicesEvent
-	// When ExitBootServices starts, this function here will make sure that the graphics driver will shut down properly,
-	// i.e. it will free up all allocated memory and perform any necessary hardware re-configuration.
-	Status = gBS->CreateEvent (
-	    EVT_SIGNAL_EXIT_BOOT_SERVICES,
-	    TPL_NOTIFY,
-	    LcdGraphicsExitBootServicesEvent, NULL,
-			&Instance->ExitBootServicesEvent
-			);
+  // Register for an ExitBootServicesEvent
+  // When ExitBootServices starts, this function here will make sure that the graphics driver will shut down properly,
+  // i.e. it will free up all allocated memory and perform any necessary hardware re-configuration.
+  Status = gBS->CreateEvent (
+            EVT_SIGNAL_EXIT_BOOT_SERVICES,
+            TPL_NOTIFY,
+            LcdGraphicsExitBootServicesEvent, NULL,
+            &Instance->ExitBootServicesEvent
+            );
 
-	if (EFI_ERROR(Status)) {
-	  DEBUG((DEBUG_ERROR, "GraphicsOutputDxeInitialize: Can not install the ExitBootServicesEvent handler. Exit Status=%r\n", Status));
-		goto EXIT_ERROR_UNINSTALL_PROTOCOL;
-	}
+  if (EFI_ERROR(Status)) {
+    DEBUG((DEBUG_ERROR, "GraphicsOutputDxeInitialize: Can not install the ExitBootServicesEvent handler. Exit Status=%r\n", Status));
+    goto EXIT_ERROR_UNINSTALL_PROTOCOL;
+  }
 
-	// To get here, everything must be fine, so just exit
-	goto EXIT;
+  // To get here, everything must be fine, so just exit
+  goto EXIT;
 
 EXIT_ERROR_UNINSTALL_PROTOCOL:
-	/* The following function could return an error message,
-	 * however, to get here something must have gone wrong already,
-	 * so preserve the original error, i.e. don't change
-	 * the Status variable, even it fails to uninstall the protocol.
-	 */
-	gBS->UninstallMultipleProtocolInterfaces (
-	    Instance->Handle,
-	    &gEfiGraphicsOutputProtocolGuid, &Instance->Gop, // Uninstall Graphics Output protocol
-	    &gEfiDevicePathProtocolGuid,     &Instance->DevicePath,     // Uninstall device path
-	    NULL
-	    );
+  /* The following function could return an error message,
+   * however, to get here something must have gone wrong already,
+   * so preserve the original error, i.e. don't change
+   * the Status variable, even it fails to uninstall the protocol.
+   */
+  gBS->UninstallMultipleProtocolInterfaces (
+    Instance->Handle,
+    &gEfiGraphicsOutputProtocolGuid, &Instance->Gop, // Uninstall Graphics Output protocol
+    &gEfiDevicePathProtocolGuid,     &Instance->DevicePath,     // Uninstall device path
+    NULL
+    );
 
 EXIT:
-	return Status;
+  return Status;
 
 }
 
@@ -241,15 +239,15 @@ EFI_STATUS
 EFIAPI
 LcdGraphicsQueryMode (
   IN EFI_GRAPHICS_OUTPUT_PROTOCOL            *This,
-	IN UINT32                                  ModeNumber,
-	OUT UINTN                                  *SizeOfInfo,
-	OUT EFI_GRAPHICS_OUTPUT_MODE_INFORMATION   **Info
-	)
+  IN UINT32                                  ModeNumber,
+  OUT UINTN                                  *SizeOfInfo,
+  OUT EFI_GRAPHICS_OUTPUT_MODE_INFORMATION   **Info
+  )
 {
-	EFI_STATUS Status = EFI_SUCCESS;
-	LCD_INSTANCE *Instance;
+  EFI_STATUS Status = EFI_SUCCESS;
+  LCD_INSTANCE *Instance;
 
-	Instance = LCD_INSTANCE_FROM_GOP_THIS(This);
+  Instance = LCD_INSTANCE_FROM_GOP_THIS(This);
 
   // Setup the hardware if not already done
   if( !mDisplayInitialized ) {
@@ -259,14 +257,14 @@ LcdGraphicsQueryMode (
     }
   }
 
-	// Error checking
-	if ( (This == NULL) || (Info == NULL) || (SizeOfInfo == NULL) || (ModeNumber >= This->Mode->MaxMode) ) {
-	  DEBUG((DEBUG_ERROR, "LcdGraphicsQueryMode: ERROR - For mode number %d : Invalid Parameter.\n", ModeNumber ));
-		Status = EFI_INVALID_PARAMETER;
-		goto EXIT;
-	}
+  // Error checking
+  if ( (This == NULL) || (Info == NULL) || (SizeOfInfo == NULL) || (ModeNumber >= This->Mode->MaxMode) ) {
+    DEBUG((DEBUG_ERROR, "LcdGraphicsQueryMode: ERROR - For mode number %d : Invalid Parameter.\n", ModeNumber ));
+    Status = EFI_INVALID_PARAMETER;
+    goto EXIT;
+  }
 
-	*Info = AllocatePool (sizeof (EFI_GRAPHICS_OUTPUT_MODE_INFORMATION));
+  *Info = AllocatePool (sizeof (EFI_GRAPHICS_OUTPUT_MODE_INFORMATION));
   if (*Info == NULL) {
     Status = EFI_OUT_OF_RESOURCES;
     goto EXIT;
@@ -280,7 +278,7 @@ LcdGraphicsQueryMode (
   }
 
 EXIT:
-	return Status;
+  return Status;
 }
 
 /***************************************
@@ -291,15 +289,15 @@ EFI_STATUS
 EFIAPI
 LcdGraphicsSetMode (
   IN EFI_GRAPHICS_OUTPUT_PROTOCOL   *This,
-	IN UINT32                         ModeNumber
-	)
+  IN UINT32                         ModeNumber
+  )
 {
-	EFI_STATUS                      Status               = EFI_SUCCESS;
-	EFI_GRAPHICS_OUTPUT_BLT_PIXEL   FillColour;
-	LCD_INSTANCE*                   Instance;
-	LCD_BPP                         Bpp;
+  EFI_STATUS                      Status = EFI_SUCCESS;
+  EFI_GRAPHICS_OUTPUT_BLT_PIXEL   FillColour;
+  LCD_INSTANCE*                   Instance;
+  LCD_BPP                         Bpp;
 
-	Instance = LCD_INSTANCE_FROM_GOP_THIS (This);
+  Instance = LCD_INSTANCE_FROM_GOP_THIS (This);
 
   // Setup the hardware if not already done
   if(!mDisplayInitialized) {
@@ -316,33 +314,33 @@ LcdGraphicsSetMode (
     goto EXIT;
   }
 
-	// Set the oscillator frequency to support the new mode
+  // Set the oscillator frequency to support the new mode
   Status = LcdPlatformSetMode (ModeNumber);
   if (EFI_ERROR(Status)) {
     Status = EFI_DEVICE_ERROR;
     goto EXIT;
   }
 
-	// Update the UEFI mode information
-	This->Mode->Mode = ModeNumber;
-	LcdPlatformQueryMode (ModeNumber,&Instance->ModeInfo);
-	Status = LcdPlatformGetBpp(ModeNumber, &Bpp);
-	if (EFI_ERROR(Status)) {
-	  DEBUG ((DEBUG_ERROR, "LcdGraphicsSetMode: ERROR - Couldn't get bytes per pixel, status: %r\n", Status));
-	  goto EXIT;
-	}
-	This->Mode->FrameBufferSize =  Instance->ModeInfo.VerticalResolution
-	                             * Instance->ModeInfo.PixelsPerScanLine
-	                             * GetBytesPerPixel(Bpp);
+  // Update the UEFI mode information
+  This->Mode->Mode = ModeNumber;
+  LcdPlatformQueryMode (ModeNumber,&Instance->ModeInfo);
+  Status = LcdPlatformGetBpp(ModeNumber, &Bpp);
+  if (EFI_ERROR(Status)) {
+    DEBUG ((DEBUG_ERROR, "LcdGraphicsSetMode: ERROR - Couldn't get bytes per pixel, status: %r\n", Status));
+    goto EXIT;
+  }
+  This->Mode->FrameBufferSize =  Instance->ModeInfo.VerticalResolution
+                               * Instance->ModeInfo.PixelsPerScanLine
+                               * GetBytesPerPixel(Bpp);
 
   // Set the hardware to the new mode
-	Status = LcdSetMode (ModeNumber);
+  Status = LcdSetMode (ModeNumber);
   if (EFI_ERROR(Status)) {
     Status = EFI_DEVICE_ERROR;
     goto EXIT;
   }
 
-	// The UEFI spec requires that we now clear the visible portions of the output display to black.
+  // The UEFI spec requires that we now clear the visible portions of the output display to black.
 
   // Set the fill colour to black
   SetMem (&FillColour, sizeof (EFI_GRAPHICS_OUTPUT_BLT_PIXEL), 0x0);
@@ -361,7 +359,7 @@ LcdGraphicsSetMode (
       0);
 
 EXIT:
-	return Status;
+  return Status;
 }
 
 UINTN

@@ -9,8 +9,6 @@ http://sourceforge.net/apps/mediawiki/tianocore/index.php?title=OVMF
 
 === STATUS ===
 
-Current status: Alpha
-
 Current capabilities:
 * IA32 and X64 architectures
 * QEMU (0.10.0 or later)
@@ -19,10 +17,10 @@ Current capabilities:
   - Optional NIC support.  Requires QEMU (0.12.2 or later)
 * UEFI Linux boots
 * UEFI Windows 8 boots
+* UEFI Windows 7 & Windows 2008 Server boot (see important notes below!)
 
 === FUTURE PLANS ===
 
-* Stabilize UEFI Linux boot
 * Test/Stabilize UEFI Self-Certification Tests (SCT) results
 
 === BUILDING OVMF ===
@@ -32,6 +30,7 @@ Pre-requisites:
 * A properly configured ASL compiler:
   - Intel ASL compiler: Available from http://www.acpica.org
   - Microsoft ASL compiler: Available from http://www.acpi.info
+* NASM: http://www.nasm.us/
 
 Update Conf/target.txt ACTIVE_PLATFORM for OVMF:
                              PEI arch   DXE arch   UEFI interfaces
@@ -60,12 +59,25 @@ http://sourceforge.net/apps/mediawiki/tianocore/index.php?title=How_to_build_OVM
 
 === RUNNING OVMF on QEMU ===
 
-* QEMU 0.9.1 or later is required.
-* Either copy, rename or symlink OVMF.FD => bios.bin
+* QEMU 0.12.2 or later is required.
 * Be sure to use qemu-system-x86_64, if you are using and X64 firmware.
   (qemu-system-x86_64 works for the IA32 firmware as well, of course.)
-* Use the QEMU -L parameter to specify the directory where the bios.bin
-  file is located.
+* Use OVMF for QEMU firmware (3 options available)
+  - Option 1: QEMU 1.6 or newer; Use QEMU -pflash parameter
+    * QEMU/OVMF will use emulated flash, and fully support UEFI variables
+    * Run qemu with: -pflash path/to/OVMF.fd
+    * Note that this option is required for running SecureBoot-enabled builds
+      (-D SECURE_BOOT_ENABLE).
+  - Option 2: Use QEMU -bios parameter
+    * Note that UEFI variables will be partially emulated, and non-volatile
+      variables may lose their contents after a reboot
+    * Run qemu with: -bios path/to/OVMF.fd
+  - Option 3: Use QEMU -L parameter
+    * Note that UEFI variables will be partially emulated, and non-volatile
+      variables may lose their contents after a reboot
+    * Either copy, rename or symlink OVMF.fd => bios.bin
+    * Use the QEMU -L parameter to specify the directory where the bios.bin
+      file is located.
 * The EFI shell is built into OVMF builds at this time, so it should
   run automatically if a UEFI boot application is not found on the
   removable media.
@@ -235,3 +247,13 @@ selectively. For example:
       GCC:*_*_*_CC_FLAGS             = -UMDEPKG_NDEBUG
   }
 
+=== UEFI Windows 7 & Windows 2008 Server ===
+
+* One of the '-vga std' and '-vga qxl' QEMU options should be used.
+* Only one video mode, 1024x768x32, is supported at OS runtime.
+* The '-vga qxl' QEMU option is recommended. After booting the installed
+  guest OS, select the video card in Device Manager, and upgrade its driver
+  to the QXL XDDM one. Download location:
+  <http://www.spice-space.org/download.html>, Guest | Windows binaries.
+  This enables further resolutions at OS runtime, and provides S3
+  (suspend/resume) capability.

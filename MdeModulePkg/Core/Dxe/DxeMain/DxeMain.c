@@ -1,7 +1,7 @@
 /** @file
   DXE Core Main Entry Point
 
-Copyright (c) 2006 - 2012, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -123,6 +123,7 @@ EFI_DXE_SERVICES mDxeServices = {
   (EFI_SCHEDULE)                     CoreSchedule,                        // Schedule
   (EFI_TRUST)                        CoreTrust,                           // Trust
   (EFI_PROCESS_FIRMWARE_VOLUME)      CoreProcessFirmwareVolume,           // ProcessFirmwareVolume
+  (EFI_SET_MEMORY_SPACE_CAPABILITIES)CoreSetMemorySpaceCapabilities,      // SetMemorySpaceCapabilities
 };
 
 EFI_SYSTEM_TABLE mEfiSystemTableTemplate = {
@@ -242,11 +243,21 @@ DxeMain (
   EFI_PHYSICAL_ADDRESS          MemoryBaseAddress;
   UINT64                        MemoryLength;
   PE_COFF_LOADER_IMAGE_CONTEXT  ImageContext;
+  UINTN                         Index;
+  EFI_HOB_GUID_TYPE             *GuidHob;
+  EFI_VECTOR_HANDOFF_INFO       *VectorInfoList;
+  EFI_VECTOR_HANDOFF_INFO       *VectorInfo;
 
   //
   // Setup the default exception handlers
   //
-  SetupCpuExceptionHandlers ();
+  VectorInfoList = NULL;
+  GuidHob = GetNextGuidHob (&gEfiVectorHandoffInfoPpiGuid, HobStart);
+  if (GuidHob != NULL) {
+    VectorInfoList = (EFI_VECTOR_HANDOFF_INFO *) (GET_GUID_HOB_DATA(GuidHob));
+  }
+  Status = InitializeCpuExceptionHandlers (VectorInfoList);
+  ASSERT_EFI_ERROR (Status);
   
   //
   // Initialize Debug Agent to support source level debug in DXE phase
@@ -257,6 +268,8 @@ DxeMain (
   // Initialize Memory Services
   //
   CoreInitializeMemoryServices (&HobStart, &MemoryBaseAddress, &MemoryLength);
+
+  MemoryProfileInit (HobStart);
 
   //
   // Allocate the EFI System Table and EFI Runtime Service Table from EfiRuntimeServicesData
@@ -286,8 +299,9 @@ DxeMain (
   //
   // Report DXE Core image information to the PE/COFF Extra Action Library
   //
+  ZeroMem (&ImageContext, sizeof (ImageContext));
   ImageContext.ImageAddress = (EFI_PHYSICAL_ADDRESS)(UINTN)gDxeCoreLoadedImage->ImageBase;
-  ImageContext.PdbPointer = PeCoffLoaderGetPdbPointer ((VOID*) (UINTN) ImageContext.ImageAddress);
+  ImageContext.PdbPointer   = PeCoffLoaderGetPdbPointer ((VOID*) (UINTN) ImageContext.ImageAddress);
   PeCoffLoaderRelocateImageExtraAction (&ImageContext);
 
   //
@@ -371,6 +385,26 @@ DxeMain (
   Status = CoreInitializeEventServices ();
   ASSERT_EFI_ERROR (Status);
 
+  MemoryProfileInstallProtocol ();
+
+  //
+  // Get persisted vector hand-off info from GUIDeed HOB again due to HobStart may be updated,
+  // and install configuration table
+  //
+  GuidHob = GetNextGuidHob (&gEfiVectorHandoffInfoPpiGuid, HobStart);
+  if (GuidHob != NULL) {
+    VectorInfoList = (EFI_VECTOR_HANDOFF_INFO *) (GET_GUID_HOB_DATA(GuidHob));
+    VectorInfo = VectorInfoList;
+    Index = 1;
+    while (VectorInfo->Attribute != EFI_VECTOR_HANDOFF_LAST_ENTRY) {
+      VectorInfo ++;
+      Index ++;
+    }
+    VectorInfo = AllocateCopyPool (sizeof (EFI_VECTOR_HANDOFF_INFO) * Index, (VOID *) VectorInfoList);
+    ASSERT (VectorInfo != NULL);
+    Status = CoreInstallConfigurationTable (&gEfiVectorHandoffTableGuid, (VOID *) VectorInfo);
+    ASSERT_EFI_ERROR (Status);
+  }
 
   //
   // Get the Protocols that were passed in from PEI to DXE through GUIDed HOBs
@@ -714,6 +748,14 @@ CoreExitBootServices (
   CoreNotifySignalList (&gEfiEventExitBootServicesGuid);
 
   //
+  // Report that ExitBootServices() has been called
+  //
+  REPORT_STATUS_CODE (
+    EFI_PROGRESS_CODE,
+    (EFI_SOFTWARE_EFI_BOOT_SERVICE | EFI_SW_BS_PC_EXIT_BOOT_SERVICES)
+    );
+
+  //
   // Disable interrupt of Debug timer.
   //
   SaveAndSetDebugTimerInterrupt (FALSE);
@@ -722,14 +764,6 @@ CoreExitBootServices (
   // Disable CPU Interrupts
   //
   gCpu->DisableInterrupt (gCpu);
-
-  //
-  // Report that ExitBootServices() has been called
-  //
-  REPORT_STATUS_CODE (
-    EFI_PROGRESS_CODE,
-    (EFI_SOFTWARE_EFI_BOOT_SERVICE | EFI_SW_BS_PC_EXIT_BOOT_SERVICES)
-    );
 
   //
   // Clear the non-runtime values of the EFI System Table
@@ -828,7 +862,7 @@ DxeMainUefiDecompressGetInfo (
   implementation. It is the caller's responsibility to allocate and free the
   Destination and Scratch buffers.
   If the compressed source data specified by Source and SourceSize is
-  sucessfully decompressed into Destination, then EFI_SUCCESS is returned. If
+  successfully decompressed into Destination, then EFI_SUCCESS is returned. If
   the compressed source data specified by Source and SourceSize is not in a
   valid compressed data format, then EFI_INVALID_PARAMETER is returned.
 

@@ -1,5 +1,5 @@
 #
-#  Copyright (c) 2011 - 2013, ARM Limited. All rights reserved.
+#  Copyright (c) 2011 - 2014, ARM Limited. All rights reserved.
 #
 #  This program and the accompanying materials
 #  are licensed and made available under the terms and conditions of the BSD License
@@ -54,7 +54,11 @@ gArmTokenSpaceGuid.PcdSecureFvBaseAddress|gArmTokenSpaceGuid.PcdSecureFvSize
 FV = FVMAIN_SEC
 
 [FD.FVP_AARCH64_EFI]
+!ifdef ARM_FVP_RUN_NORFLASH
 BaseAddress   = 0x08000000|gArmTokenSpaceGuid.PcdFdBaseAddress  # The base address of the Firmware in Flash0.
+!else
+BaseAddress   = 0x88000000|gArmTokenSpaceGuid.PcdFdBaseAddress  # UEFI in DRAM + 128MB.
+!endif
 Size          = 0x04000000|gArmTokenSpaceGuid.PcdFdSize         # The size in bytes of the device (64MiB).
 ErasePolarity = 1
 
@@ -177,6 +181,12 @@ READ_LOCK_STATUS   = TRUE
 !endif
 
   #
+  # Platform Driver
+  #
+  INF ArmPlatformPkg/ArmVExpressPkg/ArmVExpressDxe/ArmFvpDxe.inf
+  INF OvmfPkg/VirtioBlkDxe/VirtioBlk.inf
+
+  #
   # UEFI application (Shell Embedded Boot Loader)
   #
   INF ShellBinPkg/UefiShell/UefiShell.inf
@@ -187,6 +197,8 @@ READ_LOCK_STATUS   = TRUE
   INF MdeModulePkg/Universal/DevicePathDxe/DevicePathDxe.inf
   INF ArmPlatformPkg/Bds/Bds.inf
 
+  # FV Filesystem
+  INF MdeModulePkg/Universal/FvSimpleFileSystemDxe/FvSimpleFileSystemDxe.inf
 
 [FV.FVMAIN_COMPACT]
 FvAlignment        = 16
@@ -206,6 +218,9 @@ READ_STATUS        = TRUE
 READ_LOCK_CAP      = TRUE
 READ_LOCK_STATUS   = TRUE
 
+!if $(EDK2_SKIP_PEICORE) == 1
+  INF ArmPlatformPkg/PrePi/PeiMPCore.inf
+!else
   INF ArmPlatformPkg/PrePeiCore/PrePeiCoreMPCore.inf
   INF MdeModulePkg/Core/Pei/PeiMain.inf
   INF ArmPlatformPkg/PlatformPei/PlatformPeim.inf
@@ -215,6 +230,7 @@ READ_LOCK_STATUS   = TRUE
   INF IntelFrameworkModulePkg/Universal/StatusCode/Pei/StatusCodePei.inf
   INF MdeModulePkg/Universal/Variable/Pei/VariablePei.inf
   INF MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf
+!endif
 
   FILE FV_IMAGE = 9E21FD93-9C72-4c15-8C4B-E77F1DB2D792 {
     SECTION GUIDED EE4E5898-3914-4259-9D6E-DC7BD79403CF PROCESSING_REQUIRED = TRUE {
@@ -253,7 +269,7 @@ READ_LOCK_STATUS   = TRUE
 
 [Rule.Common.SEC]
   FILE SEC = $(NAMED_GUID) RELOCS_STRIPPED {
-    TE  TE Align = 128                  $(INF_OUTPUT)/$(MODULE_NAME).efi
+    TE  TE Align = 4K                  $(INF_OUTPUT)/$(MODULE_NAME).efi
   }
 
 [Rule.Common.PEI_CORE]

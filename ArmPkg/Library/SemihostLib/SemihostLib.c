@@ -1,7 +1,8 @@
 /** @file
 
   Copyright (c) 2008 - 2009, Apple Inc. All rights reserved.<BR>
-  
+  Copyright (c) 2013 - 2014, ARM Ltd. All rights reserved.<BR>
+
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -73,10 +74,12 @@ SemihostFileSeek (
 
   Result = Semihost_SYS_SEEK(&SeekBlock);
 
-  if (Result == 0) {
-    return RETURN_SUCCESS;
-  } else {
+  // Semihosting does not behave as documented. It returns the offset on
+  // success.
+  if (Result < 0) {
     return RETURN_ABORTED;
+  } else {
+    return RETURN_SUCCESS;
   }
 }
 
@@ -100,7 +103,7 @@ SemihostFileRead (
 
   Result = Semihost_SYS_READ(&ReadBlock);
 
-  if (Result == *Length) {
+  if ((*Length != 0) && (Result == *Length)) {
     return RETURN_ABORTED;
   } else {
     *Length -= Result;
@@ -126,8 +129,11 @@ SemihostFileWrite (
   WriteBlock.Length = *Length;
 
   *Length = Semihost_SYS_WRITE(&WriteBlock);
-  
-  return RETURN_SUCCESS;
+
+  if (*Length != 0)
+    return RETURN_ABORTED;
+  else
+    return RETURN_SUCCESS;
 }
 
 RETURN_STATUS
@@ -166,6 +172,46 @@ SemihostFileLength (
   }
 }
 
+/**
+  Get a temporary name for a file from the host running the debug agent.
+
+  @param[out]  Buffer      Pointer to the buffer where the temporary name has to
+                           be stored
+  @param[in]   Identifier  File name identifier (integer in the range 0 to 255)
+  @param[in]   Length      Length of the buffer to store the temporary name
+
+  @retval  RETURN_SUCCESS            Temporary name returned
+  @retval  RETURN_INVALID_PARAMETER  Invalid buffer address
+  @retval  RETURN_ABORTED            Temporary name not returned
+
+**/
+RETURN_STATUS
+SemihostFileTmpName(
+  OUT  VOID   *Buffer,
+  IN   UINT8  Identifier,
+  IN   UINTN  Length
+  )
+{
+  SEMIHOST_FILE_TMPNAME_BLOCK  TmpNameBlock;
+  INT32                        Result;
+
+  if (Buffer == NULL) {
+    return RETURN_INVALID_PARAMETER;
+  }
+
+  TmpNameBlock.Buffer     = Buffer;
+  TmpNameBlock.Identifier = Identifier;
+  TmpNameBlock.Length     = Length;
+
+  Result = Semihost_SYS_TMPNAME (&TmpNameBlock);
+
+  if (Result != 0) {
+    return  RETURN_ABORTED;
+  } else {
+    return  RETURN_SUCCESS;
+  }
+}
+
 RETURN_STATUS
 SemihostFileRemove (
   IN CHAR8 *FileName
@@ -173,6 +219,11 @@ SemihostFileRemove (
 {
   SEMIHOST_FILE_REMOVE_BLOCK  RemoveBlock;
   UINT32                      Result;
+
+  // Remove any leading separator (e.g.: '\'). EFI Shell adds one.
+  if (*FileName == '\\') {
+    FileName++;
+  }
 
   RemoveBlock.FileName    = FileName;
   RemoveBlock.NameLength  = AsciiStrLen(FileName);
@@ -183,6 +234,44 @@ SemihostFileRemove (
     return RETURN_SUCCESS;
   } else {
     return RETURN_ABORTED;
+  }
+}
+
+/**
+  Rename a specified file.
+
+  @param[in]  FileName     Name of the file to rename.
+  @param[in]  NewFileName  The new name of the file.
+
+  @retval  RETURN_SUCCESS            File Renamed
+  @retval  RETURN_INVALID_PARAMETER  Either the current or the new name is not specified
+  @retval  RETURN_ABORTED            Rename failed
+
+**/
+RETURN_STATUS
+SemihostFileRename(
+  IN  CHAR8  *FileName,
+  IN  CHAR8  *NewFileName
+  )
+{
+  SEMIHOST_FILE_RENAME_BLOCK  RenameBlock;
+  INT32                       Result;
+
+  if ((FileName == NULL) || (NewFileName == NULL)) {
+    return RETURN_INVALID_PARAMETER;
+  }
+
+  RenameBlock.FileName          = FileName;
+  RenameBlock.FileNameLength    = AsciiStrLen (FileName);
+  RenameBlock.NewFileName       = NewFileName;
+  RenameBlock.NewFileNameLength = AsciiStrLen (NewFileName);
+
+  Result = Semihost_SYS_RENAME (&RenameBlock);
+
+  if (Result != 0) {
+    return  RETURN_ABORTED;
+  } else {
+    return  RETURN_SUCCESS;
   }
 }
 
@@ -209,7 +298,7 @@ SemihostWriteString (
 {
   Semihost_SYS_WRITE0(String);
 }
-  
+
 UINT32
 SemihostSystem (
   IN CHAR8 *CommandLine

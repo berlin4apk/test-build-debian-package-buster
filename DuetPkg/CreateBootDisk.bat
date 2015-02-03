@@ -1,6 +1,6 @@
 @REM ## @file
 @REM #
-@REM #  Copyright (c) 2010 - 2011, Intel Corporation. All rights reserved.<BR>
+@REM #  Copyright (c) 2010 - 2014, Intel Corporation. All rights reserved.<BR>
 @REM #
 @REM #  This program and the accompanying materials
 @REM #  are licensed and made available under the terms and conditions of the BSD License
@@ -52,25 +52,26 @@ goto Help
 @format /v:%DISK_LABEL% /q %EFI_BOOT_DISK% < FormatCommandInput.txt > NUL
 @del FormatCommandInput.txt
 @echo Create boot sector ...
-%BASETOOLS_DIR%\Genbootsector.exe -i %EFI_BOOT_DISK% -o FDBs.com
-%BASETOOLS_DIR%\Bootsectimage.exe -g FDBs.com %BOOTSECTOR_BIN_DIR%\Bootsect.com -f
+@%BASETOOLS_DIR%\Genbootsector.exe -i %EFI_BOOT_DISK% -o FDBs.com
+@copy %BOOTSECTOR_BIN_DIR%\Bootsect.com FDBs-1.com
+@%BASETOOLS_DIR%\Bootsectimage.exe -g FDBs.com FDBs-1.com -f
 @REM @del FDBS.com
-%BASETOOLS_DIR%\Genbootsector.exe -o %EFI_BOOT_DISK% -i %BOOTSECTOR_BIN_DIR%\Bootsect.com
+@%BASETOOLS_DIR%\Genbootsector.exe -o %EFI_BOOT_DISK% -i FDBs-1.com 
+@del FDBs-1.com
 @echo Done.
-copy %BUILD_DIR%\FV\EfiLdr %EFI_BOOT_DISK%
-mkdir %EFI_BOOT_DISK%\efi\boot
-@if "%PROCESSOR%"=="IA32" goto CreateBootFileForIA32
-@if "%PROCESSOR%"=="X64" goto CreateBootFileForX64
-@goto end
+@copy %BUILD_DIR%\FV\EfiLdr %EFI_BOOT_DISK%
+@goto CreateBootFile
 
 :CreateFile
 @if NOT "%3"=="FAT12" goto WrongFATType
 @echo Start to create file boot disk ...
 @echo Create boot sector ...
 %BASETOOLS_DIR%\Genbootsector.exe -i %EFI_BOOT_DISK% -o FDBs.com
-%BASETOOLS_DIR%\Bootsectimage.exe -g FDBs.com %BOOTSECTOR_BIN_DIR%\Bootsect.com -f
+@copy %BOOTSECTOR_BIN_DIR%\Bootsect.com FDBs-1.com
+@%BASETOOLS_DIR%\Bootsectimage.exe -g FDBs.com FDBs-1.com -f
 @REM @del FDBS.com
-%BASETOOLS_DIR%\Genbootsector.exe -o %EFI_BOOT_DISK% -i %BOOTSECTOR_BIN_DIR%\Bootsect.com
+@%BASETOOLS_DIR%\Genbootsector.exe -o %EFI_BOOT_DISK% -i FDBs-1.com 
+@del FDBs-1.com
 @echo Done.
 @goto end
 
@@ -88,8 +89,10 @@ mkdir %EFI_BOOT_DISK%\efi\boot
 @del FormatCommandInput.txt
 @echo Create boot sector ...
 @%BASETOOLS_DIR%\Genbootsector.exe -i %EFI_BOOT_DISK% -o UsbBs16.com
-@%BASETOOLS_DIR%\Bootsectimage.exe -g UsbBs16.com %BOOTSECTOR_BIN_DIR%\Bs16.com -f
-@%BASETOOLS_DIR%\Genbootsector.exe -o %EFI_BOOT_DISK% -i %BOOTSECTOR_BIN_DIR%\Bs16.com
+@copy %BOOTSECTOR_BIN_DIR%\Bs16.com Bs16-1.com 
+@%BASETOOLS_DIR%\Bootsectimage.exe -g UsbBs16.com Bs16-1.com -f 
+@%BASETOOLS_DIR%\Genbootsector.exe -o %EFI_BOOT_DISK% -i Bs16-1.com
+@del Bs16-1.com
 @%BASETOOLS_DIR%\Genbootsector.exe -m -o %EFI_BOOT_DISK% -i %BOOTSECTOR_BIN_DIR%\Mbr.com
 @echo Done.
 @echo PLEASE UNPLUG USB, THEN PLUG IT AGAIN!
@@ -97,10 +100,7 @@ mkdir %EFI_BOOT_DISK%\efi\boot
 
 :CreateUsb_FAT16_step2
 @copy %BUILD_DIR%\FV\EfiLdr16 %EFI_BOOT_DISK%
-@mkdir %EFI_BOOT_DISK%\efi\boot
-@if "%PROCESSOR%"=="IA32" goto CreateBootFileForIA32
-@if "%PROCESSOR%"=="X64" goto CreateBootFileForX64
-@goto end
+@goto CreateBootFile
 
 :CreateUsb_FAT32
 @if "%STEP%"=="2" goto CreateUsb_FAT32_step2
@@ -110,9 +110,11 @@ mkdir %EFI_BOOT_DISK%\efi\boot
 @del FormatCommandInput.txt
 @echo Create boot sector ...
 @%BASETOOLS_DIR%\Genbootsector.exe -i %EFI_BOOT_DISK% -o UsbBs32.com
-@%BASETOOLS_DIR%\Bootsectimage.exe -g UsbBs32.com %BOOTSECTOR_BIN_DIR%\Bs32.com -f
+@copy %BOOTSECTOR_BIN_DIR%\Bs32.com Bs32-1.com 
+@%BASETOOLS_DIR%\Bootsectimage.exe -g UsbBs32.com Bs32-1.com -f 
 @del UsbBs32.com
-@%BASETOOLS_DIR%\Genbootsector.exe -o %EFI_BOOT_DISK% -i %BOOTSECTOR_BIN_DIR%\Bs32.com
+@%BASETOOLS_DIR%\Genbootsector.exe -o %EFI_BOOT_DISK% -i Bs32-1.com
+@del Bs32-1.com
 @%BASETOOLS_DIR%\Genbootsector.exe -m -o %EFI_BOOT_DISK% -i %BOOTSECTOR_BIN_DIR%\Mbr.com
 @echo Done.
 @echo PLEASE UNPLUG USB, THEN PLUG IT AGAIN!
@@ -120,20 +122,14 @@ mkdir %EFI_BOOT_DISK%\efi\boot
 
 :CreateUsb_FAT32_step2
 @copy %BUILD_DIR%\FV\EfiLdr20 %EFI_BOOT_DISK%
-@mkdir %EFI_BOOT_DISK%\efi\boot
-@if "%PROCESSOR%"=="IA32" goto CreateBootFileForIA32
-@if "%PROCESSOR%"=="X64" goto CreateBootFileForX64
-@goto end
+@goto CreateBootFile
 
 :CreateIde
 @goto end
 
-:CreateBootFileForIA32
-copy %WORKSPACE%\EdkShellBinPkg\MinimumShell\IA32\Shell.efi %EFI_BOOT_DISK%\efi\boot\bootia32.efi /y
-@goto end
-
-:CreateBootFileForX64
-copy %WORKSPACE%\EdkShellBinPkg\MinimumShell\X64\Shell.efi %EFI_BOOT_DISK%\efi\boot\bootx64.efi /y
+:CreateBootFile
+@mkdir %EFI_BOOT_DISK%\efi\boot
+copy %WORKSPACE%\ShellBinPkg\UefiShell\%PROCESSOR%\Shell.efi %EFI_BOOT_DISK%\efi\boot\boot%PROCESSOR%.efi /y
 @goto end
 
 :WrongFATType

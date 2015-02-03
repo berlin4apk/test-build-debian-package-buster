@@ -54,7 +54,7 @@ QemuFlashPtr (
   IN        UINTN                               Offset
   )
 {
-  return mFlashBase + (Lba * mFdBlockSize) + Offset;
+  return mFlashBase + ((UINTN)Lba * mFdBlockSize) + Offset;
 }
 
 
@@ -208,7 +208,7 @@ QemuFlashWrite (
   // Restore flash to read mode
   //
   if (*NumBytes > 0) {
-    *Ptr = READ_ARRAY_CMD;
+    *(Ptr - 1) = READ_ARRAY_CMD;
   }
 
   return EFI_SUCCESS;

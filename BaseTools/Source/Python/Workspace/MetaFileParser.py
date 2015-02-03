@@ -1,7 +1,7 @@
 ## @file
 # This file is used to parse meta files
 #
-# Copyright (c) 2008 - 2012, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2008 - 2014, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -14,7 +14,7 @@
 ##
 # Import Modules
 #
-import os
+import Common.LongFilePathOs as os
 import re
 import time
 import copy
@@ -28,8 +28,10 @@ from Common.String import *
 from Common.Misc import GuidStructureStringToGuidString, CheckPcdDatum, PathClass, AnalyzePcdData, AnalyzeDscPcd
 from Common.Expression import *
 from CommonDataClass.Exceptions import *
+from Common.LongFilePathSupport import OpenLongFilePath as open
 
 from MetaFileTable import MetaFileStorage
+from MetaFileCommentParser import CheckInfComment
 
 ## A decorator used to parse macro definition
 def ParseMacro(Parser):
@@ -265,6 +267,10 @@ class MetaFileParser(object):
                         Line=self._LineIndex + 1, ExtraData=self._CurrentLine);
         self._ValueList[0:1] = [self._CurrentLine]
 
+    ## Skip unsupported data for UserExtension Section
+    def _SkipUserExtension(self):
+        self._ValueList[0:1] = [self._CurrentLine]
+
     ## Section header parser
     #
     #   The section header is always in following format:
@@ -278,7 +284,7 @@ class MetaFileParser(object):
         for Item in GetSplitValueList(self._CurrentLine[1:-1], TAB_COMMA_SPLIT):
             if Item == '':
                 continue
-            ItemList = GetSplitValueList(Item, TAB_SPLIT)
+            ItemList = GetSplitValueList(Item, TAB_SPLIT,2)
             # different section should not mix in one section
             if self._SectionName != '' and self._SectionName != ItemList[0].upper():
                 EdkLogger.error('Parser', FORMAT_INVALID, "Different section names in the same section",
@@ -287,7 +293,7 @@ class MetaFileParser(object):
             if self._SectionName in self.DataType:
                 self._SectionType = self.DataType[self._SectionName]
                 # Check if the section name is valid
-                if self._SectionName not in SECTIONS_HAVE_ITEM_AFTER_ARCH and len(ItemList) > 2:
+                if self._SectionName not in SECTIONS_HAVE_ITEM_AFTER_ARCH and len(ItemList) > 3:
                     EdkLogger.error("Parser", FORMAT_UNKNOWN_ERROR, "%s is not a valid section name" % Item,
                                     self.MetaFile, self._LineIndex + 1, self._CurrentLine)
             elif self._Version >= 0x00010005:
@@ -305,7 +311,10 @@ class MetaFileParser(object):
 
             # S2 may be Platform or ModuleType
             if len(ItemList) > 2:
-                S2 = ItemList[2].upper()
+                if self._SectionName.upper() in SECTIONS_HAVE_ITEM_PCD:
+                    S2 = ItemList[2]
+                else:
+                    S2 = ItemList[2].upper()
             else:
                 S2 = 'COMMON'
             self._Scope.append([S1, S2])
@@ -495,14 +504,23 @@ class InfParser(MetaFileParser):
 
         # parse the file line by line
         IsFindBlockComment = False
+        GetHeaderComment = False
+        TailComments = []
+        SectionComments = []
+        Comments = []
 
         for Index in range(0, len(Content)):
             # skip empty, commented, block commented lines
-            Line = CleanString(Content[Index], AllowCppStyleComment=True)
+            Line, Comment = CleanString2(Content[Index], AllowCppStyleComment=True)
             NextLine = ''
             if Index + 1 < len(Content):
-                NextLine = CleanString(Content[Index + 1])
+                NextLine, NextComment = CleanString2(Content[Index + 1])
             if Line == '':
+                if Comment:
+                    Comments.append((Comment, Index + 1))
+                elif GetHeaderComment:
+                    SectionComments.extend(Comments)
+                    Comments = []
                 continue
             if Line.find(DataType.TAB_COMMENT_EDK_START) > -1:
                 IsFindBlockComment = True
@@ -518,6 +536,14 @@ class InfParser(MetaFileParser):
 
             # section header
             if Line[0] == TAB_SECTION_START and Line[-1] == TAB_SECTION_END:
+                if not GetHeaderComment:
+                    for Cmt, LNo in Comments:
+                        self._Store(MODEL_META_DATA_HEADER_COMMENT, Cmt, '', '', 'COMMON',
+                                    'COMMON', self._Owner[-1], LNo, -1, LNo, -1, 0)
+                    GetHeaderComment = True
+                else:
+                    TailComments.extend(SectionComments + Comments)
+                Comments = []
                 self._SectionHeaderParser()
                 # Check invalid sections
                 if self._Version < 0x00010005:
@@ -566,13 +592,18 @@ class InfParser(MetaFileParser):
             self._SectionParser[self._SectionType](self)
             if self._ValueList == None or self._ItemType == MODEL_META_DATA_DEFINE:
                 self._ItemType = -1
+                Comments = []
                 continue
+            if Comment:
+                Comments.append((Comment, Index + 1))
+            if GlobalData.gOptions and GlobalData.gOptions.CheckUsage:
+                CheckInfComment(self._SectionType, Comments, str(self.MetaFile), Index + 1, self._ValueList)
             #
             # Model, Value1, Value2, Value3, Arch, Platform, BelongsToItem=-1,
             # LineBegin=-1, ColumnBegin=-1, LineEnd=-1, ColumnEnd=-1, Enabled=-1
             #
             for Arch, Platform in self._Scope:
-                self._Store(self._SectionType,
+                LastItem = self._Store(self._SectionType,
                             self._ValueList[0],
                             self._ValueList[1],
                             self._ValueList[2],
@@ -585,9 +616,20 @@ class InfParser(MetaFileParser):
                             - 1,
                             0
                             )
+                for Comment, LineNo in Comments:
+                    self._Store(MODEL_META_DATA_COMMENT, Comment, '', '', Arch, Platform,
+                                LastItem, LineNo, -1, LineNo, -1, 0)
+            Comments = []
+            SectionComments = []
+        TailComments.extend(SectionComments + Comments)
         if IsFindBlockComment:
             EdkLogger.error("Parser", FORMAT_INVALID, "Open block comments (starting with /*) are expected to end with */",
                             File=self.MetaFile)
+
+        # If there are tail comments in INF file, save to database whatever the comments are
+        for Comment in TailComments:
+            self._Store(MODEL_META_DATA_TAIL_COMMENT, Comment[0], '', '', 'COMMON',
+                                'COMMON', self._Owner[-1], -1, -1, -1, -1, 0)
         self._Done()
 
     ## Data parser for the format in which there's path
@@ -721,7 +763,7 @@ class InfParser(MetaFileParser):
         MODEL_EFI_PPI                   :   MetaFileParser._CommonParser,
         MODEL_EFI_DEPEX                 :   _DepexParser,
         MODEL_EFI_BINARY_FILE           :   _BinaryFileParser,
-        MODEL_META_DATA_USER_EXTENSION  :   MetaFileParser._Skip,
+        MODEL_META_DATA_USER_EXTENSION  :   MetaFileParser._SkipUserExtension,
     }
 
 ## DSC file parser class
@@ -761,6 +803,7 @@ class DscParser(MetaFileParser):
         TAB_ELSE_IF.upper()                         :   MODEL_META_DATA_CONDITIONAL_STATEMENT_ELSEIF,
         TAB_ELSE.upper()                            :   MODEL_META_DATA_CONDITIONAL_STATEMENT_ELSE,
         TAB_END_IF.upper()                          :   MODEL_META_DATA_CONDITIONAL_STATEMENT_ENDIF,
+        TAB_USER_EXTENSIONS.upper()                 :   MODEL_META_DATA_USER_EXTENSION,
     }
 
     # Valid names in define section
@@ -770,6 +813,7 @@ class DscParser(MetaFileParser):
         "PLATFORM_GUID",
         "PLATFORM_VERSION",
         "SKUID_IDENTIFIER",
+        "PCD_INFO_GENERATION",
         "SUPPORTED_ARCHITECTURES",
         "BUILD_TARGETS",
         "OUTPUT_DIRECTORY",
@@ -780,6 +824,10 @@ class DscParser(MetaFileParser):
         "TIME_STAMP_FILE",
         "VPD_TOOL_GUID",
         "FIX_LOAD_TOP_MEMORY_ADDRESS"
+    ]
+
+    SubSectionDefineKeywords = [
+        "FILE_GUID"
     ]
 
     SymbolPattern = ValueExpression.SymbolPattern
@@ -1000,13 +1048,15 @@ class DscParser(MetaFileParser):
         if not self._ValueList[2]:
             EdkLogger.error('Parser', FORMAT_INVALID, "No value specified",
                             ExtraData=self._CurrentLine, File=self.MetaFile, Line=self._LineIndex + 1)
-        if not self._ValueList[1] in self.DefineKeywords:
+        if (not self._ValueList[1] in self.DefineKeywords and
+            (self._InSubsection and self._ValueList[1] not in self.SubSectionDefineKeywords)):
             EdkLogger.error('Parser', FORMAT_INVALID,
                             "Unknown keyword found: %s. "
                             "If this is a macro you must "
                             "add it as a DEFINE in the DSC" % self._ValueList[1],
                             ExtraData=self._CurrentLine, File=self.MetaFile, Line=self._LineIndex + 1)
-        self._Defines[self._ValueList[1]] = self._ValueList[2]
+        if not self._InSubsection:
+            self._Defines[self._ValueList[1]] = self._ValueList[2]
         self._ItemType = self.DataType[TAB_DSC_DEFINES.upper()]
 
     @ParseMacro
@@ -1169,7 +1219,7 @@ class DscParser(MetaFileParser):
             MODEL_META_DATA_COMPONENT_SOURCE_OVERRIDE_PATH  :   self.__ProcessSourceOverridePath,
             MODEL_META_DATA_BUILD_OPTION                    :   self.__ProcessBuildOption,
             MODEL_UNKNOWN                                   :   self._Skip,
-            MODEL_META_DATA_USER_EXTENSION                  :   self._Skip,
+            MODEL_META_DATA_USER_EXTENSION                  :   self._SkipUserExtension,
         }
 
         self._Table = MetaFileStorage(self._RawTable.Cur, self.MetaFile, MODEL_FILE_DSC, True)
@@ -1185,6 +1235,7 @@ class DscParser(MetaFileParser):
         self.__RetrievePcdValue()
         self._Content = self._RawTable.GetAll()
         self._ContentIndex = 0
+        self._InSubsection = False
         while self._ContentIndex < len(self._Content) :
             Id, self._ItemType, V1, V2, V3, S1, S2, Owner, self._From, \
                 LineStart, ColStart, LineEnd, ColEnd, Enabled = self._Content[self._ContentIndex]
@@ -1213,6 +1264,10 @@ class DscParser(MetaFileParser):
             self._LineIndex = LineStart - 1
             self._ValueList = [V1, V2, V3]
 
+            if Owner > 0 and Owner in self._IdMapping:
+                self._InSubsection = True
+            else:
+                self._InSubsection = False
             try:
                 Processer[self._ItemType]()
             except EvaluationException, Excpt:
@@ -1315,6 +1370,13 @@ class DscParser(MetaFileParser):
 
         Type, Name, Value = self._ValueList
         Value = ReplaceMacro(Value, self._Macros, False)
+        #
+        # If it is <Defines>, return
+        #
+        if self._InSubsection:
+            self._ValueList = [Type, Name, Value]
+            return
+
         if self._ItemType == MODEL_META_DATA_DEFINE:
             if self._SectionType == MODEL_META_DATA_HEADER:
                 self._FileLocalMacros[Name] = Value
@@ -1511,7 +1573,7 @@ class DscParser(MetaFileParser):
         MODEL_META_DATA_COMPONENT_SOURCE_OVERRIDE_PATH  :   _CompponentSourceOverridePathParser,
         MODEL_META_DATA_BUILD_OPTION                    :   _BuildOptionParser,
         MODEL_UNKNOWN                                   :   MetaFileParser._Skip,
-        MODEL_META_DATA_USER_EXTENSION                  :   MetaFileParser._Skip,
+        MODEL_META_DATA_USER_EXTENSION                  :   MetaFileParser._SkipUserExtension,
         MODEL_META_DATA_SECTION_HEADER                  :   MetaFileParser._SectionHeaderParser,
         MODEL_META_DATA_SUBSECTION_HEADER               :   _SubsectionHeaderParser,
     }
@@ -1540,6 +1602,7 @@ class DecParser(MetaFileParser):
         TAB_PCDS_FEATURE_FLAG_NULL.upper()          :   MODEL_PCD_FEATURE_FLAG,
         TAB_PCDS_DYNAMIC_NULL.upper()               :   MODEL_PCD_DYNAMIC,
         TAB_PCDS_DYNAMIC_EX_NULL.upper()            :   MODEL_PCD_DYNAMIC_EX,
+        TAB_USER_EXTENSIONS.upper()                 :   MODEL_META_DATA_USER_EXTENSION,
     }
 
     ## Constructor of DecParser
@@ -1824,7 +1887,7 @@ class DecParser(MetaFileParser):
         MODEL_PCD_DYNAMIC               :   _PcdParser,
         MODEL_PCD_DYNAMIC_EX            :   _PcdParser,
         MODEL_UNKNOWN                   :   MetaFileParser._Skip,
-        MODEL_META_DATA_USER_EXTENSION  :   MetaFileParser._Skip,
+        MODEL_META_DATA_USER_EXTENSION  :   MetaFileParser._SkipUserExtension,
     }
 
 ##

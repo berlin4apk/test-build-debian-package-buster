@@ -1,7 +1,7 @@
 /** @file
   Debug Agent library implementition for Dxe Core and Dxr modules.
 
-  Copyright (c) 2010 - 2013, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2010 - 2014, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -57,6 +57,32 @@ InternalConstructorWorker (
   BOOLEAN                     DebugTimerInterruptState;
   DEBUG_AGENT_MAILBOX         *Mailbox;
   DEBUG_AGENT_MAILBOX         *NewMailbox;
+  EFI_HOB_GUID_TYPE           *GuidHob;
+  EFI_VECTOR_HANDOFF_INFO     *VectorHandoffInfo;
+
+  //
+  // Check persisted vector handoff info
+  //
+  Status = EFI_SUCCESS;
+  GuidHob = GetFirstGuidHob (&gEfiVectorHandoffInfoPpiGuid);
+  if (GuidHob != NULL && !mDxeCoreFlag) {
+    //
+    // Check if configuration table is installed or not if GUIDed HOB existed,
+    // only when Debug Agent is not linked by DXE Core
+    //
+    Status = EfiGetSystemConfigurationTable (&gEfiVectorHandoffTableGuid, (VOID **) &VectorHandoffInfo);
+  }
+  if (GuidHob == NULL || Status != EFI_SUCCESS) {
+    //
+    // Install configuration table for persisted vector handoff info if GUIDed HOB cannot be found or
+    // configuration table does not exist
+    //
+    Status = gBS->InstallConfigurationTable (&gEfiVectorHandoffTableGuid, (VOID *) &mVectorHandoffInfoDebugAgent[0]);
+    if (EFI_ERROR (Status)) {
+      DEBUG ((EFI_D_ERROR, "DebugAgent: Cannot install configuration table for persisted vector handoff info!\n"));
+      CpuDeadLoop ();
+    }
+  }
 
   //
   // Install EFI Serial IO protocol on debug port
@@ -70,7 +96,10 @@ InternalConstructorWorker (
                   EFI_SIZE_TO_PAGES (sizeof(DEBUG_AGENT_MAILBOX) + PcdGet16(PcdDebugPortHandleBufferSize)),
                   &Address
                   );
-  ASSERT_EFI_ERROR (Status);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((EFI_D_ERROR, "DebugAgent: Cannot install configuration table for mailbox!\n"));
+    CpuDeadLoop ();
+  }
 
   DebugTimerInterruptState = SaveAndSetDebugTimerInterrupt (FALSE);
 
@@ -91,7 +120,10 @@ InternalConstructorWorker (
   DebugTimerInterruptState = SaveAndSetDebugTimerInterrupt (DebugTimerInterruptState);
 
   Status = gBS->InstallConfigurationTable (&gEfiDebugAgentGuid, (VOID *) mMailboxPointer);
-  ASSERT_EFI_ERROR (Status);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((EFI_D_ERROR, "DebugAgent: Failed to install configuration for mailbox!\n"));
+    CpuDeadLoop ();
+  }
 }
 
 /**
@@ -133,7 +165,7 @@ GetMailboxFromConfigurationTable (
 {
   EFI_STATUS               Status;
   DEBUG_AGENT_MAILBOX      *Mailbox;
-  
+
   Status = EfiGetSystemConfigurationTable (&gEfiDebugAgentGuid, (VOID **) &Mailbox);
   if (Status == EFI_SUCCESS && Mailbox != NULL) {
     VerifyMailboxChecksum (Mailbox);
@@ -233,9 +265,16 @@ SetupDebugAgentEnviroment (
   AsmReadIdtr ((IA32_DESCRIPTOR *) &Idtr);
   IdtEntryCount = (UINT16) ((Idtr.Limit + 1) / sizeof (IA32_IDT_GATE_DESCRIPTOR));
   if (IdtEntryCount < 33) {
+    ZeroMem (&mIdtEntryTable, sizeof (IA32_IDT_GATE_DESCRIPTOR) * 33);
+    //
+    // Copy original IDT table into new one
+    //
+    CopyMem (&mIdtEntryTable, (VOID *) Idtr.Base, Idtr.Limit + 1);
+    //
+    // Load new IDT table
+    //
     Idtr.Limit = (UINT16) (sizeof (IA32_IDT_GATE_DESCRIPTOR) * 33 - 1);
     Idtr.Base  = (UINTN) &mIdtEntryTable;
-    ZeroMem (&mIdtEntryTable, Idtr.Limit + 1);
     AsmWriteIdtr ((IA32_DESCRIPTOR *) &Idtr);
   }
 
@@ -244,16 +283,21 @@ SetupDebugAgentEnviroment (
   //
   InitializeDebugIdt ();
 
-  if (Mailbox != NULL) {
-    //
-    // If Mailbox exists, copy it into one global variable,
-    //
-    CopyMem (&mMailbox, Mailbox, sizeof (DEBUG_AGENT_MAILBOX));
-  } else {
-    ZeroMem (&mMailbox, sizeof (DEBUG_AGENT_MAILBOX));
-  }  
+  //
+  // If mMailboxPointer is not set before, set it
+  //
+  if (mMailboxPointer == NULL) {
+    if (Mailbox != NULL) {
+      //
+      // If Mailbox exists, copy it into one global variable
+      //
+      CopyMem (&mMailbox, Mailbox, sizeof (DEBUG_AGENT_MAILBOX));
+    } else {
+      ZeroMem (&mMailbox, sizeof (DEBUG_AGENT_MAILBOX));
+    }
+    mMailboxPointer = &mMailbox;
+  }
 
-  mMailboxPointer = &mMailbox;
   //
   // Initialize debug communication port
   //
@@ -320,7 +364,7 @@ InitializeDebugAgent (
     return ;
   }
 
-  // 
+  //
   // Disable Debug Timer interrupt
   //
   SaveAndSetDebugTimerInterrupt (FALSE);
@@ -354,16 +398,16 @@ InitializeDebugAgent (
     mSaveIdtTableSize = IdtDescriptor.Limit + 1;
     mSavedIdtTable    = AllocateCopyPool (mSaveIdtTableSize, (VOID *) IdtDescriptor.Base);
     //
-    // Initialize Debug Timer hardware
+    // Initialize Debug Timer hardware and save its initial count
     //
-    InitializeDebugTimer ();
+    mDebugMpContext.DebugTimerInitCount = InitializeDebugTimer ();
     //
     // Check if Debug Agent initialized in DXE phase
     //
     Mailbox = GetMailboxFromConfigurationTable ();
     if (Mailbox == NULL) {
       //
-      // Try to get mailbox from GUIDed HOB build in PEI 
+      // Try to get mailbox from GUIDed HOB build in PEI
       //
       HobList = GetHobList ();
       Mailbox = GetMailboxFromHob (HobList);
@@ -421,7 +465,7 @@ InitializeDebugAgent (
       if (IsHostAttached ()) {
         Print (L"Debug Agent: Host is still connected, please de-attach TARGET firstly!\r\n");
         *(EFI_STATUS *)Context = EFI_ACCESS_DENIED;
-        // 
+        //
         // Enable Debug Timer interrupt again
         //
         SaveAndSetDebugTimerInterrupt (TRUE);
@@ -452,11 +496,11 @@ InitializeDebugAgent (
     mDxeCoreFlag                = TRUE;
     mMultiProcessorDebugSupport = TRUE;
     //
-    // Initialize Debug Timer hardware
+    // Initialize Debug Timer hardware and its initial count
     //
-    InitializeDebugTimer ();
+    mDebugMpContext.DebugTimerInitCount = InitializeDebugTimer ();
     //
-    // Try to get mailbox from GUIDed HOB build in PEI 
+    // Try to get mailbox from GUIDed HOB build in PEI
     //
     HobList = Context;
     Mailbox = GetMailboxFromHob (HobList);
@@ -476,11 +520,15 @@ InitializeDebugAgent (
     if (Context != NULL) {
       Ia32Idtr =  (IA32_DESCRIPTOR *) Context;
       Ia32IdtEntry = (IA32_IDT_ENTRY *)(Ia32Idtr->Base);
-      MailboxLocation = (UINT64 *) (UINTN) (Ia32IdtEntry[DEBUG_MAILBOX_VECTOR].Bits.OffsetLow + 
+      MailboxLocation = (UINT64 *) (UINTN) (Ia32IdtEntry[DEBUG_MAILBOX_VECTOR].Bits.OffsetLow +
                                            (Ia32IdtEntry[DEBUG_MAILBOX_VECTOR].Bits.OffsetHigh << 16));
       Mailbox = (DEBUG_AGENT_MAILBOX *)(UINTN)(*MailboxLocation);
       VerifyMailboxChecksum (Mailbox);
     }
+    //
+    // Save Mailbox pointer in global variable
+    //
+    mMailboxPointer = Mailbox;
     //
     // Set up IDT table and prepare for IDT entries
     //
@@ -500,7 +548,7 @@ InitializeDebugAgent (
 
   default:
     //
-    // Only DEBUG_AGENT_INIT_PREMEM_SEC and DEBUG_AGENT_INIT_POSTMEM_SEC are allowed for this 
+    // Only DEBUG_AGENT_INIT_PREMEM_SEC and DEBUG_AGENT_INIT_POSTMEM_SEC are allowed for this
     // Debug Agent library instance.
     //
     DEBUG ((EFI_D_ERROR, "Debug Agent: The InitFlag value is not allowed!\n"));

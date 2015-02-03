@@ -7,8 +7,9 @@
   GetImageInfo() is the only required function. GetImage(), SetImage(), 
   CheckImage(), GetPackageInfo(), and SetPackageInfo() shall return 
   EFI_UNSUPPORTED if not supported by the driver.
-  
-  Copyright (c) 2009 - 2013, Intel Corporation. All rights reserved.<BR>
+    
+  Copyright (c) 2009 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2013 - 2014, Hewlett-Packard Development Company, L.P.<BR>  
   This program and the accompanying materials                          
   are licensed and made available under the terms and conditions of the BSD License         
   which accompanies this distribution.  The full text of the license may be found at        
@@ -118,6 +119,10 @@ typedef struct {
 /// This distinguishes firmware images in a device that supports redundant images.  
 /// 
 #define    IMAGE_ATTRIBUTE_IN_USE                  0x0000000000000008
+///
+/// The attribute IMAGE_ATTRIBUTE_UEFI_IMAGE indicates that this image is an EFI compatible image.
+///
+#define    IMAGE_ATTRIBUTE_UEFI_IMAGE              0x0000000000000010
 
 
 //
@@ -130,7 +135,7 @@ typedef struct {
 #define   IMAGE_COMPATIBILITY_CHECK_SUPPORTED      0x0000000000000001
 
 ///
-/// Descriptor Version
+/// Descriptor Version exposed by GetImageInfo() function
 ///
 #define   EFI_FIRMWARE_IMAGE_DESCRIPTOR_VERSION   2
 
@@ -148,6 +153,8 @@ typedef struct {
   /// Provides the authorization for the firmware image operations.  It is a signature across 
   /// the image data and the Monotonic Count value.  Caller uses the private key that is 
   /// associated with a public key that has been provisioned via the key exchange.  
+  /// Because this is defined as a signature, WIN_CERTIFICATE_UEFI_GUID.CertType must
+  /// be EFI_CERT_TYPE_PKCS7_GUID.
   ///
   WIN_CERTIFICATE_UEFI_GUID               AuthInfo;
 } EFI_FIRMWARE_IMAGE_AUTHENTICATION;

@@ -1,7 +1,7 @@
 /** @file
   Helper functions for configuring or getting the parameters relating to iSCSI.
 
-Copyright (c) 2004 - 2012, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2014, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -227,6 +227,7 @@ IScsiUpdateDeviceList (
                   );
   if (Status == EFI_BUFFER_TOO_SMALL) {
     DeviceList = (ISCSI_DEVICE_LIST *) AllocatePool (DataSize);
+    ASSERT (DeviceList != NULL);
 
     gRT->GetVariable (
           L"iSCSIDeviceList",
@@ -291,6 +292,7 @@ IScsiUpdateDeviceList (
   //
   DeviceListSize        = sizeof (ISCSI_DEVICE_LIST) + (NumHandles - 1) * sizeof (ISCSI_MAC_INFO);
   DeviceList            = (ISCSI_DEVICE_LIST *) AllocatePool (DeviceListSize);
+  ASSERT (DeviceList != NULL);
   DeviceList->NumDevice = (UINT8) NumHandles;
 
   for (Index = 0; Index < NumHandles; Index++) {
@@ -870,6 +872,23 @@ IScsiFormCallback (
             Status = EFI_INVALID_PARAMETER;
             break;
           }
+
+          //
+          // Validate iSCSI target name configuration again:
+          // The format of iSCSI target name is already verified when user input the name;
+          // here we only check the case user does not input the name.
+          //
+          if (Private->Current->SessionConfigData.TargetName[0] == '\0') {
+            CreatePopUp (
+              EFI_LIGHTGRAY | EFI_BACKGROUND_BLUE,
+              &Key,
+              L"iSCSI target name is NULL!",
+              NULL
+              );
+            Status = EFI_INVALID_PARAMETER;
+            break;
+          }
+
         }
 
         if (IfrNvData->CHAPType != ISCSI_CHAP_NONE) {
@@ -1171,7 +1190,7 @@ IScsiConfigFormInit (
   CallbackInfo->RegisteredHandle = HiiAddPackages (
                                      &gIp4IScsiConfigGuid,
                                      CallbackInfo->DriverHandle,
-                                     IScsiDxeStrings,
+                                     IScsi4DxeStrings,
                                      IScsiConfigDxeBin,
                                      NULL
                                      );

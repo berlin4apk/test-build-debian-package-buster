@@ -2,7 +2,7 @@
   
   Vfr common library functions.
 
-Copyright (c) 2004 - 2013, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2014, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials                          
 are licensed and made available under the terms and conditions of the BSD License         
 which accompanies this distribution.  The full text of the license may be found at        
@@ -15,6 +15,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 #include "stdio.h"
 #include "stdlib.h"
+#include "CommonLib.h"
 #include "VfrUtilityLib.h"
 #include "VfrFormPkg.h"
 
@@ -1512,21 +1513,30 @@ CVfrDataStorage::MarkVarStoreIdUnused (
 
 EFI_VFR_RETURN_CODE
 CVfrDataStorage::DeclareNameVarStoreBegin (
-  IN CHAR8    *StoreName
+  IN CHAR8           *StoreName,
+  IN EFI_VARSTORE_ID VarStoreId
   )
 {
   SVfrVarStorageNode *pNode = NULL;
-  EFI_VARSTORE_ID    VarStoreId;
+  EFI_VARSTORE_ID    TmpVarStoreId;
 
   if (StoreName == NULL) {
     return VFR_RETURN_FATAL_ERROR;
   }
 
-  if (GetVarStoreId (StoreName, &VarStoreId) == VFR_RETURN_SUCCESS) {
+  if (GetVarStoreId (StoreName, &TmpVarStoreId) == VFR_RETURN_SUCCESS) {
     return VFR_RETURN_REDEFINED;
   }
+  
+  if (VarStoreId == EFI_VARSTORE_ID_INVALID) {
+    VarStoreId = GetFreeVarStoreId (EFI_VFR_VARSTORE_NAME);
+  } else {
+    if (ChekVarStoreIdFree (VarStoreId) == FALSE) {
+      return VFR_RETURN_VARSTOREID_REDEFINED;
+    }
+    MarkVarStoreIdUsed (VarStoreId);
+  }
 
-  VarStoreId = GetFreeVarStoreId (EFI_VFR_VARSTORE_NAME);
   if ((pNode = new SVfrVarStorageNode (StoreName, VarStoreId)) == NULL) {
     return VFR_RETURN_UNDEFINED;
   }
@@ -2619,6 +2629,14 @@ CVfrQuestionDB::RegisterNewDateQuestion (
   CHAR8                 Index;
 
   if (BaseVarId == NULL && Name == NULL) {
+    if (QuestionId == EFI_QUESTION_ID_INVALID) {
+      QuestionId = GetFreeQuestionId ();
+    } else {
+      if (ChekQuestionIdFree (QuestionId) == FALSE) {
+        goto Err;
+      }
+      MarkQuestionIdUsed (QuestionId);
+    }
     return;
   }
 
@@ -2787,6 +2805,14 @@ CVfrQuestionDB::RegisterNewTimeQuestion (
   CHAR8                 Index;
 
   if (BaseVarId == NULL && Name == NULL) {
+    if (QuestionId == EFI_QUESTION_ID_INVALID) {
+      QuestionId = GetFreeQuestionId ();
+    } else {
+      if (ChekQuestionIdFree (QuestionId) == FALSE) {
+        goto Err;
+      }
+      MarkQuestionIdUsed (QuestionId);
+    }
     return;
   }
 
@@ -3258,7 +3284,7 @@ CVfrStringDB::GetVarStoreNameFormStringId (
     return NULL;
   }
 
-  if ((pInFile = fopen (mStringFileName, "rb")) == NULL) {
+  if ((pInFile = fopen (LongFilePath (mStringFileName), "rb")) == NULL) {
     return NULL;
   }
 

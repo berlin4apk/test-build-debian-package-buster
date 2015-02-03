@@ -2,7 +2,7 @@
   Library that helps implement monolithic PEI
 
   Copyright (c) 2008 - 2009, Apple Inc. All rights reserved.<BR>
-  
+
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -23,8 +23,6 @@
 #include <Guid/StatusCodeDataTypeDebug.h>
 #include <FrameworkPei.h>
 
-#define EFI_STATUS_CODE_DATA_MAX_SIZE 200
-
 EFI_STATUS
 EFIAPI
 SerialReportStatusCode (
@@ -36,8 +34,8 @@ SerialReportStatusCode (
   );
 
 
-EFI_STATUS_CODE_PROTOCOL gStatusCode = { 
-  (EFI_REPORT_STATUS_CODE)SerialReportStatusCode 
+EFI_STATUS_CODE_PROTOCOL gStatusCode = {
+  (EFI_REPORT_STATUS_CODE)SerialReportStatusCode
 };
 
 /**
@@ -223,7 +221,7 @@ SerialReportStatusCode (
 
   } else if (Data != NULL &&
     ReportStatusCodeExtractDebugInfo (Data, &ErrorLevel, &Marker, &Format)) {
-    
+
     //
     // Print DEBUG() information into output buffer.
     //

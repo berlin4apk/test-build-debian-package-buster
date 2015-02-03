@@ -1,7 +1,8 @@
 /** @file
 
   Copyright (c) 2008 - 2009, Apple Inc. All rights reserved.<BR>
-  
+  Copyright (c) 2014, ARM Limited. All rights reserved.<BR>
+
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -12,7 +13,7 @@
 
 **/
 
-#include "CpuDxe.h" 
+#include "CpuDxe.h"
 
 //FIXME: Will not compile on non-ARMv7 builds
 #include <Chipset/ArmV7.h>
@@ -44,9 +45,9 @@ EFI_EXCEPTION_CALLBACK  gDebuggerExceptionHandlers[MAX_ARM_EXCEPTION + 1];
 
 
 /**
-  This function registers and enables the handler specified by InterruptHandler for a processor 
-  interrupt or exception type specified by InterruptType. If InterruptHandler is NULL, then the 
-  handler for the processor interrupt or exception type specified by InterruptType is uninstalled. 
+  This function registers and enables the handler specified by InterruptHandler for a processor
+  interrupt or exception type specified by InterruptType. If InterruptHandler is NULL, then the
+  handler for the processor interrupt or exception type specified by InterruptType is uninstalled.
   The installed handler is called once for each processor interrupt or exception.
 
   @param  InterruptType    A pointer to the processor's current interrupt state. Set to TRUE if interrupts
@@ -101,7 +102,7 @@ CommonCExceptionHandler (
     DEBUG ((EFI_D_ERROR, "Unknown exception type %d from %08x\n", ExceptionType, SystemContext.SystemContextArm->PC));
     ASSERT (FALSE);
   }
-  
+
   if (ExceptionType == EXCEPT_ARM_SOFTWARE_INTERRUPT) {
     //
     // ARM JTAG debuggers some times use this vector, so it is not an error to get one
@@ -138,8 +139,8 @@ InitializeExceptions (
   Cpu->DisableInterrupt (Cpu);
 
   //
-  // EFI does not use the FIQ, but a debugger might so we must disable 
-  // as we take over the exception vectors. 
+  // EFI does not use the FIQ, but a debugger might so we must disable
+  // as we take over the exception vectors.
   //
   FiqEnabled = ArmGetFiqState ();
   ArmDisableFiq ();
@@ -209,7 +210,10 @@ InitializeExceptions (
     ArmWriteVBar (PcdGet32(PcdCpuVectorBaseAddress));
   } else {
     // The Vector table must be 32-byte aligned
-    ASSERT(((UINT32)ExceptionHandlersStart & ((1 << 5)-1)) == 0);
+    if (((UINT32)ExceptionHandlersStart & ARM_VECTOR_TABLE_ALIGNMENT) != 0) {
+      ASSERT (0);
+      return EFI_INVALID_PARAMETER;
+    }
 
     // We do not copy the Exception Table at PcdGet32(PcdCpuVectorBaseAddress). We just set Vector Base Address to point into CpuDxe code.
     ArmWriteVBar ((UINT32)ExceptionHandlersStart);
@@ -220,7 +224,7 @@ InitializeExceptions (
   }
 
   if (IrqEnabled) {
-    // 
+    //
     // Restore interrupt state
     //
     Status = Cpu->EnableInterrupt (Cpu);

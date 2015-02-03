@@ -1,22 +1,19 @@
 /** @file
   Implement the IP4 driver support for the socket layer.
 
-  Copyright (c) 2011, Intel Corporation
-  All rights reserved. This program and the accompanying materials
-  are licensed and made available under the terms and conditions of the BSD License
-  which accompanies this distribution.  The full text of the license may be found at
-  http://opensource.org/licenses/bsd-license.php
+  Copyright (c) 2011 - 2014, Intel Corporation. All rights reserved.<BR>
+  This program and the accompanying materials are licensed and made available
+  under the terms and conditions of the BSD License which accompanies this
+  distribution.  The full text of the license may be found at
+  http://opensource.org/licenses/bsd-license.php.
 
   THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
   WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
-
 **/
-
 #include "Socket.h"
 
 
-/**
-  Get the local socket address
+/** Get the local socket address.
 
   This routine returns the IPv4 address associated with the local
   socket.
@@ -25,9 +22,7 @@
   network address for the SOCK_RAW socket.
 
   @param [in] pPort       Address of an ::ESL_PORT structure.
-
   @param [out] pAddress   Network address to receive the local system address
-
 **/
 VOID
 EslIp4LocalAddressGet (
@@ -40,9 +35,7 @@ EslIp4LocalAddressGet (
 
   DBG_ENTER ( );
 
-  //
   //  Return the local address
-  //
   pIp4 = &pPort->Context.Ip4;
   pLocalAddress = (struct sockaddr_in *)pAddress;
   pLocalAddress->sin_family = AF_INET;
@@ -54,8 +47,7 @@ EslIp4LocalAddressGet (
 }
 
 
-/**
-  Set the local port address.
+/** Set the local port address.
 
   This routine sets the local port address.
 
@@ -75,7 +67,6 @@ EslIp4LocalAddressGet (
   @param [in] bBindTest   TRUE = run bind testing
 
   @retval EFI_SUCCESS     The operation was successful
-
  **/
 EFI_STATUS
 EslIp4LocalAddressSet (
@@ -91,23 +82,17 @@ EslIp4LocalAddressSet (
 
   DBG_ENTER ( );
 
-  //
   //  Validate the address
-  //
   pIpAddress = (struct sockaddr_in *)pSockAddr;
   if ( INADDR_BROADCAST == pIpAddress->sin_addr.s_addr ) {
-    //
     //  The local address must not be the broadcast address
-    //
     Status = EFI_INVALID_PARAMETER;
     pPort->pSocket->errno = EADDRNOTAVAIL;
   }
   else {
     Status = EFI_SUCCESS;
 
-    //
     //  Set the local address
-    //
     pIpAddress = (struct sockaddr_in *)pSockAddr;
     pIpv4Address = (UINT8 *)&pIpAddress->sin_addr.s_addr;
     pConfig = &pPort->Context.Ip4.ModeData.ConfigData;
@@ -116,14 +101,10 @@ EslIp4LocalAddressSet (
     pConfig->StationAddress.Addr[2] = pIpv4Address[2];
     pConfig->StationAddress.Addr[3] = pIpv4Address[3];
 
-    //
     //  Determine if the default address is used
-    //
     pConfig->UseDefaultAddress = (BOOLEAN)( 0 == pIpAddress->sin_addr.s_addr );
 
-    //
     //  Display the local address
-    //
     DEBUG (( DEBUG_BIND,
               "0x%08x: Port, Local IP4 Address: %d.%d.%d.%d\r\n",
               pPort,
@@ -132,9 +113,7 @@ EslIp4LocalAddressSet (
               pConfig->StationAddress.Addr[2],
               pConfig->StationAddress.Addr[3]));
 
-    //
     //  Set the subnet mask
-    //
     if ( pConfig->UseDefaultAddress ) {
       pConfig->SubnetMask.Addr[0] = 0;
       pConfig->SubnetMask.Addr[1] = 0;
@@ -148,17 +127,13 @@ EslIp4LocalAddressSet (
       pConfig->SubnetMask.Addr[3] = ( 224 <= pConfig->StationAddress.Addr[0]) ? 0xff : 0;
     }
   }
-
-  //
   //  Return the operation status
-  //
   DBG_EXIT_STATUS ( Status );
   return Status;
 }
 
 
-/**
-  Get the option value
+/** Get the option value.
 
   This routine handles the IPv4 level options.
 
@@ -171,7 +146,6 @@ EslIp4LocalAddressSet (
   @param [out] pOptionLength    Buffer to receive the option length
 
   @retval EFI_SUCCESS - Socket data successfully received
-
  **/
 EFI_STATUS
 EslIp4OptionGet (
@@ -185,20 +159,14 @@ EslIp4OptionGet (
 
   DBG_ENTER ( );
 
-  //
   //  Assume success
-  //
   pSocket->errno = 0;
   Status = EFI_SUCCESS;
 
-  //
   //  Attempt to get the option
-  //
   switch ( OptionName ) {
   default:
-    //
     //  Option not supported
-    //
     pSocket->errno = ENOPROTOOPT;
     Status = EFI_INVALID_PARAMETER;
     break;
@@ -208,17 +176,13 @@ EslIp4OptionGet (
     *pOptionLength = sizeof ( pSocket->bIncludeHeader );
     break;
   }
-
-  //
   //  Return the operation status
-  //
   DBG_EXIT_STATUS ( Status );
   return Status;
 }
 
 
-/**
-  Set the option value
+/** Set the option value.
 
   This routine handles the IPv4 level options.
 
@@ -231,7 +195,6 @@ EslIp4OptionGet (
   @param [in] OptionLength    Length of the buffer in bytes
 
   @retval EFI_SUCCESS - Option successfully set
-
  **/
 EFI_STATUS
 EslIp4OptionSet (
@@ -242,28 +205,22 @@ EslIp4OptionSet (
   )
 {
   BOOLEAN bTrueFalse;
-  socklen_t LengthInBytes;
-  UINT8 * pOptionData;
+  //socklen_t LengthInBytes;
+  //UINT8 * pOptionData;
   EFI_STATUS Status;
 
   DBG_ENTER ( );
 
-  //
   //  Assume success
-  //
   pSocket->errno = 0;
   Status = EFI_SUCCESS;
 
-  //
   //  Determine if the option protocol matches
-  //
-  LengthInBytes = 0;
-  pOptionData = NULL;
+  //LengthInBytes = 0;
+  //pOptionData = NULL;
   switch ( OptionName ) {
   default:
-    //
     //  Protocol level not supported
-    //
     DEBUG (( DEBUG_INFO | DEBUG_OPTION, "ERROR - Invalid protocol option\r\n" ));
     pSocket->errno = ENOTSUP;
     Status = EFI_UNSUPPORTED;
@@ -271,31 +228,22 @@ EslIp4OptionSet (
 
   case IP_HDRINCL:
 
-    //
     //  Validate the option length
-    //
     if ( sizeof ( UINT32 ) == OptionLength ) {
-      //
       //  Restrict the input to TRUE or FALSE
-      //
       bTrueFalse = TRUE;
       if ( 0 == *(UINT32 *)pOptionValue ) {
         bTrueFalse = FALSE;
       }
       pOptionValue = &bTrueFalse;
 
-      //
       //  Set the option value
-      //
-      pOptionData = (UINT8 *)&pSocket->bIncludeHeader;
-      LengthInBytes = sizeof ( pSocket->bIncludeHeader );
+      //pOptionData = (UINT8 *)&pSocket->bIncludeHeader;
+      //LengthInBytes = sizeof ( pSocket->bIncludeHeader );
     }
     break;
   }
-
-  //
   //  Return the operation status
-  //
   DBG_EXIT_STATUS ( Status );
   return Status;
 }
@@ -430,13 +378,13 @@ EslIp4PortAllocate (
   @param [in] pPort           Address of an ::ESL_PORT structure.
 
   @param [in] pPacket         Address of an ::ESL_PACKET structure.
-  
+
   @param [in] pbConsumePacket Address of a BOOLEAN indicating if the packet is to be consumed
-  
+
   @param [in] BufferLength    Length of the the buffer
-  
+
   @param [in] pBuffer         Address of a buffer to receive the data.
-  
+
   @param [in] pDataLength     Number of received data bytes in the buffer.
 
   @param [out] pAddress       Network address to receive the remote system address
@@ -653,17 +601,15 @@ EslIp4RxComplete (
   )
 {
   size_t LengthInBytes;
-  ESL_PORT * pPort;
   ESL_PACKET * pPacket;
   EFI_IP4_RECEIVE_DATA * pRxData;
   EFI_STATUS Status;
-  
+
   DBG_ENTER ( );
-  
+
   //
   //  Get the operation status.
   //
-  pPort = pIo->pPort;
   Status = pIo->Token.Ip4Rx.Status;
 
   //
@@ -672,7 +618,7 @@ EslIp4RxComplete (
   pRxData = pIo->Token.Ip4Rx.Packet.RxData;
   LengthInBytes = pRxData->HeaderLength + pRxData->DataLength;
 
-  //
+  //{{
   //      +--------------------+   +----------------------+
   //      | ESL_IO_MGMT        |   |      Data Buffer     |
   //      |                    |   |     (Driver owned)   |
@@ -692,7 +638,7 @@ EslIp4RxComplete (
   //
   //
   //  Save the data in the packet
-  //
+  //}}
   pPacket = pIo->pPacket;
   pPacket->Op.Ip4Rx.pRxData = pRxData;
 
@@ -717,7 +663,7 @@ EslIp4RxComplete (
   that the socket is configured.
 
   @param [in] pSocket         Address of an ::ESL_SOCKET structure
-  
+
   @retval EFI_SUCCESS - The port is connected
   @retval EFI_NOT_STARTED - The port is not connected
 
@@ -904,7 +850,7 @@ EslIp4RxComplete (
   //  Determine the socket configuration status
   //
   Status = pSocket->bConfigured ? EFI_SUCCESS : EFI_NOT_STARTED;
-  
+
   //
   //  Return the port connected state.
   //
@@ -1067,71 +1013,64 @@ EslIp4TxBuffer (
           RAISE_TPL ( TplPrevious, TPL_SOCKETS );
 
           //
-          //  Stop transmission after an error
+          //  Display the request
           //
-          if ( !EFI_ERROR ( pSocket->TxError )) {
-            //
-            //  Display the request
-            //
-            DEBUG (( DEBUG_TX,
-                      "Send %d bytes from 0x%08x, %d.%d.%d.%d --> %d.%d.%d.%d\r\n",
-                      BufferLength,
-                      pBuffer,
-                      pIp4->ModeData.ConfigData.StationAddress.Addr[0],
-                      pIp4->ModeData.ConfigData.StationAddress.Addr[1],
-                      pIp4->ModeData.ConfigData.StationAddress.Addr[2],
-                      pIp4->ModeData.ConfigData.StationAddress.Addr[3],
-                      pTxData->TxData.DestinationAddress.Addr[0],
-                      pTxData->TxData.DestinationAddress.Addr[1],
-                      pTxData->TxData.DestinationAddress.Addr[2],
-                      pTxData->TxData.DestinationAddress.Addr[3]));
+          DEBUG (( DEBUG_TX,
+                    "Send %d bytes from 0x%08x, %d.%d.%d.%d --> %d.%d.%d.%d\r\n",
+                    BufferLength,
+                    pBuffer,
+                    pIp4->ModeData.ConfigData.StationAddress.Addr[0],
+                    pIp4->ModeData.ConfigData.StationAddress.Addr[1],
+                    pIp4->ModeData.ConfigData.StationAddress.Addr[2],
+                    pIp4->ModeData.ConfigData.StationAddress.Addr[3],
+                    pTxData->TxData.DestinationAddress.Addr[0],
+                    pTxData->TxData.DestinationAddress.Addr[1],
+                    pTxData->TxData.DestinationAddress.Addr[2],
+                    pTxData->TxData.DestinationAddress.Addr[3]));
 
-            //
-            //  Queue the data for transmission
-            //
-            pPacket->pNext = NULL;
-            pPreviousPacket = pSocket->pTxPacketListTail;
-            if ( NULL == pPreviousPacket ) {
-              pSocket->pTxPacketListHead = pPacket;
-            }
-            else {
-              pPreviousPacket->pNext = pPacket;
-            }
-            pSocket->pTxPacketListTail = pPacket;
-            DEBUG (( DEBUG_TX,
-                      "0x%08x: Packet on transmit list\r\n",
-                      pPacket ));
-
-            //
-            //  Account for the buffered data
-            //
-            *pTxBytes += BufferLength;
-            *pDataLength = BufferLength;
-
-            //
-            //  Start the transmit engine if it is idle
-            //
-            if ( NULL != pPort->pTxFree ) {
-              EslSocketTxStart ( pPort,
-                                 &pSocket->pTxPacketListHead,
-                                 &pSocket->pTxPacketListTail,
-                                 &pPort->pTxActive,
-                                 &pPort->pTxFree );
-            }
+          //
+          //  Queue the data for transmission
+          //
+          pPacket->pNext = NULL;
+          pPreviousPacket = pSocket->pTxPacketListTail;
+          if ( NULL == pPreviousPacket ) {
+            pSocket->pTxPacketListHead = pPacket;
           }
           else {
-            //
-            //  Previous transmit error
-            //  Stop transmission
-            //
-            Status = pSocket->TxError;
-            pSocket->errno = EIO;
+            pPreviousPacket->pNext = pPacket;
+          }
+          pSocket->pTxPacketListTail = pPacket;
+          DEBUG (( DEBUG_TX,
+                    "0x%08x: Packet on transmit list\r\n",
+                    pPacket ));
+
+          //
+          //  Account for the buffered data
+          //
+          *pTxBytes += BufferLength;
+          *pDataLength = BufferLength;
+
+          //
+          //  Start the transmit engine if it is idle
+          //
+          if ( NULL != pPort->pTxFree ) {
+            EslSocketTxStart ( pPort,
+                               &pSocket->pTxPacketListHead,
+                               &pSocket->pTxPacketListTail,
+                               &pPort->pTxActive,
+                               &pPort->pTxFree );
 
             //
-            //  Free the packet
+            //  Ignore any transmit error
             //
-            EslSocketPacketFree ( pPacket, DEBUG_TX );
-            break;
+            if ( EFI_ERROR ( pSocket->TxError )) {
+              DEBUG (( DEBUG_TX,
+                       "0x%08x: Transmit error, Packet: 0x%08x, Status: %r\r\n",
+                       pPort,
+                       pPacket,
+                       pSocket->TxError ));
+            }
+            pSocket->TxError = EFI_SUCCESS;
           }
 
           //
@@ -1195,9 +1134,9 @@ EslIp4TxComplete (
   ESL_PACKET * pPacket;
   ESL_SOCKET * pSocket;
   EFI_STATUS Status;
-  
+
   DBG_ENTER ( );
-  
+
   //
   //  Locate the active transmit packet
   //
@@ -1213,6 +1152,18 @@ EslIp4TxComplete (
   Status = pIo->Token.Ip4Tx.Status;
 
   //
+  //  Ignore the transmit error
+  //
+  if ( EFI_ERROR ( Status )) {
+    DEBUG (( DEBUG_TX,
+             "0x%08x: Transmit completion error, Packet: 0x%08x, Status: %r\r\n",
+             pPort,
+             pPacket,
+             Status ));
+    Status = EFI_SUCCESS;
+  }
+
+  //
   //  Complete the transmit operation
   //
   EslSocketTxComplete ( pIo,
@@ -1224,6 +1175,157 @@ EslIp4TxComplete (
                         &pPort->pTxActive,
                         &pPort->pTxFree );
   DBG_EXIT ( );
+}
+
+
+/**
+  Verify the adapter's IP address
+
+  This support routine is called by EslSocketBindTest.
+
+  @param [in] pPort       Address of an ::ESL_PORT structure.
+  @param [in] pConfigData Address of the configuration data
+
+  @retval EFI_SUCCESS - The IP address is valid
+  @retval EFI_NOT_STARTED - The IP address is invalid
+
+ **/
+EFI_STATUS
+EslIp4VerifyLocalIpAddress (
+  IN ESL_PORT * pPort,
+  IN EFI_IP4_CONFIG_DATA * pConfigData
+  )
+{
+  UINTN DataSize;
+  EFI_IP4_IPCONFIG_DATA * pIpConfigData;
+  EFI_IP4_CONFIG_PROTOCOL * pIpConfigProtocol;
+  ESL_SERVICE * pService;
+  EFI_STATUS Status;
+
+  DBG_ENTER ( );
+
+  //
+  //  Use break instead of goto
+  //
+  pIpConfigData = NULL;
+  for ( ; ; ) {
+    //
+    //  Determine if the IP address is specified
+    //
+    DEBUG (( DEBUG_BIND,
+              "UseDefaultAddress: %s\r\n",
+              pConfigData->UseDefaultAddress ? L"TRUE" : L"FALSE" ));
+    DEBUG (( DEBUG_BIND,
+              "Requested IP address: %d.%d.%d.%d\r\n",
+              pConfigData->StationAddress.Addr [ 0 ],
+              pConfigData->StationAddress.Addr [ 1 ],
+              pConfigData->StationAddress.Addr [ 2 ],
+              pConfigData->StationAddress.Addr [ 3 ]));
+    if ( pConfigData->UseDefaultAddress
+      || (( 0 == pConfigData->StationAddress.Addr [ 0 ])
+      && ( 0 == pConfigData->StationAddress.Addr [ 1 ])
+      && ( 0 == pConfigData->StationAddress.Addr [ 2 ])
+      && ( 0 == pConfigData->StationAddress.Addr [ 3 ])))
+    {
+      Status = EFI_SUCCESS;
+      break;
+    }
+
+    //
+    //  Open the configuration protocol
+    //
+    pService = pPort->pService;
+    Status = gBS->OpenProtocol ( pService->Controller,
+                                 &gEfiIp4ConfigProtocolGuid,
+                                 (VOID **)&pIpConfigProtocol,
+                                 NULL,
+                                 NULL,
+                                 EFI_OPEN_PROTOCOL_GET_PROTOCOL );
+    if ( EFI_ERROR ( Status )) {
+      DEBUG (( DEBUG_ERROR,
+                "ERROR - IP Configuration Protocol not available, Status: %r\r\n",
+                Status ));
+      break;
+    }
+
+    //
+    //  Get the IP configuration data size
+    //
+    DataSize = 0;
+    Status = pIpConfigProtocol->GetData ( pIpConfigProtocol,
+                                          &DataSize,
+                                          NULL );
+    if ( EFI_BUFFER_TOO_SMALL != Status ) {
+      DEBUG (( DEBUG_ERROR,
+                "ERROR - Failed to get IP Configuration data size, Status: %r\r\n",
+                Status ));
+      break;
+    }
+
+    //
+    //  Allocate the configuration data buffer
+    //
+    pIpConfigData = AllocatePool ( DataSize );
+    if ( NULL == pIpConfigData ) {
+      DEBUG (( DEBUG_ERROR,
+                "ERROR - Not enough memory to allocate IP Configuration data!\r\n" ));
+      Status = EFI_OUT_OF_RESOURCES;
+      break;
+    }
+
+    //
+    //  Get the IP configuration
+    //
+    Status = pIpConfigProtocol->GetData ( pIpConfigProtocol,
+                                          &DataSize,
+                                          pIpConfigData );
+    if ( EFI_ERROR ( Status )) {
+      DEBUG (( DEBUG_ERROR,
+                "ERROR - Failed to return IP Configuration data, Status: %r\r\n",
+                Status ));
+      break;
+    }
+
+    //
+    //  Display the current configuration
+    //
+    DEBUG (( DEBUG_BIND,
+              "Actual adapter IP address: %d.%d.%d.%d\r\n",
+              pIpConfigData->StationAddress.Addr [ 0 ],
+              pIpConfigData->StationAddress.Addr [ 1 ],
+              pIpConfigData->StationAddress.Addr [ 2 ],
+              pIpConfigData->StationAddress.Addr [ 3 ]));
+
+    //
+    //  Assume the port is not configured
+    //
+    Status = EFI_SUCCESS;
+    if (( pConfigData->StationAddress.Addr [ 0 ] == pIpConfigData->StationAddress.Addr [ 0 ])
+      && ( pConfigData->StationAddress.Addr [ 1 ] == pIpConfigData->StationAddress.Addr [ 1 ])
+      && ( pConfigData->StationAddress.Addr [ 2 ] == pIpConfigData->StationAddress.Addr [ 2 ])
+      && ( pConfigData->StationAddress.Addr [ 3 ] == pIpConfigData->StationAddress.Addr [ 3 ])) {
+      break;
+    }
+
+    //
+    //  The IP address did not match
+    //
+    Status = EFI_NOT_STARTED;
+    break;
+  }
+
+  //
+  //  Free the buffer if necessary
+  //
+  if ( NULL != pIpConfigData ) {
+    FreePool ( pIpConfigData );
+  }
+
+  //
+  //  Return the IP address status
+  //
+  DBG_EXIT_STATUS ( Status );
+  return Status;
 }
 
 
@@ -1265,5 +1367,6 @@ CONST ESL_PROTOCOL_API cEslIp4Api = {
   NULL,   //  RxStart
   EslIp4TxBuffer,
   EslIp4TxComplete,
-  NULL    //  TxOobComplete
+  NULL,   //  TxOobComplete
+  (PFN_API_VERIFY_LOCAL_IP_ADDRESS)EslIp4VerifyLocalIpAddress
 };

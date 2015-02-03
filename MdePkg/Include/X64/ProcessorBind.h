@@ -249,12 +249,12 @@ typedef INT64   INTN;
   ///
 #elif defined(_MSC_EXTENSIONS)
   ///
-  /// Microsoft* compiler specific method for EFIAPI calling convension
+  /// Microsoft* compiler specific method for EFIAPI calling convention.
   /// 
   #define EFIAPI __cdecl  
 #elif defined(__GNUC__)
   ///
-  /// Define the standard calling convention reguardless of optimization level.
+  /// Define the standard calling convention regardless of optimization level.
   /// The GCC support assumes a GCC compiler that supports the EFI ABI. The EFI
   /// ABI is much closer to the x64 Microsoft* ABI than standard x64 (x86-64) 
   /// GCC ABI. Thus a standard x64 (x86-64) GCC compiler can not be used for 
@@ -289,6 +289,10 @@ typedef INT64   INTN;
   
 **/
 #define FUNCTION_ENTRY_POINT(FunctionPointer) (VOID *)(UINTN)(FunctionPointer)
+
+#ifndef __USER_LABEL_PREFIX__
+#define __USER_LABEL_PREFIX__
+#endif
 
 #endif
 

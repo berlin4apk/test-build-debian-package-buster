@@ -59,7 +59,7 @@ IsBSP (
   EFI_STATUS  Status;
   UINTN       ProcessorNumber;
 
-  Status = CpuMpServicesWhoAmI (&mMpSercicesTemplate, &ProcessorNumber);
+  Status = CpuMpServicesWhoAmI (&mMpServicesTemplate, &ProcessorNumber);
   if (EFI_ERROR (Status)) {
     return FALSE;
   }
@@ -111,8 +111,31 @@ GetNextBlockedNumber (
   return EFI_NOT_FOUND;
 }
 
+/**
+ * Calculated and stalled the interval time by BSP to check whether
+ * the APs have finished.
+ *
+ * @param[in]  Timeout    The time limit in microseconds for
+ *                        APs to return from Procedure.
+ *
+ * @retval     StallTime  Time of execution stall.
+**/
+UINTN
+CalculateAndStallInterval (
+  IN UINTN                  Timeout
+  )
+{
+  UINTN                 StallTime;
 
+  if (Timeout < gPollInterval && Timeout != 0) {
+    StallTime = Timeout;
+  } else {
+    StallTime = gPollInterval;
+  }
+  gBS->Stall (StallTime);
 
+  return StallTime;
+}
 
 /**
   This service retrieves the number of logical processor in the platform
@@ -378,7 +401,7 @@ CpuMpServicesStartupAllAps (
   UINTN                 NextNumber;
   PROCESSOR_STATE       APInitialState;
   PROCESSOR_STATE       ProcessorState;
-  INTN                  Timeout;
+  UINTN                 Timeout;
 
 
   if (!IsBSP ()) {
@@ -397,6 +420,24 @@ CpuMpServicesStartupAllAps (
     return EFI_UNSUPPORTED;
   }
 
+  for (Number = 0; Number < gMPSystem.NumberOfProcessors; Number++) {
+    ProcessorData = &gMPSystem.ProcessorData[Number];
+    if ((ProcessorData->Info.StatusFlag & PROCESSOR_AS_BSP_BIT) == PROCESSOR_AS_BSP_BIT) {
+      // Skip BSP
+      continue;
+    }
+
+    if ((ProcessorData->Info.StatusFlag & PROCESSOR_ENABLED_BIT) == 0) {
+      // Skip Disabled processors
+      continue;
+    }
+    gThread->MutexLock(ProcessorData->StateLock);
+    if (ProcessorData->State != CPU_STATE_IDLE) {
+      gThread->MutexUnlock (ProcessorData->StateLock);
+      return EFI_NOT_READY;
+    }
+    gThread->MutexUnlock(ProcessorData->StateLock);
+  }
 
   if (FailedCpuList != NULL) {
     gMPSystem.FailedList = AllocatePool ((gMPSystem.NumberOfProcessors + 1) * sizeof (UINTN));
@@ -437,18 +478,14 @@ CpuMpServicesStartupAllAps (
     // state 1 by 1, until the previous 1 finished its task
     // if not "SingleThread", all APs are put to ready state from the beginning
     //
-    if (ProcessorData->State == CPU_STATE_IDLE) {
-      gMPSystem.StartCount++;
+    gThread->MutexLock(ProcessorData->StateLock);
+    ASSERT (ProcessorData->State == CPU_STATE_IDLE);
+    ProcessorData->State = APInitialState;
+    gThread->MutexUnlock (ProcessorData->StateLock);
 
-      gThread->MutexLock (&ProcessorData->StateLock);
-      ProcessorData->State = APInitialState;
-      gThread->MutexUnlock (&ProcessorData->StateLock);
-
-      if (SingleThread) {
-        APInitialState = CPU_STATE_BLOCKED;
-      }
-    } else {
-      return EFI_NOT_READY;
+    gMPSystem.StartCount++;
+    if (SingleThread) {
+      APInitialState = CPU_STATE_BLOCKED;
     }
   }
 
@@ -465,7 +502,13 @@ CpuMpServicesStartupAllAps (
         continue;
       }
 
-      SetApProcedure (ProcessorData, Procedure, ProcedureArgument);
+      gThread->MutexLock (ProcessorData->StateLock);
+      ProcessorState = ProcessorData->State;
+      gThread->MutexUnlock (ProcessorData->StateLock);
+
+      if (ProcessorState == CPU_STATE_READY) {
+        SetApProcedure (ProcessorData, Procedure, ProcedureArgument);
+      }
     }
 
     //
@@ -512,11 +555,16 @@ CpuMpServicesStartupAllAps (
         if (SingleThread) {
           Status = GetNextBlockedNumber (&NextNumber);
           if (!EFI_ERROR (Status)) {
+            gThread->MutexLock (gMPSystem.ProcessorData[NextNumber].StateLock);
             gMPSystem.ProcessorData[NextNumber].State = CPU_STATE_READY;
+            gThread->MutexUnlock (gMPSystem.ProcessorData[NextNumber].StateLock);
           }
         }
 
+        gThread->MutexLock (ProcessorData->StateLock);
         ProcessorData->State = CPU_STATE_IDLE;
+        gThread->MutexUnlock (ProcessorData->StateLock);
+
         break;
 
       default:
@@ -529,13 +577,12 @@ CpuMpServicesStartupAllAps (
       goto Done;
     }
 
-    if ((TimeoutInMicroseconds != 0) && (Timeout < 0)) {
+    if ((TimeoutInMicroseconds != 0) && (Timeout == 0)) {
       Status = EFI_TIMEOUT;
       goto Done;
     }
 
-    gBS->Stall (gPollInterval);
-    Timeout -= gPollInterval;
+    Timeout -= CalculateAndStallInterval (Timeout);
   }
 
 Done:
@@ -648,7 +695,7 @@ CpuMpServicesStartupThisAP (
   OUT BOOLEAN                   *Finished               OPTIONAL
   )
 {
-  INTN            Timeout;
+  UINTN            Timeout;
 
   if (!IsBSP ()) {
     return EFI_DEVICE_ERROR;
@@ -666,9 +713,16 @@ CpuMpServicesStartupThisAP (
     return EFI_INVALID_PARAMETER;
   }
 
+  if ((gMPSystem.ProcessorData[ProcessorNumber].Info.StatusFlag & PROCESSOR_ENABLED_BIT) == 0) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  gThread->MutexLock(gMPSystem.ProcessorData[ProcessorNumber].StateLock);
   if (gMPSystem.ProcessorData[ProcessorNumber].State != CPU_STATE_IDLE) {
+    gThread->MutexUnlock(gMPSystem.ProcessorData[ProcessorNumber].StateLock);
     return EFI_NOT_READY;
   }
+  gThread->MutexUnlock(gMPSystem.ProcessorData[ProcessorNumber].StateLock);
 
   if ((WaitEvent != NULL)  && gReadToBoot) {
     return EFI_UNSUPPORTED;
@@ -694,21 +748,20 @@ CpuMpServicesStartupThisAP (
 
   // Blocking
   while (TRUE) {
-    gThread->MutexLock (&gMPSystem.ProcessorData[ProcessorNumber].StateLock);
+    gThread->MutexLock (gMPSystem.ProcessorData[ProcessorNumber].StateLock);
     if (gMPSystem.ProcessorData[ProcessorNumber].State == CPU_STATE_FINISHED) {
       gMPSystem.ProcessorData[ProcessorNumber].State = CPU_STATE_IDLE;
-      gThread->MutexUnlock (&gMPSystem.ProcessorData[ProcessorNumber].StateLock);
+      gThread->MutexUnlock (gMPSystem.ProcessorData[ProcessorNumber].StateLock);
       break;
     }
 
-    gThread->MutexUnlock (&gMPSystem.ProcessorData[ProcessorNumber].StateLock);
+    gThread->MutexUnlock (gMPSystem.ProcessorData[ProcessorNumber].StateLock);
 
-    if ((TimeoutInMicroseconds != 0) && (Timeout < 0)) {
+    if ((TimeoutInMicroseconds != 0) && (Timeout == 0)) {
       return EFI_TIMEOUT;
     }
 
-    gBS->Stall (gPollInterval);
-    Timeout -= gPollInterval;
+    Timeout -= CalculateAndStallInterval (Timeout);
   }
 
   return EFI_SUCCESS;
@@ -784,9 +837,12 @@ CpuMpServicesSwitchBSP (
   }
   ASSERT (Index != gMPSystem.NumberOfProcessors);
 
+  gThread->MutexLock (gMPSystem.ProcessorData[ProcessorNumber].StateLock);
   if (gMPSystem.ProcessorData[ProcessorNumber].State != CPU_STATE_IDLE) {
+    gThread->MutexUnlock (gMPSystem.ProcessorData[ProcessorNumber].StateLock);
     return EFI_NOT_READY;
   }
+  gThread->MutexUnlock (gMPSystem.ProcessorData[ProcessorNumber].StateLock);
 
   // Skip for now as we need switch a bunch of stack stuff around and it's complex
   // May not be worth it?
@@ -856,11 +912,12 @@ CpuMpServicesEnableDisableAP (
     return EFI_INVALID_PARAMETER;
   }
 
+  gThread->MutexLock (gMPSystem.ProcessorData[ProcessorNumber].StateLock);
   if (gMPSystem.ProcessorData[ProcessorNumber].State != CPU_STATE_IDLE) {
+    gThread->MutexUnlock (gMPSystem.ProcessorData[ProcessorNumber].StateLock);
     return EFI_UNSUPPORTED;
   }
-
-  gThread->MutexLock (&gMPSystem.ProcessorData[ProcessorNumber].StateLock);
+  gThread->MutexUnlock (gMPSystem.ProcessorData[ProcessorNumber].StateLock);
 
   if (EnableAP) {
     if ((gMPSystem.ProcessorData[ProcessorNumber].Info.StatusFlag & PROCESSOR_ENABLED_BIT) == 0 ) {
@@ -878,8 +935,6 @@ CpuMpServicesEnableDisableAP (
     gMPSystem.ProcessorData[ProcessorNumber].Info.StatusFlag &= ~PROCESSOR_HEALTH_STATUS_BIT;
     gMPSystem.ProcessorData[ProcessorNumber].Info.StatusFlag |= (*HealthFlag & PROCESSOR_HEALTH_STATUS_BIT);
   }
-
-  gThread->MutexUnlock (&gMPSystem.ProcessorData[ProcessorNumber].StateLock);
 
   return EFI_SUCCESS;
 }
@@ -936,7 +991,7 @@ CpuMpServicesWhoAmI (
 
 
 
-EFI_MP_SERVICES_PROTOCOL  mMpSercicesTemplate = {
+EFI_MP_SERVICES_PROTOCOL  mMpServicesTemplate = {
   CpuMpServicesGetNumberOfProcessors,
   CpuMpServicesGetProcessorInfo,
   CpuMpServicesStartupAllAps,
@@ -971,13 +1026,12 @@ CpuCheckAllAPsStatus (
   BOOLEAN               Found;
 
   if (gMPSystem.TimeoutActive) {
-    gMPSystem.Timeout -= gPollInterval;
+    gMPSystem.Timeout -= CalculateAndStallInterval (gMPSystem.Timeout);
   }
 
-  ProcessorData = (PROCESSOR_DATA_BLOCK *) Context;
-
   for (ProcessorNumber = 0; ProcessorNumber < gMPSystem.NumberOfProcessors; ProcessorNumber++) {
-    if ((ProcessorData[ProcessorNumber].Info.StatusFlag & PROCESSOR_AS_BSP_BIT) == PROCESSOR_AS_BSP_BIT) {
+    ProcessorData = &gMPSystem.ProcessorData[ProcessorNumber];
+    if ((ProcessorData->Info.StatusFlag & PROCESSOR_AS_BSP_BIT) == PROCESSOR_AS_BSP_BIT) {
      // Skip BSP
       continue;
     }
@@ -992,33 +1046,31 @@ CpuCheckAllAPsStatus (
     // context. Meaning deadlock. Which is a bad thing.
     // So, try lock it. If we can get it, cool, do our thing.
     // otherwise, just dump out & try again on the next iteration.
-    Status = gThread->MutexTryLock (gMPSystem.ProcessorData[ProcessorNumber].StateLock);
+    Status = gThread->MutexTryLock (ProcessorData->StateLock);
     if (EFI_ERROR(Status)) {
       return;
     }
-    ProcessorState = gMPSystem.ProcessorData[ProcessorNumber].State;
-    gThread->MutexUnlock (gMPSystem.ProcessorData[ProcessorNumber].StateLock);
+    ProcessorState = ProcessorData->State;
+    gThread->MutexUnlock (ProcessorData->StateLock);
 
     switch (ProcessorState) {
-    case CPU_STATE_READY:
-      SetApProcedure (ProcessorData, gMPSystem.Procedure, gMPSystem.ProcedureArgument);
-      break;
-
     case CPU_STATE_FINISHED:
       if (gMPSystem.SingleThread) {
         Status = GetNextBlockedNumber (&NextNumber);
         if (!EFI_ERROR (Status)) {
           NextData = &gMPSystem.ProcessorData[NextNumber];
 
-          gThread->MutexLock (&NextData->ProcedureLock);
+          gThread->MutexLock (NextData->StateLock);
           NextData->State = CPU_STATE_READY;
-          gThread->MutexUnlock (&NextData->ProcedureLock);
+          gThread->MutexUnlock (NextData->StateLock);
 
           SetApProcedure (NextData, gMPSystem.Procedure, gMPSystem.ProcedureArgument);
         }
       }
 
-      gMPSystem.ProcessorData[ProcessorNumber].State = CPU_STATE_IDLE;
+      gThread->MutexLock (ProcessorData->StateLock);
+      ProcessorData->State = CPU_STATE_IDLE;
+      gThread->MutexUnlock (ProcessorData->StateLock);
       gMPSystem.FinishCount++;
       break;
 
@@ -1027,13 +1079,14 @@ CpuCheckAllAPsStatus (
     }
   }
 
-  if (gMPSystem.TimeoutActive && gMPSystem.Timeout < 0) {
+  if (gMPSystem.TimeoutActive && gMPSystem.Timeout == 0) {
     //
     // Timeout
     //
     if (gMPSystem.FailedList != NULL) {
       for (ProcessorNumber = 0; ProcessorNumber < gMPSystem.NumberOfProcessors; ProcessorNumber++) {
-        if ((ProcessorData[ProcessorNumber].Info.StatusFlag & PROCESSOR_AS_BSP_BIT) == PROCESSOR_AS_BSP_BIT) {
+        ProcessorData = &gMPSystem.ProcessorData[ProcessorNumber];
+        if ((ProcessorData->Info.StatusFlag & PROCESSOR_AS_BSP_BIT) == PROCESSOR_AS_BSP_BIT) {
          // Skip BSP
           continue;
         }
@@ -1044,12 +1097,12 @@ CpuCheckAllAPsStatus (
         }
 
         // Mark the
-        Status = gThread->MutexTryLock (gMPSystem.ProcessorData[ProcessorNumber].StateLock);
+        Status = gThread->MutexTryLock (ProcessorData->StateLock);
         if (EFI_ERROR(Status)) {
           return;
         }
-        ProcessorState = gMPSystem.ProcessorData[ProcessorNumber].State;
-        gThread->MutexUnlock (gMPSystem.ProcessorData[ProcessorNumber].StateLock);
+        ProcessorState = ProcessorData->State;
+        gThread->MutexUnlock (ProcessorData->StateLock);
 
         if (ProcessorState != CPU_STATE_IDLE) {
           // If we are retrying make sure we don't double count
@@ -1348,7 +1401,7 @@ CpuMpServicesInit (
   Handle = NULL;
   Status = gBS->InstallMultipleProtocolInterfaces (
                   &Handle,
-                  &gEfiMpServiceProtocolGuid,   &mMpSercicesTemplate,
+                  &gEfiMpServiceProtocolGuid,   &mMpServicesTemplate,
                   NULL
                   );
   return Status;

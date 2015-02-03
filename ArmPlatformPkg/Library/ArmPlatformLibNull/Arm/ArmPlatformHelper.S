@@ -14,7 +14,7 @@
 #include <AsmMacroIoLib.h>
 #include <Library/ArmLib.h>
 
-.text 
+.text
 .align 2
 
 GCC_ASM_EXPORT(ArmPlatformPeiBootAction)
@@ -33,17 +33,17 @@ ASM_PFX(ArmPlatformPeiBootAction):
 //  IN UINTN MpId
 //  );
 ASM_PFX(ArmPlatformGetCorePosition):
-  and	r1, r0, #ARM_CORE_MASK
-  and	r0, r0, #ARM_CLUSTER_MASK
-  add	r0, r1, r0, LSR #7
-  bx 	lr
+  and   r1, r0, #ARM_CORE_MASK
+  and   r0, r0, #ARM_CLUSTER_MASK
+  add   r0, r1, r0, LSR #7
+  bx    lr
 
 //UINTN
 //ArmPlatformGetPrimaryCoreMpId (
 //  VOID
 //  );
 ASM_PFX(ArmPlatformGetPrimaryCoreMpId):
-  LoadConstantToReg (_gPcd_FixedAtBuild_PcdArmPrimaryCoreMask, r0)
+  LoadConstantToReg (_gPcd_FixedAtBuild_PcdArmPrimaryCore, r0)
   ldr   r0, [r0]
   bx    lr
 

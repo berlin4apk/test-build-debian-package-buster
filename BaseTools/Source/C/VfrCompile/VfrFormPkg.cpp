@@ -82,7 +82,7 @@ SPendingAssign::AssignValue (
   IN UINT32 Len
   )
 {
-  memcpy (mAddr, Addr, (mLen < Len ? mLen : Len));
+  memmove (mAddr, Addr, (mLen < Len ? mLen : Len));
   mFlag = ASSIGNED;
 }
 
@@ -95,7 +95,7 @@ SPendingAssign::GetKey (
 }
 
 CFormPkg::CFormPkg (
-  IN UINT32 BufferSize = 4096
+  IN UINT32 BufferSize
   )
 {
   CHAR8       *BufferStart;
@@ -685,7 +685,7 @@ CFormPkg::AdjustDynamicInsertOpcode (
     //
     // Override the restore buffer data.
     //
-    memcpy (LastFormEndAddr, InsertOpcodeAddr, InsertOpcodeNode->mBufferFree - InsertOpcodeAddr);
+    memmove (LastFormEndAddr, InsertOpcodeAddr, InsertOpcodeNode->mBufferFree - InsertOpcodeAddr);
     InsertOpcodeNode->mBufferFree -= NeedRestoreCodeLen;
     memset (InsertOpcodeNode->mBufferFree, 0, NeedRestoreCodeLen);
   } else {
@@ -733,7 +733,7 @@ CFormPkg::AdjustDynamicInsertOpcode (
       //
       // Override the restore buffer data.
       //
-      memcpy (InsertOpcodeNode->mBufferStart, InsertOpcodeAddr, InsertOpcodeNode->mBufferFree - InsertOpcodeAddr);
+      memmove (InsertOpcodeNode->mBufferStart, InsertOpcodeAddr, InsertOpcodeNode->mBufferFree - InsertOpcodeAddr);
       InsertOpcodeNode->mBufferFree -= InsertOpcodeAddr - InsertOpcodeNode->mBufferStart;
 
       //
@@ -855,17 +855,6 @@ CFormPkg::DeclarePendingQuestion (
       // Get VarStoreType
       //
       ReturnCode = lCVfrDataStorage.GetVarStoreId (FName, &Info.mVarStoreId);
-      if (ReturnCode == VFR_RETURN_UNDEFINED) {
-        lCVfrDataStorage.DeclareBufferVarStore (
-                           FName, 
-                           LocalFormSetGuid, 
-                           &lCVfrVarDataTypeDB, 
-                           FName,
-                           EFI_VARSTORE_ID_INVALID,
-                           FALSE
-                           );
-        ReturnCode = lCVfrDataStorage.GetVarStoreId (FName, &Info.mVarStoreId, LocalFormSetGuid); 
-      }
       if (ReturnCode != VFR_RETURN_SUCCESS) {
         gCVfrErrorHandle.PrintMsg (pNode->mLineNo, FName, "Error", "Var Store Type is not defined");
         return ReturnCode;
@@ -1553,7 +1542,7 @@ CIfrObj::_EMIT_PENDING_OBJ (
   //
   ObjBinBuf  = gCFormPkg.IfrBinBufferGet (mObjBinLen);
   if (ObjBinBuf != NULL) {
-    memcpy (ObjBinBuf, mObjBinBuf, mObjBinLen);
+    memmove (ObjBinBuf, mObjBinBuf, mObjBinLen);
   }
   
   //

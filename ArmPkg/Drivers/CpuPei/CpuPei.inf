@@ -45,7 +45,7 @@
 
 [Ppis]
   gArmMpCoreInfoPpiGuid
-  
+
 [Guids]
   gArmMpCoreInfoGuid
 
@@ -53,9 +53,6 @@
   gEmbeddedTokenSpaceGuid.PcdPrePiCpuMemorySize
   gEmbeddedTokenSpaceGuid.PcdPrePiCpuIoSize
 
-[FeaturePcd]  
-  gEmbeddedTokenSpaceGuid.PcdCacheEnable  
-
-[depex]
+[Depex]
   gEfiPeiMemoryDiscoveredPpiGuid
-  
+

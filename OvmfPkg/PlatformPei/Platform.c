@@ -1,7 +1,7 @@
 /**@file
   Platform PEI driver
 
-  Copyright (c) 2006 - 2011, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
   Copyright (c) 2011, Andrei Warkentin <andreiw@motorola.com>
 
   This program and the accompanying materials
@@ -30,10 +30,12 @@
 #include <Library/PciLib.h>
 #include <Library/PeimEntryPoint.h>
 #include <Library/PeiServicesLib.h>
+#include <Library/QemuFwCfgLib.h>
 #include <Library/ResourcePublicationLib.h>
 #include <Guid/MemoryTypeInformation.h>
 #include <Ppi/MasterBootMode.h>
 #include <IndustryStandard/Pci22.h>
+#include <OvmfPlatforms.h>
 
 #include "Platform.h"
 #include "Cmos.h"
@@ -57,6 +59,11 @@ EFI_PEI_PPI_DESCRIPTOR   mPpiBootMode[] = {
     NULL
   }
 };
+
+
+EFI_BOOT_MODE mBootMode = BOOT_WITH_FULL_CONFIGURATION;
+
+BOOLEAN mS3Supported = FALSE;
 
 
 VOID
@@ -163,10 +170,9 @@ AddUntestedMemoryRangeHob (
   AddUntestedMemoryBaseSizeHob (MemoryBase, (UINT64)(MemoryLimit - MemoryBase));
 }
 
-
 VOID
 MemMapInitialization (
-  EFI_PHYSICAL_ADDRESS  TopOfMemory
+  VOID
   )
 {
   //
@@ -194,21 +200,27 @@ MemMapInitialization (
   //
   AddIoMemoryRangeHob (0x0A0000, BASE_1MB);
 
-  //
-  // address       purpose   size
-  // ------------  --------  -------------------------
-  // max(top, 2g)  PCI MMIO  0xFC000000 - max(top, 2g)
-  // 0xFC000000    gap                           44 MB
-  // 0xFEC00000    IO-APIC                        4 KB
-  // 0xFEC01000    gap                         1020 KB
-  // 0xFED00000    HPET                           1 KB
-  // 0xFED00400    gap                         1023 KB
-  // 0xFEE00000    LAPIC                          1 MB
-  //
-  AddIoMemoryRangeHob (TopOfMemory < BASE_2GB ? BASE_2GB : TopOfMemory, 0xFC000000);
-  AddIoMemoryBaseSizeHob (0xFEC00000, SIZE_4KB);
-  AddIoMemoryBaseSizeHob (0xFED00000, SIZE_1KB);
-  AddIoMemoryBaseSizeHob (PcdGet32(PcdCpuLocalApicBaseAddress), SIZE_1MB);
+  if (!mXen) {
+    UINT32  TopOfLowRam;
+    TopOfLowRam = GetSystemMemorySizeBelow4gb ();
+
+    //
+    // address       purpose   size
+    // ------------  --------  -------------------------
+    // max(top, 2g)  PCI MMIO  0xFC000000 - max(top, 2g)
+    // 0xFC000000    gap                           44 MB
+    // 0xFEC00000    IO-APIC                        4 KB
+    // 0xFEC01000    gap                         1020 KB
+    // 0xFED00000    HPET                           1 KB
+    // 0xFED00400    gap                         1023 KB
+    // 0xFEE00000    LAPIC                          1 MB
+    //
+    AddIoMemoryRangeHob (TopOfLowRam < BASE_2GB ?
+                         BASE_2GB : TopOfLowRam, 0xFC000000);
+    AddIoMemoryBaseSizeHob (0xFEC00000, SIZE_4KB);
+    AddIoMemoryBaseSizeHob (0xFED00000, SIZE_1KB);
+    AddIoMemoryBaseSizeHob (PcdGet32(PcdCpuLocalApicBaseAddress), SIZE_1MB);
+  }
 }
 
 
@@ -217,6 +229,11 @@ MiscInitialization (
   VOID
   )
 {
+  UINT16 HostBridgeDevId;
+  UINTN  PmCmd;
+  UINTN  Pmba;
+  UINTN  PmRegMisc;
+
   //
   // Disable A20 Mask
   //
@@ -228,44 +245,65 @@ MiscInitialization (
   BuildCpuHob (36, 16);
 
   //
+  // Query Host Bridge DID to determine platform type and save to PCD
+  //
+  HostBridgeDevId = PciRead16 (OVMF_HOSTBRIDGE_DID);
+  switch (HostBridgeDevId) {
+    case INTEL_82441_DEVICE_ID:
+      PmCmd     = POWER_MGMT_REGISTER_PIIX4 (PCI_COMMAND_OFFSET);
+      Pmba      = POWER_MGMT_REGISTER_PIIX4 (0x40);
+      PmRegMisc = POWER_MGMT_REGISTER_PIIX4 (0x80);
+      break;
+    case INTEL_Q35_MCH_DEVICE_ID:
+      PmCmd     = POWER_MGMT_REGISTER_Q35 (PCI_COMMAND_OFFSET);
+      Pmba      = POWER_MGMT_REGISTER_Q35 (0x40);
+      PmRegMisc = POWER_MGMT_REGISTER_Q35 (0x80);
+      break;
+    default:
+      DEBUG ((EFI_D_ERROR, "%a: Unknown Host Bridge Device ID: 0x%04x\n",
+        __FUNCTION__, HostBridgeDevId));
+      ASSERT (FALSE);
+      return;
+  }
+  PcdSet16 (PcdOvmfHostBridgePciDevId, HostBridgeDevId);
+
+  //
   // If PMREGMISC/PMIOSE is set, assume the ACPI PMBA has been configured (for
   // example by Xen) and skip the setup here. This matches the logic in
   // AcpiTimerLibConstructor ().
   //
-  if ((PciRead8 (PCI_LIB_ADDRESS (0, 1, 3, 0x80)) & 0x01) == 0) {
+  if ((PciRead8 (PmRegMisc) & 0x01) == 0) {
     //
     // The PEI phase should be exited with fully accessibe PIIX4 IO space:
     // 1. set PMBA
     //
-    PciAndThenOr32 (
-      PCI_LIB_ADDRESS (0, 1, 3, 0x40),
-      (UINT32) ~0xFFC0,
-      PcdGet16 (PcdAcpiPmBaseAddress)
-      );
+    PciAndThenOr32 (Pmba, (UINT32) ~0xFFC0, PcdGet16 (PcdAcpiPmBaseAddress));
 
     //
     // 2. set PCICMD/IOSE
     //
-    PciOr8 (
-      PCI_LIB_ADDRESS (0, 1, 3, PCI_COMMAND_OFFSET),
-      EFI_PCI_COMMAND_IO_SPACE
-      );
+    PciOr8 (PmCmd, EFI_PCI_COMMAND_IO_SPACE);
 
     //
     // 3. set PMREGMISC/PMIOSE
     //
-    PciOr8 (PCI_LIB_ADDRESS (0, 1, 3, 0x80), 0x01);
+    PciOr8 (PmRegMisc, 0x01);
   }
 }
 
 
 VOID
 BootModeInitialization (
+  VOID
   )
 {
-  EFI_STATUS Status;
+  EFI_STATUS    Status;
 
-  Status = PeiServicesSetBootMode (BOOT_WITH_FULL_CONFIGURATION);
+  if (CmosRead8 (0xF) == 0xFE) {
+    mBootMode = BOOT_ON_S3_RESUME;
+  }
+
+  Status = PeiServicesSetBootMode (mBootMode);
   ASSERT_EFI_ERROR (Status);
 
   Status = PeiServicesInstallPpi (mPpiBootMode);
@@ -337,25 +375,37 @@ InitializePlatform (
   IN CONST EFI_PEI_SERVICES     **PeiServices
   )
 {
-  EFI_PHYSICAL_ADDRESS  TopOfMemory;
-
   DEBUG ((EFI_D_ERROR, "Platform PEIM Loaded\n"));
 
   DebugDumpCmos ();
 
-  TopOfMemory = MemDetect ();
+  XenDetect ();
 
-  InitializeXen ();
-
-  ReserveEmuVariableNvStore ();
-
-  PeiFvInitialization ();
-
-  MemMapInitialization (TopOfMemory);
-
-  MiscInitialization ();
+  if (QemuFwCfgS3Enabled ()) {
+    DEBUG ((EFI_D_INFO, "S3 support was detected on QEMU\n"));
+    mS3Supported = TRUE;
+  }
 
   BootModeInitialization ();
+
+  PublishPeiMemory ();
+
+  InitializeRamRegions ();
+
+  if (mXen) {
+    DEBUG ((EFI_D_INFO, "Xen was detected\n"));
+    InitializeXen ();
+  }
+
+  if (mBootMode != BOOT_ON_S3_RESUME) {
+    ReserveEmuVariableNvStore ();
+
+    PeiFvInitialization ();
+
+    MemMapInitialization ();
+  }
+
+  MiscInitialization ();
 
   return EFI_SUCCESS;
 }

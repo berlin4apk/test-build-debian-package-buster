@@ -1,7 +1,8 @@
 /** @file
+Elf64 convert solution
 
-Copyright (c) 2010 - 2011, Intel Corporation. All rights reserved.<BR>
-Portions copyright (c) 2013, ARM Ltd. All rights reserved.<BR>
+Copyright (c) 2010 - 2014, Intel Corporation. All rights reserved.<BR>
+Portions copyright (c) 2013-2014, ARM Ltd. All rights reserved.<BR>
 
 This program and the accompanying materials are licensed and made available
 under the terms and conditions of the BSD License which accompanies this
@@ -19,6 +20,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <windows.h>
 #include <io.h>
 #endif
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -258,9 +260,12 @@ ScanSections64 (
   EFI_IMAGE_OPTIONAL_HEADER_UNION *NtHdr;
   UINT32                          CoffEntry;
   UINT32                          SectionCount;
+  BOOLEAN                         FoundText;
 
   CoffEntry = 0;
   mCoffOffset = 0;
+  mTextOffset = 0;
+  FoundText = FALSE;
 
   //
   // Coff file start with a DOS header.
@@ -286,7 +291,6 @@ ScanSections64 (
   // First text sections.
   //
   mCoffOffset = CoffAlign(mCoffOffset);
-  mTextOffset = mCoffOffset;
   SectionCount = 0;
   for (i = 0; i < mEhdr->e_shnum; i++) {
     Elf_Shdr *shdr = GetShdrByIndex(i);
@@ -310,10 +314,24 @@ ScanSections64 (
           (mEhdr->e_entry < shdr->sh_addr + shdr->sh_size)) {
         CoffEntry = (UINT32) (mCoffOffset + mEhdr->e_entry - shdr->sh_addr);
       }
+
+      //
+      // Set mTextOffset with the offset of the first '.text' section
+      //
+      if (!FoundText) {
+        mTextOffset = mCoffOffset;
+        FoundText = TRUE;
+      }
+
       mCoffSectionsOffset[i] = mCoffOffset;
       mCoffOffset += (UINT32) shdr->sh_size;
       SectionCount ++;
     }
+  }
+
+  if (!FoundText) {
+    Error (NULL, 0, 3000, "Invalid", "Did not find any '.text' section.");
+    assert (FALSE);
   }
 
   if (mEhdr->e_machine != EM_ARM) {
@@ -673,6 +691,18 @@ WriteSections64 (
 
           switch (ELF_R_TYPE(Rel->r_info)) {
 
+          case R_AARCH64_ADR_PREL_LO21:
+            if  (Rel->r_addend != 0 ) { /* TODO */
+              Error (NULL, 0, 3000, "Invalid", "AArch64: R_AARCH64_ADR_PREL_LO21 Need to fixup with addend!.");
+            }
+            break;
+
+          case R_AARCH64_CONDBR19:
+            if  (Rel->r_addend != 0 ) { /* TODO */
+              Error (NULL, 0, 3000, "Invalid", "AArch64: R_AARCH64_CONDBR19 Need to fixup with addend!.");
+            }
+            break;
+
           case R_AARCH64_LD_PREL_LO19:
             if  (Rel->r_addend != 0 ) { /* TODO */
               Error (NULL, 0, 3000, "Invalid", "AArch64: R_AARCH64_LD_PREL_LO19 Need to fixup with addend!.");
@@ -680,13 +710,15 @@ WriteSections64 (
             break;
 
           case R_AARCH64_CALL26:
-            if  (Rel->r_addend != 0 ) { /* TODO */
-              Error (NULL, 0, 3000, "Invalid", "AArch64: R_AARCH64_CALL26 Need to fixup with addend!.");
-            }
-            break;
-
           case R_AARCH64_JUMP26:
-            if  (Rel->r_addend != 0 ) { /* TODO : AArch64 '-O2' optimisation. */
+            if  (Rel->r_addend != 0 ) {
+              // Some references to static functions sometime start at the base of .text + addend.
+              // It is safe to ignore these relocations because they patch a `BL` instructions that
+              // contains an offset from the instruction itself and there is only a single .text section.
+              // So we check if the symbol is a "section symbol"
+              if (ELF64_ST_TYPE (Sym->st_info) == STT_SECTION) {
+                break;
+              }
               Error (NULL, 0, 3000, "Invalid", "AArch64: R_AARCH64_JUMP26 Need to fixup with addend!.");
             }
             break;
@@ -767,6 +799,12 @@ WriteRelocations64 (
           } else if (mEhdr->e_machine == EM_AARCH64) {
             // AArch64 GCC uses RELA relocation, so all relocations has to be fixed up. ARM32 uses REL.
             switch (ELF_R_TYPE(Rel->r_info)) {
+            case R_AARCH64_ADR_PREL_LO21:
+              break;
+
+            case R_AARCH64_CONDBR19:
+              break;
+
             case R_AARCH64_LD_PREL_LO19:
               break;
 

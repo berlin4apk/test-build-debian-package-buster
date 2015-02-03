@@ -1,7 +1,7 @@
 ## @file
 # Common routines used by all tools
 #
-# Copyright (c) 2007 - 2010, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -14,7 +14,7 @@
 ##
 # Import Modules
 #
-import os
+import Common.LongFilePathOs as os
 import sys
 import string
 import thread
@@ -23,6 +23,7 @@ import time
 import re
 import cPickle
 import array
+import shutil
 from UserDict import IterableUserDict
 from UserList import UserList
 
@@ -31,6 +32,8 @@ from Common import GlobalData as GlobalData
 from DataType import *
 from BuildToolError import *
 from CommonDataClass.DataClass import *
+from Parsing import GetSplitValueList
+from Common.LongFilePathSupport import OpenLongFilePath as open
 
 ## Regular expression used to find out place holders in string template
 gPlaceholderPattern = re.compile("\$\{([^$()\s]+)\}", re.MULTILINE|re.UNICODE)
@@ -40,6 +43,90 @@ gFileTimeStampCache = {}    # {file path : file time stamp}
 
 ## Dictionary used to store dependencies of files
 gDependencyDatabase = {}    # arch : {file path : [dependent files list]}
+
+## Routine to process duplicated INF
+#
+#  This function is called by following two cases:
+#  Case 1 in DSC:
+#    [components.arch]
+#    Pkg/module/module.inf
+#    Pkg/module/module.inf {
+#      <Defines>
+#        FILE_GUID = 0D1B936F-68F3-4589-AFCC-FB8B7AEBC836
+#    }
+#  Case 2 in FDF:
+#    INF Pkg/module/module.inf
+#    INF FILE_GUID = 0D1B936F-68F3-4589-AFCC-FB8B7AEBC836 Pkg/module/module.inf
+#
+#  This function copies Pkg/module/module.inf to
+#  Conf/.cache/0D1B936F-68F3-4589-AFCC-FB8B7AEBC836module.inf
+#
+#  @param Path     Original PathClass object
+#  @param BaseName New file base name
+#
+#  @retval         return the new PathClass object
+#
+def ProcessDuplicatedInf(Path, BaseName, Workspace):
+    Filename = os.path.split(Path.File)[1]
+    if '.' in Filename:
+        Filename = BaseName + Path.BaseName + Filename[Filename.rfind('.'):]
+    else:
+        Filename = BaseName + Path.BaseName
+
+    #
+    # If -N is specified on command line, cache is disabled
+    # The directory has to be created
+    #
+    DbDir = os.path.split(GlobalData.gDatabasePath)[0]
+    if not os.path.exists(DbDir):
+        os.makedirs(DbDir)
+    #
+    # A temporary INF is copied to database path which must have write permission
+    # The temporary will be removed at the end of build
+    # In case of name conflict, the file name is 
+    # FILE_GUIDBaseName (0D1B936F-68F3-4589-AFCC-FB8B7AEBC836module.inf)
+    #
+    TempFullPath = os.path.join(DbDir,
+                                Filename)
+    RtPath = PathClass(Path.File, Workspace)
+    #
+    # Modify the full path to temporary path, keep other unchanged
+    #
+    # To build same module more than once, the module path with FILE_GUID overridden has
+    # the file name FILE_GUIDmodule.inf, but the relative path (self.MetaFile.File) is the real path
+    # in DSC which is used as relative path by C files and other files in INF. 
+    # A trick was used: all module paths are PathClass instances, after the initialization
+    # of PathClass, the PathClass.Path is overridden by the temporary INF path.
+    #
+    # The reason for creating a temporary INF is:
+    # Platform.Modules which is the base to create ModuleAutoGen objects is a dictionary,
+    # the key is the full path of INF, the value is an object to save overridden library instances, PCDs.
+    # A different key for the same module is needed to create different output directory,
+    # retrieve overridden PCDs, library instances.
+    #
+    # The BaseName is the FILE_GUID which is also the output directory name.
+    #
+    #
+    RtPath.Path = TempFullPath
+    RtPath.BaseName = BaseName
+    #
+    # If file exists, compare contents
+    #
+    if os.path.exists(TempFullPath):
+        with open(str(Path), 'rb') as f1: Src = f1.read()
+        with open(TempFullPath, 'rb') as f2: Dst = f2.read()
+        if Src == Dst:
+            return RtPath
+    GlobalData.gTempInfs.append(TempFullPath)
+    shutil.copy2(str(Path), TempFullPath)
+    return RtPath
+
+## Remove temporary created INFs whose paths were saved in gTempInfs
+#
+def ClearDuplicatedInf():
+    for File in GlobalData.gTempInfs:
+        if os.path.exists(File):
+            os.remove(File)
 
 ## callback routine for processing variable option
 #
@@ -439,6 +526,7 @@ def RealPath(File, Dir='', OverrideDir=''):
     return NewFile
 
 def RealPath2(File, Dir='', OverrideDir=''):
+    NewFile = None
     if OverrideDir:
         NewFile = GlobalData.gAllFiles[os.path.normpath(os.path.join(OverrideDir, File))]
         if NewFile:
@@ -448,8 +536,10 @@ def RealPath2(File, Dir='', OverrideDir=''):
                 return NewFile[len(OverrideDir)+1:], NewFile[0:len(OverrideDir)]
     if GlobalData.gAllFiles:
         NewFile = GlobalData.gAllFiles[os.path.normpath(os.path.join(Dir, File))]
-    else:
+    if not NewFile:
         NewFile = os.path.normpath(os.path.join(Dir, File))
+        if not os.path.exists(NewFile):
+            return None, None
     if NewFile:
         if Dir:
             if Dir[-1] == os.path.sep:
@@ -1237,9 +1327,16 @@ def AnalyzeDscPcd(Setting, PcdType, DataType=''):
         Value = FieldList[0]
         Size = ''
         if len(FieldList) > 1:
-            Size = FieldList[1]
+            Type = FieldList[1]
+            # Fix the PCD type when no DataType input
+            if Type == 'VOID*':
+                DataType = 'VOID*'
+            else:
+                Size = FieldList[1]
+        if len(FieldList) > 2:
+            Size = FieldList[2]
         if DataType == 'VOID*':
-            IsValid = (len(FieldList) <= 2)
+            IsValid = (len(FieldList) <= 3)
         else:
             IsValid = (len(FieldList) <= 1)
         return [Value, '', Size], IsValid, 0
@@ -1248,8 +1345,18 @@ def AnalyzeDscPcd(Setting, PcdType, DataType=''):
         Size = Type = ''
         if len(FieldList) > 1:
             Type = FieldList[1]
+        else:
+            Type = DataType
         if len(FieldList) > 2:
             Size = FieldList[2]
+        else:
+            if Type == 'VOID*':
+                if Value.startswith("L"):
+                    Size = str((len(Value)- 3 + 1) * 2)
+                elif Value.startswith("{"):
+                    Size = str(len(Value.split(",")))
+                else:
+                    Size = str(len(Value) -2 + 1 )
         if DataType == 'VOID*':
             IsValid = (len(FieldList) <= 3)
         else:
@@ -1322,25 +1429,13 @@ def AnalyzePcdData(Setting):
 #  
 #  @retval   ValueList: A List contaian VariableName, VariableGuid, VariableOffset, DefaultValue. 
 #
-def AnalyzeHiiPcdData(Setting):   
-    ValueList = ['', '', '', '']    
-    
-    ValueRe  = re.compile(r'^\s*L?\".*\|.*\"')
-    PtrValue = ValueRe.findall(Setting)
-    
-    ValueUpdateFlag = False
-    
-    if len(PtrValue) >= 1:
-        Setting = re.sub(ValueRe, '', Setting)
-        ValueUpdateFlag = True   
+def AnalyzeHiiPcdData(Setting):
+    ValueList = ['', '', '', '']
 
-    TokenList = Setting.split(TAB_VALUE_SPLIT)
+    TokenList = GetSplitValueList(Setting)
     ValueList[0:len(TokenList)] = TokenList
-    
-    if ValueUpdateFlag:
-        ValueList[0] = PtrValue[0]
-        
-    return ValueList     
+
+    return ValueList
 
 ## AnalyzeVpdPcdData
 #
@@ -1448,6 +1543,45 @@ def CommonPath(PathList):
         if P1[Index] != P2[Index]:
             return os.path.sep.join(P1[:Index])
     return os.path.sep.join(P1)
+
+#
+# Convert string to C format array
+#
+def ConvertStringToByteArray(Value):
+    Value = Value.strip()
+    if not Value:
+        return None
+    if Value[0] == '{':
+        if not Value.endswith('}'):
+            return None
+        Value = Value.replace(' ', '').replace('{', '').replace('}', '')
+        ValFields = Value.split(',')
+        try:
+            for Index in range(len(ValFields)):
+                ValFields[Index] = str(int(ValFields[Index], 0))
+        except ValueError:
+            return None
+        Value = '{' + ','.join(ValFields) + '}'
+        return Value
+
+    Unicode = False
+    if Value.startswith('L"'):
+        if not Value.endswith('"'):
+            return None
+        Value = Value[1:]
+        Unicode = True
+    elif not Value.startswith('"') or not Value.endswith('"'):
+        return None
+
+    Value = eval(Value)         # translate escape character
+    NewValue = '{'
+    for Index in range(0,len(Value)):
+        if Unicode:
+            NewValue = NewValue + str(ord(Value[Index]) % 0x10000) + ','
+        else:
+            NewValue = NewValue + str(ord(Value[Index]) % 0x100) + ','
+    Value = NewValue + '0}'
+    return Value
 
 class PathClass(object):
     def __init__(self, File='', Root='', AlterRoot='', Type='', IsBinary=False,
@@ -1679,7 +1813,60 @@ class PeImageClass():
         for index in range(len(ByteList) - 1, -1, -1):
             Value = (Value << 8) | int(ByteList[index])
         return Value
+
+
+class SkuClass():
+    
+    DEFAULT = 0
+    SINGLE = 1
+    MULTIPLE =2
+    
+    def __init__(self,SkuIdentifier='', SkuIds={}):
         
+        self.AvailableSkuIds = sdict()
+        self.SkuIdSet = []
+        
+        if SkuIdentifier == '' or SkuIdentifier is None:
+            self.SkuIdSet = ['DEFAULT']
+        elif SkuIdentifier == 'ALL':
+            self.SkuIdSet = SkuIds.keys()
+        else:
+            r = SkuIdentifier.split('|') 
+            self.SkuIdSet=[r[k].strip() for k in range(len(r))]      
+        if len(self.SkuIdSet) == 2 and 'DEFAULT' in self.SkuIdSet and SkuIdentifier != 'ALL':
+            self.SkuIdSet.remove('DEFAULT')
+                
+        for each in self.SkuIdSet:
+            if each in SkuIds:
+                self.AvailableSkuIds[each] = SkuIds[each]
+            else:
+                EdkLogger.error("build", PARAMETER_INVALID,
+                            ExtraData="SKU-ID [%s] is not supported by the platform. [Valid SKU-ID: %s]"
+                                      % (each, " ".join(SkuIds.keys())))
+        
+    def __SkuUsageType(self): 
+        
+        if len(self.SkuIdSet) == 1:
+            if self.SkuIdSet[0] == 'DEFAULT':
+                return SkuClass.DEFAULT
+            else:
+                return SkuClass.SINGLE
+        else:
+            return SkuClass.MULTIPLE
+
+    def __GetAvailableSkuIds(self):
+        return self.AvailableSkuIds
+    
+    def __GetSystemSkuID(self):
+        if self.__SkuUsageType() == SkuClass.SINGLE:
+            return self.SkuIdSet[0]
+        else:
+            return 'DEFAULT'
+            
+    SystemSkuId = property(__GetSystemSkuID)
+    AvailableSkuIdSet = property(__GetAvailableSkuIds)
+    SkuUsageType = property(__SkuUsageType)
+
 ##
 #
 # This acts like the main() function for the script, unless it is 'import'ed into another

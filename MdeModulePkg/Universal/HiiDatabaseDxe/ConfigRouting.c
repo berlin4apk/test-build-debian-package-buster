@@ -1,7 +1,7 @@
 /** @file
 Implementation of interfaces function for EFI_HII_CONFIG_ROUTING_PROTOCOL.
 
-Copyright (c) 2007 - 2013, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -355,6 +355,9 @@ OutputConfigBody (
   }
 
   Length = TmpPtr - String;
+  if (Length == 0) {
+    return EFI_NOT_FOUND;
+  }
   Result = AllocateCopyPool (Length * sizeof (CHAR16), String);
   if (Result == NULL) {
     return EFI_OUT_OF_RESOURCES;
@@ -1281,6 +1284,13 @@ IsThisVarstore (
   GuidStr      = NULL;
   TempStr      = NULL;
 
+  //
+  // If ConfigHdr has name field and varstore not has name, return FALSE.
+  //
+  if (Name == NULL && ConfigHdr != NULL && StrStr (ConfigHdr, L"NAME=&") == NULL) {
+    return FALSE;
+  }
+
   GenerateSubStr (L"GUID=", sizeof (EFI_GUID), (VOID *)VarstoreGuid, 1, &GuidStr);
   if (Name != NULL) {
     GenerateSubStr (L"NAME=", StrLen (Name) * sizeof (CHAR16), (VOID *) Name, 2, &NameStr);
@@ -1315,6 +1325,128 @@ Done:
   }
 
   return RetVal;
+}
+
+/**
+  This function parses Form Package to get the efi varstore info according to the request ConfigHdr.
+
+  @param  DataBaseRecord        The DataBaseRecord instance contains the found Hii handle and package.
+  @param  ConfigHdr             Request string ConfigHdr. If it is NULL,
+                                the first found varstore will be as ConfigHdr.
+  @retval  TRUE                 This hii package is the reqeust one.
+  @retval  FALSE                This hii package is not the reqeust one.
+**/                                
+BOOLEAN
+IsThisPackageList (
+  IN     HII_DATABASE_RECORD        *DataBaseRecord,
+  IN     EFI_STRING                 ConfigHdr
+  )
+{
+  EFI_STATUS               Status;
+  UINTN                    IfrOffset;
+  UINTN                    PackageOffset;
+  EFI_IFR_OP_HEADER        *IfrOpHdr;
+  CHAR16                   *VarStoreName;
+  UINT8                    *HiiFormPackage;
+  UINTN                    PackageSize;
+  EFI_IFR_VARSTORE_EFI     *IfrEfiVarStore;
+  EFI_HII_PACKAGE_HEADER   *PackageHeader;
+  EFI_IFR_VARSTORE         *IfrVarStore;
+  EFI_IFR_VARSTORE_NAME_VALUE *IfrNameValueVarStore;
+  BOOLEAN                  FindVarstore;
+
+  HiiFormPackage   = NULL;
+  VarStoreName     = NULL;
+  Status           = EFI_SUCCESS;
+  FindVarstore     = FALSE;
+
+  Status = GetFormPackageData(DataBaseRecord, &HiiFormPackage, &PackageSize);
+  if (EFI_ERROR (Status)) {
+    return FALSE;
+  }
+
+  IfrOffset     = sizeof (EFI_HII_PACKAGE_HEADER);
+  PackageOffset = IfrOffset;
+  PackageHeader = (EFI_HII_PACKAGE_HEADER *) HiiFormPackage;
+
+  while (IfrOffset < PackageSize) {
+    //
+    // More than one form packages exist.
+    //
+    if (PackageOffset >= PackageHeader->Length) {
+        //
+        // Process the new form package.
+        //
+        PackageOffset = sizeof (EFI_HII_PACKAGE_HEADER);
+        IfrOffset    += PackageOffset;
+        PackageHeader = (EFI_HII_PACKAGE_HEADER *) (HiiFormPackage + IfrOffset);
+    }
+
+    IfrOpHdr  = (EFI_IFR_OP_HEADER *) (HiiFormPackage + IfrOffset);
+    IfrOffset += IfrOpHdr->Length;
+    PackageOffset += IfrOpHdr->Length;
+
+    switch (IfrOpHdr->OpCode) {
+    
+    case EFI_IFR_VARSTORE_OP:
+      IfrVarStore = (EFI_IFR_VARSTORE *) IfrOpHdr;
+
+      VarStoreName = AllocateZeroPool (AsciiStrSize ((CHAR8 *)IfrVarStore->Name) * sizeof (CHAR16));
+      if (VarStoreName == NULL) {
+        goto Done;
+      }
+      AsciiStrToUnicodeStr ((CHAR8 *)IfrVarStore->Name, VarStoreName);
+
+      if (IsThisVarstore((VOID *)&IfrVarStore->Guid, VarStoreName, ConfigHdr)) {
+        FindVarstore = TRUE;
+        goto Done;
+      }
+      break;
+
+    case EFI_IFR_VARSTORE_EFI_OP:
+      IfrEfiVarStore = (EFI_IFR_VARSTORE_EFI *) IfrOpHdr;
+      VarStoreName = AllocateZeroPool (AsciiStrSize ((CHAR8 *)IfrEfiVarStore->Name) * sizeof (CHAR16));
+      if (VarStoreName == NULL) {
+        goto Done;
+      }
+      AsciiStrToUnicodeStr ((CHAR8 *)IfrEfiVarStore->Name, VarStoreName);
+
+      if (IsThisVarstore (&IfrEfiVarStore->Guid, VarStoreName, ConfigHdr)) {
+        FindVarstore = TRUE;
+        goto Done;
+      }
+      break;
+
+    case EFI_IFR_VARSTORE_NAME_VALUE_OP:
+      IfrNameValueVarStore = (EFI_IFR_VARSTORE_NAME_VALUE *) IfrOpHdr;
+
+      if (IsThisVarstore (&IfrNameValueVarStore->Guid, NULL, ConfigHdr)) {
+        FindVarstore = TRUE;
+        goto Done;
+      }
+      break;
+      
+    case EFI_IFR_FORM_OP:
+    case EFI_IFR_FORM_MAP_OP:
+      //
+      // No matched varstore is found and directly return.
+      //
+      goto Done;
+
+    default:
+      break;
+    }
+  }
+Done:
+  if (HiiFormPackage != NULL) {
+    FreePool (HiiFormPackage);
+  }
+
+  if (VarStoreName != NULL) {
+    FreePool (VarStoreName);
+  }
+
+  return FindVarstore;
 }
 
 /**
@@ -2128,14 +2260,26 @@ ParseIfrData (
       //
       // End Opcode is for Var question.
       //
-      if (BlockData != NULL && BlockData->Scope > 0) {
-        BlockData->Scope--;
+      if (BlockData != NULL) {
+        if (BlockData->Scope > 0) {
+          BlockData->Scope--;
+        }
+        if (BlockData->Scope == 0) {
+          BlockData = NULL;
+        }
       }
+
       break;
 
     default:
-      if (BlockData != NULL && BlockData->Scope > 0) {
-        BlockData->Scope = (UINT8) (BlockData->Scope + IfrOpHdr->Scope);
+      if (BlockData != NULL) {
+        if (BlockData->Scope > 0) {
+          BlockData->Scope = (UINT8) (BlockData->Scope + IfrOpHdr->Scope);
+        }
+
+        if (BlockData->Scope == 0) {
+          BlockData = NULL;
+        }
       }
       break;
     }
@@ -2184,6 +2328,8 @@ GetBlockElement (
   LIST_ENTRY           *Link;
   IFR_BLOCK_DATA       *NextBlockData;
   UINTN                Length;
+
+  TmpBuffer = NULL;
 
   //
   // Init RequestBlockArray
@@ -2939,7 +3085,7 @@ GetFullStringFromHiiFormPackages (
 
   Status = GetFormPackageData (DataBaseRecord, &HiiFormPackage, &PackageSize);
   if (EFI_ERROR (Status)) {
-    return Status;
+    goto Done;
   }
 
   //
@@ -3200,10 +3346,11 @@ GetConfigRespFromEfiVarStore (
   UINT8      *VarStore;
   UINTN      BufferSize;
 
-  Status       = EFI_SUCCESS;
-  BufferSize   = 0;
-  VarStore     = NULL;
-  VarStoreName = NULL;
+  Status          = EFI_SUCCESS;
+  BufferSize      = 0;
+  VarStore        = NULL;
+  VarStoreName    = NULL;
+  *AccessProgress = Request;
   
   VarStoreName = AllocateZeroPool (AsciiStrSize ((CHAR8 *)EfiVarStoreInfo->Name) * sizeof (CHAR16));
   if (VarStoreName == NULL) {
@@ -3537,6 +3684,7 @@ HiiConfigRoutingExtractConfig (
   BOOLEAN                             IsEfiVarStore;
   EFI_IFR_VARSTORE_EFI                *EfiVarStoreInfo;
   EFI_STRING                          ErrorPtr;
+  UINTN                               DevicePathSize;
 
   if (This == NULL || Progress == NULL || Results == NULL) {
     return EFI_INVALID_PARAMETER;
@@ -3622,11 +3770,8 @@ HiiConfigRoutingExtractConfig (
       Database = CR (Link, HII_DATABASE_RECORD, DatabaseEntry, HII_DATABASE_RECORD_SIGNATURE);
       if ((DevicePathPkg = Database->PackageList->DevicePathPkg) != NULL) {
         CurrentDevicePath = DevicePathPkg + sizeof (EFI_HII_PACKAGE_HEADER);
-        if (CompareMem (
-              DevicePath,
-              CurrentDevicePath,
-              GetDevicePathSize ((EFI_DEVICE_PATH_PROTOCOL *) CurrentDevicePath)
-              ) == 0) {
+        DevicePathSize    = GetDevicePathSize ((EFI_DEVICE_PATH_PROTOCOL *) CurrentDevicePath);
+        if ((CompareMem (DevicePath,CurrentDevicePath,DevicePathSize) == 0) && IsThisPackageList(Database, ConfigRequest)) {
           DriverHandle = Database->DriverHandle;
           HiiHandle    = Database->Handle;
           break;
@@ -4060,6 +4205,7 @@ HiiConfigRoutingRouteConfig (
   EFI_STRING                          AccessProgress;
   EFI_IFR_VARSTORE_EFI                *EfiVarStoreInfo;
   BOOLEAN                             IsEfiVarstore;
+  UINTN                               DevicePathSize;
 
   if (This == NULL || Progress == NULL) {
     return EFI_INVALID_PARAMETER;
@@ -4131,11 +4277,8 @@ HiiConfigRoutingRouteConfig (
 
       if ((DevicePathPkg = Database->PackageList->DevicePathPkg) != NULL) {
         CurrentDevicePath = DevicePathPkg + sizeof (EFI_HII_PACKAGE_HEADER);
-        if (CompareMem (
-              DevicePath,
-              CurrentDevicePath,
-              GetDevicePathSize ((EFI_DEVICE_PATH_PROTOCOL *) CurrentDevicePath)
-              ) == 0) {
+        DevicePathSize    = GetDevicePathSize ((EFI_DEVICE_PATH_PROTOCOL *) CurrentDevicePath);
+        if ((CompareMem (DevicePath,CurrentDevicePath,DevicePathSize) == 0) && IsThisPackageList(Database, ConfigResp)) {
           DriverHandle = Database->DriverHandle;
           break;
         }
@@ -4198,6 +4341,7 @@ HiiConfigRoutingRouteConfig (
                                );
     }
     if (EFI_ERROR (Status)) {
+      ASSERT (AccessProgress != NULL);
       //
       // AccessProgress indicates the parsing progress on <ConfigResp>.
       // Map it to the progress on <MultiConfigResp> then return it.
@@ -4290,6 +4434,8 @@ HiiBlockToConfig (
   CHAR16                              *TemString;
   CHAR16                              TemChar;
 
+  TmpBuffer = NULL;
+
   if (This == NULL || Progress == NULL || Config == NULL) {
     return EFI_INVALID_PARAMETER;
   }
@@ -4339,12 +4485,11 @@ HiiBlockToConfig (
   }
   if (*StringPtr == 0) {
     *Progress = StringPtr;
-    Status = EFI_SUCCESS;
 
     AppendToMultiString(Config, ConfigRequest);
     HiiToLower (*Config);
 
-    goto Exit;
+    return EFI_SUCCESS;
   }
   //
   // Skip '&'
@@ -4586,6 +4731,8 @@ HiiConfigToBlock (
   UINT8                               *Value;
   UINTN                               BufferSize;
   UINTN                               MaxBlockSize;
+
+  TmpBuffer = NULL;
 
   if (This == NULL || BlockSize == NULL || Progress == NULL) {
     return EFI_INVALID_PARAMETER;

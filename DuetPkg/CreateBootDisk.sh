@@ -2,7 +2,7 @@
 
 ## @file
 #
-#  Copyright (c) 2010, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2010 - 2014, Intel Corporation. All rights reserved.<BR>
 #
 #  This program and the accompanying materials
 #  are licensed and made available under the terms and conditions of the BSD License
@@ -79,20 +79,21 @@ then
 				echo Create boot sector ...
 				## Linux version of GenBootSector has not pass build yet.
 				$BASETOOLS_DIR/GnuGenBootSector -i $EFI_BOOT_DEVICE -o FDBs.com
-				$BASETOOLS_DIR/BootSectImage -g FDBs.com $BOOTSECTOR_BIN_DIR/bootsect.com -f
-				$BASETOOLS_DIR/GnuGenBootSector -o $EFI_BOOT_DEVICE -i $BOOTSECTOR_BIN_DIR/bootsect.com
-	
+				cp $BOOTSECTOR_BIN_DIR/bootsect.com FDBs-1.com
+				$BASETOOLS_DIR/BootSectImage -g FDBs.com FDBs-1.com -f
+				$BASETOOLS_DIR/GnuGenBootSector -o $EFI_BOOT_DEVICE -i FDBs-1.com
+				rm FDBs-1.com
 				cp $BUILD_DIR/FV/Efildr $EFI_BOOT_MEDIA
 	
 				mkdir -p $EFI_BOOT_MEDIA/efi
 				mkdir -p $EFI_BOOT_MEDIA/efi/boot
 				if [ "$5" = IA32 ]
 				then
-					cp $WORKSPACE/EdkShellBinPkg/MinimumShell/Ia32/Shell.efi $EFI_BOOT_MEDIA/efi/boot/bootia32.efi 
+					cp $WORKSPACE/ShellBinPkg/UefiShell/Ia32/Shell.efi $EFI_BOOT_MEDIA/efi/boot/boot$5.efi
 				else
 					if [ "$5" = X64 ]
 					then
-						cp $WORKSPACE/EdkShellBinPkg/MinimumShell/X64/Shell.efi $EFI_BOOT_MEDIA/efi/boot/bootx64.efi 
+						cp $WORKSPACE/ShellBinPkg/UefiShell/X64/Shell.efi $EFI_BOOT_MEDIA/efi/boot/boot$5.efi
 					else
 						echo Wrong Arch!
 					fi
@@ -114,10 +115,10 @@ then
 				mmd -i $EFI_BOOT_MEDIA ::/efi ::/efi/boot
 				if [ "$5" = IA32 ]
 				then
-					mcopy -i $EFI_BOOT_MEDIA $WORKSPACE/EdkShellBinPkg/MinimumShell/Ia32/Shell.efi ::/efi/boot/bootia32.efi
+					mcopy -i $EFI_BOOT_MEDIA $WORKSPACE/ShellBinPkg/UefiShell/Ia32/Shell.efi ::/efi/boot/boot$5.efi
 				elif [ "$5" = X64 ]
 				then
-					mcopy -i $EFI_BOOT_MEDIA $WORKSPACE/EdkShellBinPkg/MinimumShell/X64/Shell.efi ::/efi/boot/bootx64.efi
+					mcopy -i $EFI_BOOT_MEDIA $WORKSPACE/ShellBinPkg/UefiShell/X64/Shell.efi ::/efi/boot/boot$5.efi
 				else
 					echo Wrong Arch!
 				fi
@@ -145,11 +146,11 @@ then
 					mkdir $EFI_BOOT_MEDIA/efi/boot
 					if [ "$5" = IA32 ]
 					then
-						cp $WORKSPACE/EdkShellBinPkg/MinimumShell/Ia32/Shell.efi $EFI_BOOT_MEDIA/efi/boot/bootia32.efi 
+						cp $WORKSPACE/ShellBinPkg/UefiShell/Ia32/Shell.efi $EFI_BOOT_MEDIA/efi/boot/boot$5.efi
 					else
 						if [ "$5" = X64 ]
 						then
-							cp $WORKSPACE/EdkShellBinPkg/MinimumShell/X64/Shell.efi $EFI_BOOT_MEDIA/efi/boot/bootx64.efi 
+							cp $WORKSPACE/ShellBinPkg/UefiShell/X64/Shell.efi $EFI_BOOT_MEDIA/efi/boot/boot$5.efi
 						else
 							echo Wrong Arch!
 						fi
@@ -161,8 +162,10 @@ then
 					echo Create boot sector ...
 					## Linux version of GenBootSector & Bootsectimage has not pass build yet.
 					$BASETOOLS_DIR/GnuGenBootSector -i $EFI_BOOT_DEVICE -o UsbBs16.com
-					$BASETOOLS_DIR/BootSectImage -g UsbBs16.com $BOOTSECTOR_BIN_DIR/bs16.com -f
-					$BASETOOLS_DIR/GnuGenBootSector -o $EFI_BOOT_DEVICE -i $BOOTSECTOR_BIN_DIR/bs16.com
+					cp $BOOTSECTOR_BIN_DIR/bs16.com Bs16-1.com
+					$BASETOOLS_DIR/BootSectImage -g UsbBs16.com Bs16-1.com -f
+					$BASETOOLS_DIR/GnuGenBootSector -o $EFI_BOOT_DEVICE -i Bs16-1.com
+					rm Bs16-1.com
 					$BASETOOLS_DIR/GnuGenBootSector -m -o $EFI_BOOT_DEVICE -i $BOOTSECTOR_BIN_DIR/Mbr.com
 					echo Done.
 					echo PLEASE UNPLUG USB, THEN PLUG IT AGAIN TO DO STEP2!
@@ -175,11 +178,11 @@ then
 					mkdir $EFI_BOOT_MEDIA/efi/boot
 					if [ "$5" = IA32 ]
 					then
-						cp $WORKSPACE/EdkShellBinPkg/MinimumShell/Ia32/Shell.efi $EFI_BOOT_MEDIA/efi/boot/bootia32.efi 
+						cp $WORKSPACE/ShellBinPkg/UefiShell/Ia32/Shell.efi $EFI_BOOT_MEDIA/efi/boot/boot$5.efi
 					else
 						if [ "$5" = X64 ]
 						then
-							cp $WORKSPACE/EdkShellBinPkg/MinimumShell/X64/Shell.efi $EFI_BOOT_MEDIA/efi/boot/bootx64.efi 
+							cp $WORKSPACE/ShellBinPkg/UefiShell/X64/Shell.efi $EFI_BOOT_MEDIA/efi/boot/boot$5.efi
 						else
 							echo Wrong Arch!
 						fi
@@ -191,8 +194,10 @@ then
 					echo Create boot sector ...
 					## Linux version of GenBootSector & Bootsectimage has not pass build yet.
 					$BASETOOLS_DIR/GnuGenBootSector -i $EFI_BOOT_DEVICE -o UsbBs32.com
-					$BASETOOLS_DIR/BootSectImage -g UsbBs32.com $BOOTSECTOR_BIN_DIR/bs32.com -f
-					$BASETOOLS_DIR/GnuGenBootSector -o $EFI_BOOT_DEVICE -i $BOOTSECTOR_BIN_DIR/bs32.com
+					cp $BOOTSECTOR_BIN_DIR/bs32.com Bs32-1.com
+					$BASETOOLS_DIR/BootSectImage -g UsbBs32.com Bs32-1.com -f
+					$BASETOOLS_DIR/GnuGenBootSector -o $EFI_BOOT_DEVICE -i Bs32-1.com
+					rm Bs32-1.com
 					$BASETOOLS_DIR/GnuGenBootSector -m -o $EFI_BOOT_DEVICE -i $BOOTSECTOR_BIN_DIR/Mbr.com
 					echo Done.
 					echo PLEASE UNPLUG USB, THEN PLUG IT AGAIN TO DO STEP2!

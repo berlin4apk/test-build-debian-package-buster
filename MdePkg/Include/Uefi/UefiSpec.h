@@ -5,7 +5,7 @@
   If a code construct is defined in the UEFI 2.4 specification it must be included
   by this include file.
 
-Copyright (c) 2006 - 2013, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials are licensed and made available under 
 the terms and conditions of the BSD License that accompanies this distribution.  
 The full text of the license may be found at
@@ -457,11 +457,11 @@ typedef enum {
   ///
   TimerCancel,
   ///
-  /// An event is to be signalled periodically at a specified interval from the current time.
+  /// An event is to be signaled periodically at a specified interval from the current time.
   ///
   TimerPeriodic,
   ///
-  /// An event is to be signalled once at a specified interval from the current time.
+  /// An event is to be signaled once at a specified interval from the current time.
   ///
   TimerRelative
 } EFI_TIMER_DELAY;
@@ -1770,10 +1770,11 @@ EFI_STATUS
 #define EFI_2_00_SYSTEM_TABLE_REVISION  ((2 << 16) | (00))
 #define EFI_1_10_SYSTEM_TABLE_REVISION  ((1 << 16) | (10))
 #define EFI_1_02_SYSTEM_TABLE_REVISION  ((1 << 16) | (02))
-#define EFI_SYSTEM_TABLE_REVISION       EFI_2_31_SYSTEM_TABLE_REVISION
+#define EFI_SYSTEM_TABLE_REVISION       EFI_2_40_SYSTEM_TABLE_REVISION
+#define EFI_SPECIFICATION_VERSION       EFI_SYSTEM_TABLE_REVISION
 
 #define EFI_RUNTIME_SERVICES_SIGNATURE  SIGNATURE_64 ('R','U','N','T','S','E','R','V')
-#define EFI_RUNTIME_SERVICES_REVISION   EFI_2_31_SYSTEM_TABLE_REVISION
+#define EFI_RUNTIME_SERVICES_REVISION   EFI_SPECIFICATION_VERSION
 
 ///
 /// EFI Runtime Services Table.
@@ -1825,7 +1826,7 @@ typedef struct {
 
 
 #define EFI_BOOT_SERVICES_SIGNATURE   SIGNATURE_64 ('B','O','O','T','S','E','R','V')
-#define EFI_BOOT_SERVICES_REVISION    EFI_2_31_SYSTEM_TABLE_REVISION
+#define EFI_BOOT_SERVICES_REVISION    EFI_SPECIFICATION_VERSION
 
 ///
 /// EFI Boot Services Table.
@@ -2042,41 +2043,46 @@ EFI_STATUS
 ///
 /// EFI Boot Key Data
 ///
-typedef UINT32 EFI_BOOT_KEY_DATA;
-///
-/// Indicates the revision of the EFI_KEY_OPTION structure. This revision level should be 0.
-///
-#define EFI_KEY_OPTION_REVISION_MASK        0x000000FF
-///
-/// Either the left or right Shift keys must be pressed (1) or must not be pressed (0).
-///
-#define EFI_KEY_OPTION_SHIFT_PRESSED_MASK   BIT8
-///
-/// Either the left or right Control keys must be pressed (1) or must not be pressed (0).
-///
-#define EFI_KEY_OPTION_CONTROL_PRESSED_MASK BIT9
-///
-/// Either the left or right Alt keys must be pressed (1) or must not be pressed (0).
-///
-#define EFI_KEY_OPTION_ALT_PRESSED_MASK     BIT10
-///
-/// Either the left or right Logo keys must be pressed (1) or must not be pressed (0).
-///
-#define EFI_KEY_OPTION_LOGO_PRESSED_MASK    BIT11
-///
-/// The Menu key must be pressed (1) or must not be pressed (0).
-///
-#define EFI_KEY_OPTION_MENU_PRESSED_MASK    BIT12
-///
-/// The SysReq key must be pressed (1) or must not be pressed (0).
-///
-#define EFI_KEY_OPTION_SYS_REQ_PRESSED_MASK BIT13
-///
-/// Specifies the actual number of entries in EFI_KEY_OPTION.Keys, from 0-3. If
-/// zero, then only the shift state is considered. If more than one, then the boot option will
-/// only be launched if all of the specified keys are pressed with the same shift state.
-///
-#define EFI_KEY_OPTION_INPUT_KEY_COUNT_MASK (BIT30 | BIT31)
+typedef union {
+  struct {
+    ///
+    /// Indicates the revision of the EFI_KEY_OPTION structure. This revision level should be 0.
+    ///
+    UINT32  Revision        : 8;
+    ///
+    /// Either the left or right Shift keys must be pressed (1) or must not be pressed (0).
+    ///
+    UINT32  ShiftPressed    : 1;
+    ///
+    /// Either the left or right Control keys must be pressed (1) or must not be pressed (0).
+    ///
+    UINT32  ControlPressed  : 1;
+    ///
+    /// Either the left or right Alt keys must be pressed (1) or must not be pressed (0).
+    ///
+    UINT32  AltPressed      : 1;
+    ///
+    /// Either the left or right Logo keys must be pressed (1) or must not be pressed (0).
+    ///
+    UINT32  LogoPressed     : 1;
+    ///
+    /// The Menu key must be pressed (1) or must not be pressed (0).
+    ///
+    UINT32  MenuPressed     : 1;
+    ///
+    /// The SysReq key must be pressed (1) or must not be pressed (0).
+    ///
+    UINT32  SysReqPressed    : 1;
+    UINT32  Reserved        : 16;
+    ///
+    /// Specifies the actual number of entries in EFI_KEY_OPTION.Keys, from 0-3. If
+    /// zero, then only the shift state is considered. If more than one, then the boot option will
+    /// only be launched if all of the specified keys are pressed with the same shift state.
+    ///
+    UINT32  InputKeyCount   : 2;
+  } Options;
+  UINT32  PackedValue;
+} EFI_BOOT_KEY_DATA;
 
 ///
 /// EFI Key Option.

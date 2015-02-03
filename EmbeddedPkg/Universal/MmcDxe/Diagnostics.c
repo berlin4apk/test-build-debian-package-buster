@@ -1,15 +1,15 @@
 /** @file
   Diagnostics Protocol implementation for the MMC DXE driver
 
-  Copyright (c) 2011, ARM Limited. All rights reserved.
-  
-  This program and the accompanying materials                          
-  are licensed and made available under the terms and conditions of the BSD License         
-  which accompanies this distribution.  The full text of the license may be found at        
-  http://opensource.org/licenses/bsd-license.php                                            
+  Copyright (c) 2011-2014, ARM Limited. All rights reserved.
 
-  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,                     
-  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.             
+  This program and the accompanying materials
+  are licensed and made available under the terms and conditions of the BSD License
+  which accompanies this distribution.  The full text of the license may be found at
+  http://opensource.org/licenses/bsd-license.php
+
+  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 **/
 
@@ -205,34 +205,43 @@ MmcDriverDiagnosticsRunDiagnostics (
 
   DiagnosticLog (L"MMC Driver Diagnostics\n");
 
-  // For each MMC instance
+  // Find the MMC Host instance on which we have been asked to run diagnostics
+  MmcHostInstance = NULL;
   CurrentLink = mMmcHostPool.ForwardLink;
   while (CurrentLink != NULL && CurrentLink != &mMmcHostPool && (Status == EFI_SUCCESS)) {
-    MmcHostInstance = MMC_HOST_INSTANCE_FROM_LINK (CurrentLink);
-    ASSERT (MmcHostInstance != NULL);
-
-    // LBA=1 Size=BlockSize
-    DiagnosticLog (L"MMC Driver Diagnostics - Test: First Block\n");
-    Status = MmcReadWriteDataTest (MmcHostInstance, 1, MmcHostInstance->BlockIo.Media->BlockSize);
-
-    // LBA=2 Size=BlockSize
-    DiagnosticLog (L"MMC Driver Diagnostics - Test: Second Block\n");
-    Status = MmcReadWriteDataTest (MmcHostInstance, 2, MmcHostInstance->BlockIo.Media->BlockSize);
-
-    // LBA=10 Size=BlockSize
-    DiagnosticLog (L"MMC Driver Diagnostics - Test: Any Block\n");
-    Status = MmcReadWriteDataTest (MmcHostInstance, MmcHostInstance->BlockIo.Media->LastBlock >> 1, MmcHostInstance->BlockIo.Media->BlockSize);
-
-    // LBA=LastBlock Size=BlockSize
-    DiagnosticLog (L"MMC Driver Diagnostics - Test: Last Block\n");
-    Status = MmcReadWriteDataTest (MmcHostInstance, MmcHostInstance->BlockIo.Media->LastBlock, MmcHostInstance->BlockIo.Media->BlockSize);
-
-    // LBA=1 Size=2*BlockSize
-    DiagnosticLog (L"MMC Driver Diagnostics - Test: First Block / 2 BlockSSize\n");
-    Status = MmcReadWriteDataTest (MmcHostInstance, 1, 2*MmcHostInstance->BlockIo.Media->BlockSize);
-
+    MmcHostInstance = MMC_HOST_INSTANCE_FROM_LINK(CurrentLink);
+    ASSERT(MmcHostInstance != NULL);
+    if (MmcHostInstance->MmcHandle == ControllerHandle) {
+      break;
+    }
     CurrentLink = CurrentLink->ForwardLink;
   }
+
+  // If we didn't find the controller, return EFI_UNSUPPORTED
+  if ((MmcHostInstance == NULL)
+      || (MmcHostInstance->MmcHandle != ControllerHandle)) {
+    return EFI_UNSUPPORTED;
+  }
+
+  // LBA=1 Size=BlockSize
+  DiagnosticLog (L"MMC Driver Diagnostics - Test: First Block\n");
+  Status = MmcReadWriteDataTest (MmcHostInstance, 1, MmcHostInstance->BlockIo.Media->BlockSize);
+
+  // LBA=2 Size=BlockSize
+  DiagnosticLog (L"MMC Driver Diagnostics - Test: Second Block\n");
+  Status = MmcReadWriteDataTest (MmcHostInstance, 2, MmcHostInstance->BlockIo.Media->BlockSize);
+
+  // LBA=10 Size=BlockSize
+  DiagnosticLog (L"MMC Driver Diagnostics - Test: Any Block\n");
+  Status = MmcReadWriteDataTest (MmcHostInstance, MmcHostInstance->BlockIo.Media->LastBlock >> 1, MmcHostInstance->BlockIo.Media->BlockSize);
+
+  // LBA=LastBlock Size=BlockSize
+  DiagnosticLog (L"MMC Driver Diagnostics - Test: Last Block\n");
+  Status = MmcReadWriteDataTest (MmcHostInstance, MmcHostInstance->BlockIo.Media->LastBlock, MmcHostInstance->BlockIo.Media->BlockSize);
+
+  // LBA=1 Size=2*BlockSize
+  DiagnosticLog (L"MMC Driver Diagnostics - Test: First Block / 2 BlockSSize\n");
+  Status = MmcReadWriteDataTest (MmcHostInstance, 1, 2 * MmcHostInstance->BlockIo.Media->BlockSize);
 
   return Status;
 }

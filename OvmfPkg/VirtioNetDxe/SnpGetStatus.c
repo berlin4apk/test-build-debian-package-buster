@@ -4,7 +4,7 @@
   any.
 
   Copyright (C) 2013, Red Hat, Inc.
-  Copyright (c) 2006 - 2013, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
 
   This program and the accompanying materials are licensed and made available
   under the terms and conditions of the BSD License which accompanies this
@@ -90,11 +90,12 @@ VirtioNetGetStatus (
   if (Dev->Snm.MediaPresentSupported) {
     UINT16 LinkStatus;
 
-    Status = VIRTIO_CFG_READ (Dev, VhdrLinkStatus, &LinkStatus);
+    Status = VIRTIO_CFG_READ (Dev, LinkStatus, &LinkStatus);
     if (EFI_ERROR (Status)) {
       goto Exit;
     }
-    Dev->Snm.MediaPresent = !!(LinkStatus & VIRTIO_NET_S_LINK_UP);
+    Dev->Snm.MediaPresent =
+      (BOOLEAN) ((LinkStatus & VIRTIO_NET_S_LINK_UP) != 0);
   }
 
   //

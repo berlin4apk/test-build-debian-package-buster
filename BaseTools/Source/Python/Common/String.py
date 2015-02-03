@@ -1,7 +1,7 @@
 ## @file
 # This file is used to define common string related functions used in parsing process
 #
-# Copyright (c) 2007 - 2008, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -16,13 +16,14 @@
 #
 import re
 import DataType
-import os.path
+import Common.LongFilePathOs as os
 import string
 import EdkLogger as EdkLogger
 
 import GlobalData
 from BuildToolError import *
 from CommonDataClass.Exceptions import *
+from Common.LongFilePathSupport import OpenLongFilePath as open
 
 gHexVerPatt = re.compile('0x[a-f0-9]{4}[a-f0-9]{4}$', re.IGNORECASE)
 gHumanReadableVerPatt = re.compile(r'([1-9][0-9]*|0)\.[0-9]{1,2}$')
@@ -401,16 +402,6 @@ def CleanString2(Line, CommentCharacter=DataType.TAB_COMMENT_SPLIT, AllowCppStyl
             Comment = Line[Index:].strip()
             Line = Line[0:Index].strip()
             break
-    if Comment:
-        # Remove prefixed and trailing comment characters
-        Start = 0
-        End = len(Comment)
-        while Start < End and Comment.startswith(CommentCharacter, Start, End):
-            Start += 1
-        while End >= 0 and Comment.endswith(CommentCharacter, Start, End):
-            End -= 1
-        Comment = Comment[Start:End]
-        Comment = Comment.strip()
 
     return Line, Comment
 
@@ -811,11 +802,25 @@ def StringToArray(String):
             return "{%s, 0x00, 0x00}" % ", ".join(["0x%02x, 0x00" % ord(C) for C in String[2:-1]])
     elif String.startswith('"'):
         if String == "\"\"":
-            return "{0x00}";
+            return "{0x00,0x00}"
         else:
-            return "{%s, 0x00}" % ", ".join(["0x%02x" % ord(C) for C in String[1:-1]])
+            StringLen = len(String[1:-1])
+            if StringLen % 2:
+                return "{%s, 0x00}" % ", ".join(["0x%02x" % ord(C) for C in String[1:-1]])
+            else:
+                return "{%s, 0x00,0x00}" % ", ".join(["0x%02x" % ord(C) for C in String[1:-1]])
+    elif String.startswith('{'):
+        StringLen = len(String.split(","))
+        if StringLen % 2:
+            return "{%s, 0x00}" % ", ".join([ C for C in String[1:-1].split(',')])
+        else:
+            return "{%s}" % ", ".join([ C for C in String[1:-1].split(',')])
+        
     else:
-        return '{%s, 0}' % ', '.join(String.split())
+        if len(String.split()) % 2:
+            return '{%s, 0}' % ', '.join(String.split())
+        else:
+            return '{%s, 0,0}' % ', '.join(String.split())
 
 def StringArrayLength(String):
     if isinstance(String, unicode):

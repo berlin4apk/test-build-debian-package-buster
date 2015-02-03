@@ -1,7 +1,7 @@
-//------------------------------------------------------------------------------ 
+//------------------------------------------------------------------------------
 //
 // Copyright (c) 2008 - 2009, Apple Inc. All rights reserved.<BR>
-// Copyright (c) 2011-2013, ARM Limited. All rights reserved.
+// Copyright (c) 2011 - 2014, ARM Limited. All rights reserved.
 //
 // This program and the accompanying materials
 // are licensed and made available under the terms and conditions of the BSD License
@@ -14,7 +14,7 @@
 //------------------------------------------------------------------------------
 
 #include <AsmMacroIoLib.h>
-    
+
     INCLUDE AsmMacroIoLib.inc
 
 #ifdef ARM_CPU_ARMv6
@@ -23,8 +23,8 @@
 #define dsb
 #endif
 
-    EXPORT Cp15IdCode
-    EXPORT Cp15CacheInfo
+    EXPORT ArmReadMidr
+    EXPORT ArmCacheInfo
     EXPORT ArmGetInterruptState
     EXPORT ArmGetFiqState
     EXPORT ArmGetTTBR0BaseAddress
@@ -47,14 +47,16 @@
     EXPORT ArmCallWFE
     EXPORT ArmCallSEV
     EXPORT ArmReadSctlr
+    EXPORT ArmReadCpuActlr
+    EXPORT ArmWriteCpuActlr
 
     AREA ArmLibSupport, CODE, READONLY
 
-Cp15IdCode
+ArmReadMidr
   mrc     p15,0,R0,c0,c0,0
   bx      LR
 
-Cp15CacheInfo
+ArmCacheInfo
   mrc     p15,0,R0,c0,c0,1
   bx      LR
 
@@ -108,7 +110,7 @@ ArmWriteAuxCr
 
 ArmReadAuxCr
   mrc     p15, 0, r0, c1, c0, 1
-  bx      lr  
+  bx      lr
 
 ArmSetTTBR0
   mcr     p15,0,r0,c2,c0,0
@@ -168,17 +170,28 @@ ArmReadMVBar
 ArmWriteMVBar
   mcr     p15, 0, r0, c12, c0, 1
   bx      lr
-  
+
 ArmCallWFE
   wfe
-  blx   lr
+  bx      lr
 
 ArmCallSEV
   sev
-  blx   lr
+  bx      lr
 
 ArmReadSctlr
-  mrc     p15, 0, R0, c1, c0, 0      // Read SCTLR into R0 (Read control register configuration data)
-  bx	  lr
+  mrc     p15, 0, r0, c1, c0, 0      // Read SCTLR into R0 (Read control register configuration data)
+  bx      lr
+
+
+ArmReadCpuActlr
+  mrc     p15, 0, r0, c1, c0, 1
+  bx      lr
+
+ArmWriteCpuActlr
+  mcr     p15, 0, r0, c1, c0, 1
+  dsb
+  isb
+  bx      lr
 
   END

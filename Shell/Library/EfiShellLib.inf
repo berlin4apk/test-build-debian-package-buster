@@ -90,10 +90,6 @@ COMPONENT_TYPE  = LIBRARY
   EdkGuidLib
 
 [libraries.ARM]
-  CompilerIntrinsicsLib
-
-[libraries.AARCH64]
-  CompilerIntrinsicsLib
-
+  CompilerIntrinsicsLib, CompilerIntrinsicsLib
 
 [nmake.common]

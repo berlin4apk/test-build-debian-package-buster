@@ -63,8 +63,15 @@
   EdkGuidLib
   EdkFrameworkGuidLib
   EfiGuidLib
+
 [nmake.common]
   IMAGE_ENTRY_POINT=GuidMain
-  C_STD_FLAGS = $(C_STD_FLAGS) /DSTRING_ARRAY_NAME=$(BASE_NAME)Strings
+
+[nmake.IA32, nmake.EBC, nmake.X64, nmake.IPF]
+  C_STD_FLAGS = $(C_STD_FLAGS) /DSTRING_ARRAY_NAME=$(BASE_NAME)Strings 
   C_STD_FLAGS = $(C_STD_FLAGS) /DSTRING_DEFINES_FILE=\"$(BASE_NAME)StrDefs.h\"
   C_STD_FLAGS = $(C_STD_FLAGS) /DEFI_BOOTSHELL
+
+[nmake.ARM, nmake.AARCH64]
+  C_STD_FLAGS = $(C_STD_FLAGS) -DEFI_BOOTSHELL
+ 

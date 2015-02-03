@@ -1,6 +1,7 @@
 /** @file
 
   Copyright (c) 2008 - 2009, Apple Inc. All rights reserved.<BR>
+  Copyright (c) 2013 - 2014, ARM Ltd. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -17,32 +18,45 @@
 
 typedef struct {
   CHAR8   *FileName;
-  UINT32  Mode;
-  UINT32  NameLength;
+  UINTN    Mode;
+  UINTN    NameLength;
 } SEMIHOST_FILE_OPEN_BLOCK;
 
 typedef struct {
-  UINT32  Handle;
+  UINTN    Handle;
   VOID    *Buffer;
-  UINT32  Length;
+  UINTN    Length;
 } SEMIHOST_FILE_READ_WRITE_BLOCK;
 
 typedef struct {
-  UINT32  Handle;
-  UINT32  Location;
+  UINTN    Handle;
+  UINTN    Location;
 } SEMIHOST_FILE_SEEK_BLOCK;
 
 typedef struct {
+  VOID    *Buffer;
+  UINTN    Identifier;
+  UINTN    Length;
+} SEMIHOST_FILE_TMPNAME_BLOCK;
+
+typedef struct {
   CHAR8   *FileName;
-  UINT32  NameLength;
+  UINTN    NameLength;
 } SEMIHOST_FILE_REMOVE_BLOCK;
 
 typedef struct {
+  CHAR8   *FileName;
+  UINTN    FileNameLength;
+  CHAR8   *NewFileName;
+  UINTN    NewFileNameLength;
+} SEMIHOST_FILE_RENAME_BLOCK;
+
+typedef struct {
   CHAR8   *CommandLine;
-  UINT32  CommandLength;
+  UINTN    CommandLength;
 } SEMIHOST_SYSTEM_BLOCK;
 
-#if defined(__CC_ARM) 
+#if defined(__CC_ARM)
 
 #if defined(__thumb__)
 #define SWI 0xAB
@@ -117,9 +131,23 @@ _Semihost_SYS_FLEN(
 
 __swi(SWI)
 UINT32
+_Semihost_SYS_TMPNAME(
+  IN UINTN                       SWI_0x0D,
+  IN SEMIHOST_FILE_TMPNAME_BLOCK *TmpNameBlock
+  );
+
+__swi(SWI)
+UINT32
 _Semihost_SYS_REMOVE(
   IN UINTN                      SWI_0x0E,
   IN SEMIHOST_FILE_REMOVE_BLOCK *RemoveBlock
+  );
+
+__swi(SWI)
+UINT32
+_Semihost_SYS_RENAME(
+  IN UINTN                      SWI_0x0F,
+  IN SEMIHOST_FILE_RENAME_BLOCK *RenameBlock
   );
 
 __swi(SWI)
@@ -138,7 +166,9 @@ _Semihost_SYS_SYSTEM(
 #define Semihost_SYS_READC()                _Semihost_SYS_READC(0x07, 0)
 #define Semihost_SYS_SEEK(SeekBlock)        _Semihost_SYS_SEEK(0x0A, SeekBlock)
 #define Semihost_SYS_FLEN(Handle)           _Semihost_SYS_FLEN(0x0C, Handle)
+#define Semihost_SYS_TMPNAME(TmpNameBlock)  _Semihost_SYS_TMPNAME(0x0D, TmpNameBlock)
 #define Semihost_SYS_REMOVE(RemoveBlock)    _Semihost_SYS_REMOVE(0x0E, RemoveBlock)
+#define Semihost_SYS_RENAME(RenameBlock)    _Semihost_SYS_RENAME(0x0F, RenameBlock)
 #define Semihost_SYS_SYSTEM(SystemBlock)    _Semihost_SYS_SYSTEM(0x12, SystemBlock)
 
 #elif defined(__GNUC__) // __CC_ARM
@@ -160,7 +190,9 @@ GccSemihostCall (
 #define Semihost_SYS_READC()                GccSemihostCall(0x07, (UINTN)(0))
 #define Semihost_SYS_SEEK(SeekBlock)        GccSemihostCall(0x0A, (UINTN)(SeekBlock))
 #define Semihost_SYS_FLEN(Handle)           GccSemihostCall(0x0C, (UINTN)(Handle))
+#define Semihost_SYS_TMPNAME(TmpNameBlock)  GccSemihostCall(0x0D, (UINTN)(TmpNameBlock))
 #define Semihost_SYS_REMOVE(RemoveBlock)    GccSemihostCall(0x0E, (UINTN)(RemoveBlock))
+#define Semihost_SYS_RENAME(RenameBlock)    GccSemihostCall(0x0F, (UINTN)(RenameBlock))
 #define Semihost_SYS_SYSTEM(SystemBlock)    GccSemihostCall(0x12, (UINTN)(SystemBlock))
 
 #else // __CC_ARM
@@ -176,7 +208,9 @@ GccSemihostCall (
 #define Semihost_SYS_READC()                ('x')
 #define Semihost_SYS_SEEK(SeekBlock)        (-1)
 #define Semihost_SYS_FLEN(Handle)           (-1)
+#define Semihost_SYS_TMPNAME(TmpNameBlock)  (-1)
 #define Semihost_SYS_REMOVE(RemoveBlock)    (-1)
+#define Semihost_SYS_RENAME(RenameBlock)    (-1)
 #define Semihost_SYS_SYSTEM(SystemBlock)    (-1)
 
 #endif // __CC_ARM

@@ -1,18 +1,18 @@
 /** @file
   Implement the TCP6 driver support for the socket layer.
 
-  Copyright (c) 2011, Intel Corporation
-  All rights reserved. This program and the accompanying materials
-  are licensed and made available under the terms and conditions of the BSD License
-  which accompanies this distribution.  The full text of the license may be found at
-  http://opensource.org/licenses/bsd-license.php
+  Copyright (c) 2011 - 2014, Intel Corporation. All rights reserved.<BR>
+  This program and the accompanying materials are licensed and made available
+  under the terms and conditions of the BSD License which accompanies this
+  distribution.  The full text of the license may be found at
+  http://opensource.org/licenses/bsd-license.php.
 
   THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
   WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 
   \section ConnectionManagement Connection Management
-  
+
   The ::EslTcp6Listen routine initially places the SOCK_STREAM or
   SOCK_SEQPACKET socket into a listen state.   When a remote machine
   makes a connection to the socket, the TCPv6 network layer calls
@@ -239,6 +239,13 @@ EslTcp6ConnectComplete (
               pTcp6->ConfigData.AccessPoint.RemotePort ));
 
     //
+    //  Start the receive operations
+    //
+    pSocket->bConfigured = TRUE;
+    pSocket->State = SOCKET_STATE_CONNECTED;
+    EslSocketRxStart ( pPort );
+
+    //
     //  Remove the rest of the ports
     //
     bRemovePorts = TRUE;
@@ -391,56 +398,55 @@ EslTcp6ConnectPoll (
       case EFI_DEVICE_ERROR:
         pSocket->errno = EIO;
         break;
-      
+
       case EFI_ABORTED:
         pSocket->errno = ECONNABORTED;
         break;
-      
+
       case EFI_ACCESS_DENIED:
         pSocket->errno = EACCES;
         break;
-      
+
       case EFI_CONNECTION_RESET:
         pSocket->errno = ECONNRESET;
         break;
-      
+
       case EFI_INVALID_PARAMETER:
         pSocket->errno = EADDRNOTAVAIL;
         break;
-      
+
       case EFI_HOST_UNREACHABLE:
       case EFI_NO_RESPONSE:
         pSocket->errno = EHOSTUNREACH;
         break;
-      
+
       case EFI_NO_MAPPING:
         pSocket->errno = EAFNOSUPPORT;
         break;
-      
+
       case EFI_NO_MEDIA:
       case EFI_NETWORK_UNREACHABLE:
         pSocket->errno = ENETDOWN;
         break;
-      
+
       case EFI_OUT_OF_RESOURCES:
         pSocket->errno = ENOBUFS;
         break;
-      
+
       case EFI_PORT_UNREACHABLE:
       case EFI_PROTOCOL_UNREACHABLE:
       case EFI_CONNECTION_REFUSED:
         pSocket->errno = ECONNREFUSED;
         break;
-      
+
       case EFI_SUCCESS:
         pSocket->errno = 0;
-        pSocket->bConfigured = TRUE;
         break;
-      
+
       case EFI_TIMEOUT:
         pSocket->errno = ETIMEDOUT;
         break;
-      
+
       case EFI_UNSUPPORTED:
         pSocket->errno = EOPNOTSUPP;
         break;
@@ -499,7 +505,7 @@ EslTcp6ConnectStart (
   EFI_STATUS Status;
 
   DBG_ENTER ( );
-  
+
   //
   //  Determine if any more local adapters are available
   //
@@ -595,7 +601,7 @@ EslTcp6ConnectStart (
       //  Status to errno translation gets done in EslTcp4ConnectPoll
       //
       pTcp6->ConnectToken.CompletionToken.Status = Status;
-      
+
       //
       //  Continue with the next port
       //
@@ -801,7 +807,7 @@ EslTcp6Listen (
       //
       pPort = pNextPort;
     }
-    
+
     //
     //  Determine if any ports are in the listen state
     //
@@ -865,7 +871,6 @@ EslTcp6ListenComplete (
   EFI_HANDLE ChildHandle;
   struct sockaddr_in6 LocalAddress;
   EFI_TCP6_CONFIG_DATA * pConfigData;
-  ESL_LAYER * pLayer;
   ESL_PORT * pNewPort;
   ESL_SOCKET * pNewSocket;
   ESL_SOCKET * pSocket;
@@ -894,7 +899,6 @@ EslTcp6ListenComplete (
     //  Allocate a socket for this connection
     //
     ChildHandle = NULL;
-    pLayer = &mEslLayer;
     Status = EslSocketAllocate ( &ChildHandle,
                                  DEBUG_CONNECTION,
                                  &pNewSocket );
@@ -1092,7 +1096,7 @@ EslTcp6ListenComplete (
     //  Process:
     //    Call close
     //    Release the resources
-    
+
   }
 
   DBG_EXIT ( );
@@ -1391,7 +1395,7 @@ EslTcp6PortAllocate (
 
   This routine is called by ::EslSocketPortClose.
   See the \ref PortCloseStateMachine section.
-  
+
   @param [in] pPort       Address of an ::ESL_PORT structure.
 
   @retval EFI_SUCCESS     The port is closed
@@ -1406,7 +1410,7 @@ EslTcp6PortClose (
   UINTN DebugFlags;
   ESL_TCP6_CONTEXT * pTcp6;
   EFI_STATUS Status;
-  
+
   DBG_ENTER ( );
 
   //
@@ -1550,13 +1554,13 @@ EslTcp6PortCloseOp (
   @param [in] pPort           Address of an ::ESL_PORT structure.
 
   @param [in] pPacket         Address of an ::ESL_PACKET structure.
-  
+
   @param [in] pbConsumePacket Address of a BOOLEAN indicating if the packet is to be consumed
-  
+
   @param [in] BufferLength    Length of the the buffer
-  
+
   @param [in] pBuffer         Address of a buffer to receive the data.
-  
+
   @param [in] pDataLength     Number of received data bytes in the buffer.
 
   @param [out] pAddress       Network address to receive the remote system address
@@ -1951,13 +1955,13 @@ EslTcp6RxStart (
   during the current transmission attempt.
 
   @param [in] pSocket         Address of an ::ESL_SOCKET structure
-  
+
   @param [in] Flags           Message control flags
-  
+
   @param [in] BufferLength    Length of the the buffer
-  
+
   @param [in] pBuffer         Address of a buffer to receive the data.
-  
+
   @param [in] pDataLength     Number of received data bytes in the buffer.
 
   @param [in] pAddress        Network address of the remote system address
@@ -1987,7 +1991,6 @@ EslTcp6TxBuffer (
   ESL_PACKET ** ppQueueHead;
   ESL_PACKET ** ppQueueTail;
   ESL_PACKET * pPreviousPacket;
-  ESL_TCP6_CONTEXT * pTcp6;
   size_t * pTxBytes;
   EFI_TCP6_TRANSMIT_DATA * pTxData;
   EFI_STATUS Status;
@@ -2014,7 +2017,6 @@ EslTcp6TxBuffer (
       //
       //  Determine the queue head
       //
-      pTcp6 = &pPort->Context.Tcp6;
       bUrgent = (BOOLEAN)( 0 != ( Flags & MSG_OOB ));
       bUrgentQueue = bUrgent
                     && ( !pSocket->bOobInLine )
@@ -2205,7 +2207,7 @@ EslTcp6TxComplete (
   ESL_PORT * pPort;
   ESL_SOCKET * pSocket;
   EFI_STATUS Status;
-  
+
   DBG_ENTER ( );
 
   //
@@ -2295,6 +2297,262 @@ EslTcp6TxOobComplete (
 
 
 /**
+  Verify the adapter's IP address
+
+  This support routine is called by EslSocketBindTest.
+
+  @param [in] pPort       Address of an ::ESL_PORT structure.
+  @param [in] pConfigData Address of the configuration data
+
+  @retval EFI_SUCCESS - The IP address is valid
+  @retval EFI_NOT_STARTED - The IP address is invalid
+
+ **/
+EFI_STATUS
+EslTcp6VerifyLocalIpAddress (
+  IN ESL_PORT * pPort,
+  IN EFI_TCP6_CONFIG_DATA * pConfigData
+  )
+{
+  UINTN AddressCount;
+  EFI_IP6_ADDRESS_INFO * pAddressInfo;
+  UINTN DataSize;
+  EFI_TCP6_ACCESS_POINT * pAccess;
+  EFI_IP6_CONFIG_INTERFACE_INFO * pIpConfigData;
+  EFI_IP6_CONFIG_PROTOCOL * pIpConfigProtocol;
+  ESL_SERVICE * pService;
+  EFI_STATUS Status;
+
+  DBG_ENTER ( );
+
+  //
+  //  Use break instead of goto
+  //
+  pIpConfigData = NULL;
+  for ( ; ; ) {
+    //
+    //  Determine if the IP address is specified
+    //
+    pAccess = &pConfigData->AccessPoint;
+    DEBUG (( DEBUG_BIND,
+              "Requested IP address: %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\r\n",
+              pAccess->StationAddress.Addr[0],
+              pAccess->StationAddress.Addr[1],
+              pAccess->StationAddress.Addr[2],
+              pAccess->StationAddress.Addr[3],
+              pAccess->StationAddress.Addr[4],
+              pAccess->StationAddress.Addr[5],
+              pAccess->StationAddress.Addr[6],
+              pAccess->StationAddress.Addr[7],
+              pAccess->StationAddress.Addr[8],
+              pAccess->StationAddress.Addr[9],
+              pAccess->StationAddress.Addr[10],
+              pAccess->StationAddress.Addr[11],
+              pAccess->StationAddress.Addr[12],
+              pAccess->StationAddress.Addr[13],
+              pAccess->StationAddress.Addr[14],
+              pAccess->StationAddress.Addr[15]));
+    if (( 0 == pAccess->StationAddress.Addr [ 0 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 1 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 2 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 3 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 4 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 5 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 6 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 7 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 8 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 9 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 10 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 11 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 12 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 13 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 14 ])
+      && ( 0 == pAccess->StationAddress.Addr [ 15 ]))
+    {
+      Status = EFI_SUCCESS;
+      break;
+    }
+
+    //
+    //  Open the configuration protocol
+    //
+    pService = pPort->pService;
+    Status = gBS->OpenProtocol ( pService->Controller,
+                                 &gEfiIp6ConfigProtocolGuid,
+                                 (VOID **)&pIpConfigProtocol,
+                                 NULL,
+                                 NULL,
+                                 EFI_OPEN_PROTOCOL_GET_PROTOCOL );
+    if ( EFI_ERROR ( Status )) {
+      DEBUG (( DEBUG_ERROR,
+                "ERROR - IP Configuration Protocol not available, Status: %r\r\n",
+                Status ));
+      break;
+    }
+
+    //
+    //  Get the IP configuration data size
+    //
+    DataSize = 0;
+    Status = pIpConfigProtocol->GetData ( pIpConfigProtocol,
+                                          Ip6ConfigDataTypeInterfaceInfo,
+                                          &DataSize,
+                                          NULL );
+    if ( EFI_BUFFER_TOO_SMALL != Status ) {
+      DEBUG (( DEBUG_ERROR,
+                "ERROR - Failed to get IP Configuration data size, Status: %r\r\n",
+                Status ));
+      break;
+    }
+
+    //
+    //  Allocate the configuration data buffer
+    //
+    pIpConfigData = AllocatePool ( DataSize );
+    if ( NULL == pIpConfigData ) {
+      DEBUG (( DEBUG_ERROR,
+                "ERROR - Not enough memory to allocate IP Configuration data!\r\n" ));
+      Status = EFI_OUT_OF_RESOURCES;
+      break;
+    }
+
+    //
+    //  Get the IP configuration
+    //
+    Status = pIpConfigProtocol->GetData ( pIpConfigProtocol,
+                                          Ip6ConfigDataTypeInterfaceInfo,
+                                          &DataSize,
+                                          pIpConfigData );
+    if ( EFI_ERROR ( Status )) {
+      DEBUG (( DEBUG_ERROR,
+                "ERROR - Failed to return IP Configuration data, Status: %r\r\n",
+                Status ));
+      break;
+    }
+
+    //
+    //  Display the current configuration
+    //
+    DEBUG (( DEBUG_BIND,
+              "Actual adapter IP address: %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\r\n",
+              pIpConfigData->HwAddress.Addr [ 0 ],
+              pIpConfigData->HwAddress.Addr [ 1 ],
+              pIpConfigData->HwAddress.Addr [ 2 ],
+              pIpConfigData->HwAddress.Addr [ 3 ],
+              pIpConfigData->HwAddress.Addr [ 4 ],
+              pIpConfigData->HwAddress.Addr [ 5 ],
+              pIpConfigData->HwAddress.Addr [ 6 ],
+              pIpConfigData->HwAddress.Addr [ 7 ],
+              pIpConfigData->HwAddress.Addr [ 8 ],
+              pIpConfigData->HwAddress.Addr [ 9 ],
+              pIpConfigData->HwAddress.Addr [ 10 ],
+              pIpConfigData->HwAddress.Addr [ 11 ],
+              pIpConfigData->HwAddress.Addr [ 12 ],
+              pIpConfigData->HwAddress.Addr [ 13 ],
+              pIpConfigData->HwAddress.Addr [ 14 ],
+              pIpConfigData->HwAddress.Addr [ 15 ]));
+
+    //
+    //  Validate the hardware address
+    //
+    Status = EFI_SUCCESS;
+    if (( 16 == pIpConfigData->HwAddressSize )
+      && ( pAccess->StationAddress.Addr [ 0 ] == pIpConfigData->HwAddress.Addr [ 0 ])
+      && ( pAccess->StationAddress.Addr [ 1 ] == pIpConfigData->HwAddress.Addr [ 1 ])
+      && ( pAccess->StationAddress.Addr [ 2 ] == pIpConfigData->HwAddress.Addr [ 2 ])
+      && ( pAccess->StationAddress.Addr [ 3 ] == pIpConfigData->HwAddress.Addr [ 3 ])
+      && ( pAccess->StationAddress.Addr [ 4 ] == pIpConfigData->HwAddress.Addr [ 4 ])
+      && ( pAccess->StationAddress.Addr [ 5 ] == pIpConfigData->HwAddress.Addr [ 5 ])
+      && ( pAccess->StationAddress.Addr [ 6 ] == pIpConfigData->HwAddress.Addr [ 6 ])
+      && ( pAccess->StationAddress.Addr [ 7 ] == pIpConfigData->HwAddress.Addr [ 7 ])
+      && ( pAccess->StationAddress.Addr [ 8 ] == pIpConfigData->HwAddress.Addr [ 8 ])
+      && ( pAccess->StationAddress.Addr [ 9 ] == pIpConfigData->HwAddress.Addr [ 9 ])
+      && ( pAccess->StationAddress.Addr [ 10 ] == pIpConfigData->HwAddress.Addr [ 10 ])
+      && ( pAccess->StationAddress.Addr [ 11 ] == pIpConfigData->HwAddress.Addr [ 11 ])
+      && ( pAccess->StationAddress.Addr [ 12 ] == pIpConfigData->HwAddress.Addr [ 12 ])
+      && ( pAccess->StationAddress.Addr [ 13 ] == pIpConfigData->HwAddress.Addr [ 13 ])
+      && ( pAccess->StationAddress.Addr [ 14 ] == pIpConfigData->HwAddress.Addr [ 14 ])
+      && ( pAccess->StationAddress.Addr [ 15 ] == pIpConfigData->HwAddress.Addr [ 15 ])) {
+      break;
+    }
+
+    //
+    //  Walk the list of other IP addresses assigned to this adapter
+    //
+    for ( AddressCount = 0; pIpConfigData->AddressInfoCount > AddressCount; AddressCount += 1 ) {
+      pAddressInfo = &pIpConfigData->AddressInfo [ AddressCount ];
+
+      //
+      //  Display the IP address
+      //
+      DEBUG (( DEBUG_BIND,
+                "Actual adapter IP address: %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\r\n",
+                pAddressInfo->Address.Addr [ 0 ],
+                pAddressInfo->Address.Addr [ 1 ],
+                pAddressInfo->Address.Addr [ 2 ],
+                pAddressInfo->Address.Addr [ 3 ],
+                pAddressInfo->Address.Addr [ 4 ],
+                pAddressInfo->Address.Addr [ 5 ],
+                pAddressInfo->Address.Addr [ 6 ],
+                pAddressInfo->Address.Addr [ 7 ],
+                pAddressInfo->Address.Addr [ 8 ],
+                pAddressInfo->Address.Addr [ 9 ],
+                pAddressInfo->Address.Addr [ 10 ],
+                pAddressInfo->Address.Addr [ 11 ],
+                pAddressInfo->Address.Addr [ 12 ],
+                pAddressInfo->Address.Addr [ 13 ],
+                pAddressInfo->Address.Addr [ 14 ],
+                pAddressInfo->Address.Addr [ 15 ]));
+
+      //
+      //  Validate the IP address
+      //
+      if (( pAccess->StationAddress.Addr [ 0 ] == pAddressInfo->Address.Addr [ 0 ])
+        && ( pAccess->StationAddress.Addr [ 1 ] == pAddressInfo->Address.Addr [ 1 ])
+        && ( pAccess->StationAddress.Addr [ 2 ] == pAddressInfo->Address.Addr [ 2 ])
+        && ( pAccess->StationAddress.Addr [ 3 ] == pAddressInfo->Address.Addr [ 3 ])
+        && ( pAccess->StationAddress.Addr [ 4 ] == pAddressInfo->Address.Addr [ 4 ])
+        && ( pAccess->StationAddress.Addr [ 5 ] == pAddressInfo->Address.Addr [ 5 ])
+        && ( pAccess->StationAddress.Addr [ 6 ] == pAddressInfo->Address.Addr [ 6 ])
+        && ( pAccess->StationAddress.Addr [ 7 ] == pAddressInfo->Address.Addr [ 7 ])
+        && ( pAccess->StationAddress.Addr [ 8 ] == pAddressInfo->Address.Addr [ 8 ])
+        && ( pAccess->StationAddress.Addr [ 9 ] == pAddressInfo->Address.Addr [ 9 ])
+        && ( pAccess->StationAddress.Addr [ 10 ] == pAddressInfo->Address.Addr [ 10 ])
+        && ( pAccess->StationAddress.Addr [ 11 ] == pAddressInfo->Address.Addr [ 11 ])
+        && ( pAccess->StationAddress.Addr [ 12 ] == pAddressInfo->Address.Addr [ 12 ])
+        && ( pAccess->StationAddress.Addr [ 13 ] == pAddressInfo->Address.Addr [ 13 ])
+        && ( pAccess->StationAddress.Addr [ 14 ] == pAddressInfo->Address.Addr [ 14 ])
+        && ( pAccess->StationAddress.Addr [ 15 ] == pAddressInfo->Address.Addr [ 15 ])) {
+        break;
+      }
+    }
+    if ( pIpConfigData->AddressInfoCount > AddressCount ) {
+      break;
+    }
+
+    //
+    //  The IP address did not match
+    //
+    Status = EFI_NOT_STARTED;
+    break;
+  }
+
+  //
+  //  Free the buffer if necessary
+  //
+  if ( NULL != pIpConfigData ) {
+    FreePool ( pIpConfigData );
+  }
+
+  //
+  //  Return the IP address status
+  //
+  DBG_EXIT_STATUS ( Status );
+  return Status;
+}
+
+
+/**
   Interface between the socket layer and the network specific
   code that supports SOCK_STREAM and SOCK_SEQPACKET sockets
   over TCPv6.
@@ -2333,5 +2591,6 @@ CONST ESL_PROTOCOL_API cEslTcp6Api = {
   EslTcp6RxStart,
   EslTcp6TxBuffer,
   EslTcp6TxComplete,
-  EslTcp6TxOobComplete
+  EslTcp6TxOobComplete,
+  (PFN_API_VERIFY_LOCAL_IP_ADDRESS)EslTcp6VerifyLocalIpAddress
 };

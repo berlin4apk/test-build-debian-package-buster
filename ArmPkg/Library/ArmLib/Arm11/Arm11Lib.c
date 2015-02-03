@@ -1,8 +1,8 @@
 /** @file
 
   Copyright (c) 2008 - 2009, Apple Inc. All rights reserved.<BR>
-  Copyright (c) 2011, ARM Limited. All rights reserved.
-  
+  Copyright (c) 2011 - 2014, ARM Limited. All rights reserved.
+
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -22,7 +22,7 @@
 VOID
 EFIAPI
 ArmWriteVBar (
-  IN  UINT32   VectorBase
+  IN  UINTN   VectorBase
   )
 {
   ASSERT(FeaturePcdGet (PcdRelocateVectorTable) == TRUE);
@@ -37,7 +37,7 @@ ArmWriteVBar (
   }
 }
 
-UINT32
+UINTN
 EFIAPI
 ArmReadVBar (
   VOID

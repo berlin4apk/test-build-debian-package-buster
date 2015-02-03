@@ -14,7 +14,6 @@
 
 #include "BdsInternal.h"
 
-#include <Library/DxeServicesTableLib.h>
 #include <Library/HobLib.h>
 #include <Library/TimerLib.h>
 #include <Library/PrintLib.h>
@@ -331,7 +330,7 @@ GetEnvironmentVariable (
                     *Size,
                     DefaultValue
                     );
-      *Value = DefaultValue;
+      *Value = AllocateCopyPool (*Size, DefaultValue);
     } else {
       return EFI_NOT_FOUND;
     }
@@ -352,7 +351,7 @@ GetEnvironmentVariable (
       *Size = VariableSize;
     }
   } else {
-    *Value = DefaultValue;
+    *Value = AllocateCopyPool (*Size, DefaultValue);
     return Status;
   }
 

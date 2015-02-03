@@ -11,7 +11,7 @@
   and companion host controller when UHCI or OHCI gets attached earlier than EHCI and a 
   USB 2.0 device inserts.
 
-Copyright (c) 2006 - 2012, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -1637,7 +1637,7 @@ EhcCreateUsb2Hc (
   One notified function to stop the Host Controller when gBS->ExitBootServices() called.
 
   @param  Event                   Pointer to this event
-  @param  Context                 Event hanlder private data
+  @param  Context                 Event handler private data
 
 **/
 VOID
@@ -1754,7 +1754,7 @@ EhcDriverBindingStart (
                     &Supports
                     );
   if (!EFI_ERROR (Status)) {
-    Supports &= EFI_PCI_DEVICE_ENABLE;
+    Supports &= (UINT64)EFI_PCI_DEVICE_ENABLE;
     Status = PciIo->Attributes (
                       PciIo,
                       EfiPciIoAttributeOperationEnable,
@@ -2049,13 +2049,6 @@ EhcDriverBindingStop (
   Ehc   = EHC_FROM_THIS (Usb2Hc);
   PciIo = Ehc->PciIo;
 
-  //
-  // Stop AsyncRequest Polling timer then stop the EHCI driver
-  // and uninstall the EHCI protocl.
-  //
-  gBS->SetTimer (Ehc->PollTimer, TimerCancel, EHC_ASYNC_POLL_INTERVAL);
-  EhcHaltHC (Ehc, EHC_GENERIC_TIMEOUT);
-
   Status = gBS->UninstallProtocolInterface (
                   Controller,
                   &gEfiUsb2HcProtocolGuid,
@@ -2065,6 +2058,13 @@ EhcDriverBindingStop (
   if (EFI_ERROR (Status)) {
     return Status;
   }
+
+  //
+  // Stop AsyncRequest Polling timer then stop the EHCI driver
+  // and uninstall the EHCI protocl.
+  //
+  gBS->SetTimer (Ehc->PollTimer, TimerCancel, EHC_ASYNC_POLL_INTERVAL);
+  EhcHaltHC (Ehc, EHC_GENERIC_TIMEOUT);
 
   if (Ehc->PollTimer != NULL) {
     gBS->CloseEvent (Ehc->PollTimer);

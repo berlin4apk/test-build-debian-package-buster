@@ -1,13 +1,13 @@
 #
-#  Copyright (c) 2012, ARM Limited. All rights reserved.
-#  
-#  This program and the accompanying materials                          
-#  are licensed and made available under the terms and conditions of the BSD License         
-#  which accompanies this distribution.  The full text of the license may be found at        
-#  http://opensource.org/licenses/bsd-license.php                                            
+#  Copyright (c) 2012-2014, ARM Limited. All rights reserved.
 #
-#  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,                     
-#  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.             
+#  This program and the accompanying materials
+#  are licensed and made available under the terms and conditions of the BSD License
+#  which accompanies this distribution.  The full text of the license may be found at
+#  http://opensource.org/licenses/bsd-license.php
+#
+#  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #
 #
 
@@ -33,7 +33,7 @@
 [LibraryClasses.common]
   ArmLib|ArmPkg/Library/ArmLib/ArmV7/ArmV7Lib.inf
   ArmPlatformLib|ArmPlatformPkg/ArmVExpressPkg/Library/ArmVExpressLibCTA15-A7/ArmVExpressLib.inf
-  
+
   ArmPlatformSysConfigLib|ArmPlatformPkg/ArmVExpressPkg/Library/ArmVExpressSysConfigLib/ArmVExpressSysConfigLib.inf
   NorFlashPlatformLib|ArmPlatformPkg/ArmVExpressPkg/Library/NorFlashArmVExpressLib/NorFlashArmVExpressLib.inf
 
@@ -43,23 +43,20 @@
   ArmGicLib|ArmPkg/Drivers/ArmGic/ArmGicLib.inf
 
   LcdPlatformLib|ArmPlatformPkg/ArmVExpressPkg/Library/HdLcdArmVExpressLib/HdLcdArmVExpressLib.inf
-  
-  TimerLib|ArmPkg/Library/ArmArchTimerLib/ArmArchTimerLib.inf 
+
+  TimerLib|ArmPkg/Library/ArmArchTimerLib/ArmArchTimerLib.inf
   ArmSmcLib|ArmPkg/Library/ArmSmcLib/ArmSmcLib.inf
 
 [BuildOptions]
 !ifdef ARM_BIGLITTLE_TC2
-  RVCT:*_*_ARM_ARCHCC_FLAGS  = -DARM_BIGLITTLE_TC2=1
-  RVCT:*_*_ARM_PP_FLAGS  = -DARM_BIGLITTLE_TC2=1
-
-  GCC:*_*_ARM_ARCHCC_FLAGS  = -DARM_BIGLITTLE_TC2=1
-  GCC:*_*_ARM_PP_FLAGS  = -DARM_BIGLITTLE_TC2=1
+  *_*_ARM_ARCHCC_FLAGS  = -DARM_BIGLITTLE_TC2=1
+  *_*_ARM_PP_FLAGS  = -DARM_BIGLITTLE_TC2=1
 !endif
 
-  RVCT:*_*_ARM_PLATFORM_FLAGS == --cpu Cortex-A15 --fpu=softvfp -I$(WORKSPACE)/ArmPlatformPkg/ArmVExpressPkg/Include -I$(WORKSPACE)/ArmPlatformPkg/ArmVExpressPkg/Include/Platform/CTA15-A7
+  RVCT:*_*_ARM_PLATFORM_FLAGS == --cpu Cortex-A15 -I$(WORKSPACE)/ArmPlatformPkg/ArmVExpressPkg/Include -I$(WORKSPACE)/ArmPlatformPkg/ArmVExpressPkg/Include/Platform/CTA15-A7
 
-  GCC:*_*_ARM_PLATFORM_FLAGS == -mcpu=cortex-a15 -mfpu=neon -I$(WORKSPACE)/ArmPlatformPkg/ArmVExpressPkg/Include -I$(WORKSPACE)/ArmPlatformPkg/ArmVExpressPkg/Include/Platform/CTA15-A7
-  
+  GCC:*_*_ARM_PLATFORM_FLAGS == -mcpu=cortex-a15 -I$(WORKSPACE)/ArmPlatformPkg/ArmVExpressPkg/Include -I$(WORKSPACE)/ArmPlatformPkg/ArmVExpressPkg/Include/Platform/CTA15-A7
+
   XCODE:*_*_ARM_PLATFORM_FLAGS = -I$(WORKSPACE)/ArmPlatformPkg/ArmVExpressPkg/Include -I$(WORKSPACE)/ArmPlatformPkg/ArmVExpressPkg/Include/Platform/CTA15-A7
 
 ################################################################################
@@ -71,11 +68,11 @@
 [PcdsFeatureFlag.common]
   gArmPlatformTokenSpaceGuid.PcdSystemMemoryInitializeInSec|TRUE
   gArmPlatformTokenSpaceGuid.PcdSendSgiToBringUpSecondaryCores|TRUE
-  
+
   ## If TRUE, Graphics Output Protocol will be installed on virtual handle created by ConsplitterDxe.
   #  It could be set FALSE to save size.
   gEfiMdeModulePkgTokenSpaceGuid.PcdConOutGopSupport|TRUE
-  
+
 [PcdsFixedAtBuild.common]
   gArmPlatformTokenSpaceGuid.PcdFirmwareVendor|"ARM Versatile Express"
   gEmbeddedTokenSpaceGuid.PcdEmbeddedPrompt|"ArmVExpress-CTA15-A7"
@@ -93,7 +90,7 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageFtwSpareSize|0x00010000
 
   gArmTokenSpaceGuid.PcdVFPEnabled|1
-  
+
   # Stacks for MPCores in Secure World
   # SRAM (CS1) is only available between 0x14000000 and 0x14001000 on the model
   # ZBT SRAM is available between 0x2E000000 and 0x2E010000 on the model
@@ -106,7 +103,7 @@
   gArmPlatformTokenSpaceGuid.PcdCPUCoreSecSecondaryStackSize|0x1000
   # Share Monitor stacks with Secure World
   gArmPlatformTokenSpaceGuid.PcdCPUCoreSecMonStackSize|0
-  
+
   # System Memory (1GB) - An additional 1GB will be added if UEFI is running on a 2GB Test Chip
   gArmTokenSpaceGuid.PcdSystemMemoryBase|0x80000000
   gArmTokenSpaceGuid.PcdSystemMemorySize|0x40000000
@@ -123,24 +120,24 @@
   #  A7_2 = 0x102, GicCoreId = 4
   gArmTokenSpaceGuid.PcdArmPrimaryCore|0x100
 !endif
-  
+
   #
   # SEC Phase Global Variables :
-  # - 0x00-0x04: Debugger Exception Handler Pointer address 
+  # - 0x00-0x04: Debugger Exception Handler Pointer address
   # - 0x04-0x08: Normal Exception Handler Pointer
   # - 0x0C-0x10: MpSafe Serial Console SpinLock
   # - 0x10-0x20: KfScb 8 Bakery Locks of 2Bytes each
   # - 0x20-0x30: CCI 8 Bakery Locks of 2Bytes each
   # - 0x30-0x48: ARM SMC Events (8 cores * 3 max_event * sizeof(UINT8))
   gArmPlatformTokenSpaceGuid.PcdSecGlobalVariableSize|0x48
-  
+
   #
   # ARM PrimeCell
   #
 
   ## SP805 Watchdog - Motherboard Watchdog
   gArmPlatformTokenSpaceGuid.PcdSP805WatchdogBase|0x1C0F0000
-  
+
   ## PL011 - Serial Terminal
   gEfiMdeModulePkgTokenSpaceGuid.PcdSerialRegisterBase|0x1C090000
   gEfiMdePkgTokenSpaceGuid.PcdUartDefaultBaudRate|38400
@@ -160,18 +157,24 @@
   #
   gArmPlatformTokenSpaceGuid.PcdPL180SysMciRegAddress|0x1C010048
   gArmPlatformTokenSpaceGuid.PcdPL180MciBaseAddress|0x1C050000
-  
-  
+
+
   #
   # ARM General Interrupt Controller
   #
   gArmTokenSpaceGuid.PcdGicDistributorBase|0x2C001000
   gArmTokenSpaceGuid.PcdGicInterruptInterfaceBase|0x2C002000
-  
+
+  # ISP1761 USB OTG Controller
+  gEmbeddedTokenSpaceGuid.PcdIsp1761BaseAddress|0x1B000000
+
+  # Ethernet (SMSC LAN9118)
+  gEmbeddedTokenSpaceGuid.PcdLan9118DxeBaseAddress|0x1A000000
+
   #
   # ARM OS Loader
   #
-  # Versatile Express machine type (ARM VERSATILE EXPRESS = 2272) required for ARM Linux: 
+  # Versatile Express machine type (ARM VERSATILE EXPRESS = 2272) required for ARM Linux:
   gArmTokenSpaceGuid.PcdArmMachineType|2272
   gArmPlatformTokenSpaceGuid.PcdDefaultBootDescription|L"Linux from NorFlash"
   gArmPlatformTokenSpaceGuid.PcdDefaultBootDevicePath|L"VenHw(1F15DA3C-37FF-4070-B471-BB4AF12A724A)/MemoryMapped(0x0,0xE000000,0xE800000)"
@@ -194,7 +197,7 @@
 !else
   gArmTokenSpaceGuid.PcdArmArchTimerFreqInHz|10000000
 !endif
-  
+
 ################################################################################
 #
 # Components Section - list of all EDK II Modules needed by this Platform
@@ -223,13 +226,13 @@
   #
   # Architectural Protocols
   #
-  ArmPkg/Drivers/CpuDxe/CpuDxe.inf  
+  ArmPkg/Drivers/CpuDxe/CpuDxe.inf
   MdeModulePkg/Core/RuntimeDxe/RuntimeDxe.inf
   MdeModulePkg/Universal/SecurityStubDxe/SecurityStubDxe.inf
   MdeModulePkg/Universal/CapsuleRuntimeDxe/CapsuleRuntimeDxe.inf
   MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf
   MdeModulePkg/Universal/FaultTolerantWriteDxe/FaultTolerantWriteDxe.inf
-  MdeModulePkg/Universal/MonotonicCounterRuntimeDxe/MonotonicCounterRuntimeDxe.inf 
+  MdeModulePkg/Universal/MonotonicCounterRuntimeDxe/MonotonicCounterRuntimeDxe.inf
   EmbeddedPkg/ResetRuntimeDxe/ResetRuntimeDxe.inf
   EmbeddedPkg/RealTimeClockRuntimeDxe/RealTimeClockRuntimeDxe.inf
   EmbeddedPkg/MetronomeDxe/MetronomeDxe.inf
@@ -248,20 +251,28 @@
   ArmPlatformPkg/Drivers/LcdGraphicsOutputDxe/HdLcdGraphicsOutputDxe.inf
   ArmPkg/Drivers/TimerDxe/TimerDxe.inf
   ArmPlatformPkg/Drivers/SP805WatchdogDxe/SP805WatchdogDxe.inf
- 
+
+  #
+  # Platform
+  #
+  ArmPlatformPkg/ArmVExpressPkg/ArmVExpressDxe/ArmHwDxe.inf
+
   #
   # Filesystems
   #
 !ifndef ARM_BIGLITTLE_TC2
   ArmPkg/Filesystem/SemihostFs/SemihostFs.inf
 !endif
-  
+
   #
   # Multimedia Card Interface
   #
   EmbeddedPkg/Universal/MmcDxe/MmcDxe.inf
   ArmPlatformPkg/Drivers/PL180MciDxe/PL180MciDxe.inf
-  
+
+  # SMSC LAN 9118
+  EmbeddedPkg/Drivers/Lan9118Dxe/Lan9118Dxe.inf
+
   #
   # FAT filesystem + GPT/MBR partitioning
   #

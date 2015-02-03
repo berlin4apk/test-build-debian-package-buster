@@ -1,10 +1,10 @@
 /** @file
   The header file for Boot Script Executer module.
   
-  This driver is dispatched by Dxe core and the driver will reload itself to ACPI NVS memory 
+  This driver is dispatched by Dxe core and the driver will reload itself to ACPI reserved memory 
   in the entry point. The functionality is to interpret and restore the S3 boot script 
   
-Copyright (c) 2006 - 2012, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
 
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
@@ -36,10 +36,13 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Library/DebugAgentLib.h>
 #include <Library/LockBoxLib.h>
 #include <Library/CpuExceptionHandlerLib.h>
+#include <Library/DevicePathLib.h>
 
 #include <Guid/AcpiS3Context.h>
 #include <Guid/BootScriptExecutorVariable.h>
-#include <Guid/EventGroup.h>
+#include <Guid/MemoryProfile.h>
+
+#include <Protocol/DxeSmmReadyToLock.h>
 #include <IndustryStandard/Acpi.h>
 /**
   a ASM function to transfer control to OS.
@@ -83,5 +86,6 @@ SetIdtEntry (
 
 extern UINT32 AsmFixAddress16;
 extern UINT32 AsmJmpAddr32;
+extern BOOLEAN mPage1GSupport;
 
 #endif //_BOOT_SCRIPT_EXECUTOR_H_

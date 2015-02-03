@@ -1,7 +1,7 @@
 /** @file
 
   Copyright (c) 2008 - 2009, Apple Inc. All rights reserved.<BR>
-  Copyright (c) 2011 - 2012, ARM Ltd. All rights reserved.<BR>
+  Copyright (c) 2011 - 2014, ARM Ltd. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -76,7 +76,7 @@ typedef enum {
 typedef struct {
   EFI_PHYSICAL_ADDRESS          PhysicalBase;
   EFI_VIRTUAL_ADDRESS           VirtualBase;
-  UINTN                         Length;
+  UINT64                        Length;
   ARM_MEMORY_REGION_ATTRIBUTES  Attributes;
 } ARM_MEMORY_REGION_DESCRIPTOR;
 
@@ -123,9 +123,6 @@ typedef enum {
 #define GET_CORE_ID(MpId)     ((MpId) & ARM_CORE_MASK)
 #define GET_CLUSTER_ID(MpId)  (((MpId) & ARM_CLUSTER_MASK) >> 8)
 #define GET_MPID(ClusterId, CoreId)   (((ClusterId) << 8) | (CoreId))
-// Get the position of the core for the Stack Offset (4 Core per Cluster)
-//   Position = (ClusterId * 4) + CoreId
-#define GET_CORE_POS(MpId)    ((((MpId) & ARM_CLUSTER_MASK) >> 6) + ((MpId) & ARM_CORE_MASK))
 #define PRIMARY_CORE_ID       (PcdGet32(PcdArmPrimaryCore) & ARM_CORE_MASK)
 
 ARM_CACHE_TYPE
@@ -151,58 +148,70 @@ EFIAPI
 ArmDataCachePresent (
   VOID
   );
-  
+
 UINTN
 EFIAPI
 ArmDataCacheSize (
   VOID
   );
-  
+
 UINTN
 EFIAPI
 ArmDataCacheAssociativity (
   VOID
   );
-  
+
 UINTN
 EFIAPI
 ArmDataCacheLineLength (
   VOID
   );
-  
+
 BOOLEAN
 EFIAPI
 ArmInstructionCachePresent (
   VOID
   );
-  
+
 UINTN
 EFIAPI
 ArmInstructionCacheSize (
   VOID
   );
-  
+
 UINTN
 EFIAPI
 ArmInstructionCacheAssociativity (
   VOID
   );
-  
+
 UINTN
 EFIAPI
 ArmInstructionCacheLineLength (
   VOID
   );
-  
-UINT32
+
+UINTN
 EFIAPI
-Cp15IdCode (
+ArmIsArchTimerImplemented (
   VOID
   );
-  
-UINT32
+
+UINTN
 EFIAPI
-Cp15CacheInfo (
+ArmReadIdPfr0 (
+  VOID
+  );
+
+UINTN
+EFIAPI
+ArmReadIdPfr1 (
+  VOID
+  );
+
+UINTN
+EFIAPI
+ArmCacheInfo (
   VOID
   );
 
@@ -263,6 +272,24 @@ ArmCleanInvalidateDataCacheEntryByMVA (
 
 VOID
 EFIAPI
+ArmInvalidateDataCacheEntryBySetWay (
+  IN  UINTN  SetWayFormat
+  );
+
+VOID
+EFIAPI
+ArmCleanDataCacheEntryBySetWay (
+  IN  UINTN  SetWayFormat
+  );
+
+VOID
+EFIAPI
+ArmCleanInvalidateDataCacheEntryBySetWay (
+  IN  UINTN   SetWayFormat
+  );
+
+VOID
+EFIAPI
 ArmEnableDataCache (
   VOID
   );
@@ -284,7 +311,7 @@ EFIAPI
 ArmDisableInstructionCache (
   VOID
   );
-  
+
 VOID
 EFIAPI
 ArmEnableMmu (
@@ -299,13 +326,13 @@ ArmDisableMmu (
 
 VOID
 EFIAPI
-ArmDisableCachesAndMmu (
+ArmEnableCachesAndMmu (
   VOID
   );
 
 VOID
 EFIAPI
-ArmInvalidateInstructionAndDataTlb (
+ArmDisableCachesAndMmu (
   VOID
   );
 
@@ -327,15 +354,27 @@ ArmGetInterruptState (
   VOID
   );
 
+VOID
+EFIAPI
+ArmEnableAsynchronousAbort (
+  VOID
+  );
+
 UINTN
 EFIAPI
-ArmDisableIrq (
+ArmDisableAsynchronousAbort (
   VOID
   );
 
 VOID
 EFIAPI
 ArmEnableIrq (
+  VOID
+  );
+
+UINTN
+EFIAPI
+ArmDisableIrq (
   VOID
   );
 
@@ -350,26 +389,29 @@ EFIAPI
 ArmDisableFiq (
   VOID
   );
-  
+
 BOOLEAN
 EFIAPI
 ArmGetFiqState (
   VOID
   );
 
+/**
+ * Invalidate Data and Instruction TLBs
+ */
 VOID
 EFIAPI
 ArmInvalidateTlb (
   VOID
   );
-  
+
 VOID
 EFIAPI
 ArmUpdateTranslationTableEntry (
   IN  VOID     *TranslationTableEntry,
   IN  VOID     *Mva
   );
-  
+
 VOID
 EFIAPI
 ArmSetDomainAccessControl (
@@ -395,25 +437,13 @@ ArmConfigureMmu (
   OUT VOID                         **TranslationTableBase OPTIONAL,
   OUT UINTN                         *TranslationTableSize  OPTIONAL
   );
-  
+
 BOOLEAN
 EFIAPI
 ArmMmuEnabled (
   VOID
   );
-  
-VOID
-EFIAPI
-ArmSwitchProcessorMode (
-  IN ARM_PROCESSOR_MODE Mode
-  );
 
-ARM_PROCESSOR_MODE
-EFIAPI
-ArmProcessorMode (
-  VOID
-  );
-  
 VOID
 EFIAPI
 ArmEnableBranchPrediction (
@@ -440,16 +470,22 @@ ArmSetHighVectors (
 
 VOID
 EFIAPI
+ArmDrainWriteBuffer (
+  VOID
+  );
+
+VOID
+EFIAPI
 ArmDataMemoryBarrier (
   VOID
   );
-  
+
 VOID
 EFIAPI
 ArmDataSyncronizationBarrier (
   VOID
   );
-  
+
 VOID
 EFIAPI
 ArmInstructionSynchronizationBarrier (
@@ -459,10 +495,10 @@ ArmInstructionSynchronizationBarrier (
 VOID
 EFIAPI
 ArmWriteVBar (
-  IN  UINT32   VectorBase
+  IN  UINTN   VectorBase
   );
 
-UINT32
+UINTN
 EFIAPI
 ArmReadVBar (
   VOID
@@ -517,6 +553,12 @@ ArmReadMpidr (
   VOID
   );
 
+UINTN
+EFIAPI
+ArmReadMidr (
+  VOID
+  );
+
 UINT32
 EFIAPI
 ArmReadCpacr (
@@ -535,16 +577,28 @@ ArmEnableVFP (
   VOID
   );
 
+/**
+  Get the Secure Configuration Register value
+
+  @return   Value read from the Secure Configuration Register
+
+**/
 UINT32
 EFIAPI
 ArmReadScr (
   VOID
   );
 
+/**
+  Set the Secure Configuration Register
+
+  @param Value   Value to write to the Secure Configuration Register
+
+**/
 VOID
 EFIAPI
 ArmWriteScr (
-  IN  UINT32   SetWayFormat
+  IN  UINT32   Value
   );
 
 UINT32
@@ -575,6 +629,35 @@ VOID
 EFIAPI
 ArmWriteHVBar (
   IN  UINTN   HypModeVectorBase
+  );
+
+
+//
+// Helper functions for accessing CPU ACTLR
+//
+
+UINTN
+EFIAPI
+ArmReadCpuActlr (
+  VOID
+  );
+
+VOID
+EFIAPI
+ArmWriteCpuActlr (
+  IN  UINTN Val
+  );
+
+VOID
+EFIAPI
+ArmSetCpuActlrBit (
+  IN  UINTN    Bits
+  );
+
+VOID
+EFIAPI
+ArmUnsetCpuActlrBit (
+  IN  UINTN    Bits
   );
 
 #endif // __ARM_LIB__

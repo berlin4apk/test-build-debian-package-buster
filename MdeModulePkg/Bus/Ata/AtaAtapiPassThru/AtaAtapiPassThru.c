@@ -2,7 +2,7 @@
   This file implements ATA_PASSTHRU_PROCTOCOL and EXT_SCSI_PASSTHRU_PROTOCOL interfaces
   for managed ATA controllers.
 
-  Copyright (c) 2010 - 2013, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2010 - 2014, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -717,7 +717,7 @@ AtaAtapiPassThruStart (
                     &Supports
                     );
   if (!EFI_ERROR (Status)) {
-    Supports &= EFI_PCI_DEVICE_ENABLE;
+    Supports &= (UINT64)EFI_PCI_DEVICE_ENABLE;
     Status = PciIo->Attributes (
                       PciIo,
                       EfiPciIoAttributeOperationEnable,
@@ -870,52 +870,16 @@ AtaAtapiPassThruStop (
 
   Instance = ATA_PASS_THRU_PRIVATE_DATA_FROM_THIS (AtaPassThru);
 
-  //
-  // Close Non-Blocking timer and free Task list.
-  //
-  if (Instance->TimerEvent != NULL) {
-    gBS->CloseEvent (Instance->TimerEvent);
-    Instance->TimerEvent = NULL;
+  Status = gBS->UninstallMultipleProtocolInterfaces (
+                  Controller,
+                  &gEfiAtaPassThruProtocolGuid, &(Instance->AtaPassThru),
+                  &gEfiExtScsiPassThruProtocolGuid, &(Instance->ExtScsiPassThru),
+                  NULL
+                  );
+
+  if (EFI_ERROR (Status)) {
+    return EFI_DEVICE_ERROR;
   }
-  DestroyAsynTaskList (Instance, FALSE);
-
-  //
-  // Disable this ATA host controller.
-  //
-  PciIo  = Instance->PciIo;
-  Status = PciIo->Attributes (
-                    PciIo,
-                    EfiPciIoAttributeOperationSupported,
-                    0,
-                    &Supports
-                    );
-  if (!EFI_ERROR (Status)) {
-    Supports &= EFI_PCI_DEVICE_ENABLE;
-    PciIo->Attributes (
-             PciIo,
-             EfiPciIoAttributeOperationDisable,
-             Supports,
-             NULL
-             );
-  }
-
-  //
-  // Restore original PCI attributes
-  //
-  Status = PciIo->Attributes (
-                    PciIo,
-                    EfiPciIoAttributeOperationSet,
-                    Instance->OriginalPciAttributes,
-                    NULL
-                    );
-  ASSERT_EFI_ERROR (Status);
-
-  gBS->UninstallMultipleProtocolInterfaces (
-         Controller,
-         &gEfiAtaPassThruProtocolGuid, &(Instance->AtaPassThru),
-         &gEfiExtScsiPassThruProtocolGuid, &(Instance->ExtScsiPassThru),
-         NULL
-         );
 
   //
   // Close protocols opened by AtaAtapiPassThru controller driver
@@ -928,14 +892,24 @@ AtaAtapiPassThruStop (
          );
 
   //
+  // Close Non-Blocking timer and free Task list.
+  //
+  if (Instance->TimerEvent != NULL) {
+    gBS->CloseEvent (Instance->TimerEvent);
+    Instance->TimerEvent = NULL;
+  }
+  DestroyAsynTaskList (Instance, FALSE);
+  //
   // Free allocated resource
   //
-  DestroyDeviceInfoList(Instance);
+  DestroyDeviceInfoList (Instance);
 
   //
   // If the current working mode is AHCI mode, then pre-allocated resource
   // for AHCI initialization should be released.
   //
+  PciIo = Instance->PciIo;
+
   if (Instance->Mode == EfiAtaAhciMode) {
     AhciRegisters = &Instance->AhciRegisters;
     PciIo->Unmap (
@@ -966,6 +940,37 @@ AtaAtapiPassThruStop (
              AhciRegisters->AhciRFis
              );
   }
+
+  //
+  // Disable this ATA host controller.
+  //
+  Status = PciIo->Attributes (
+                    PciIo,
+                    EfiPciIoAttributeOperationSupported,
+                    0,
+                    &Supports
+                    );
+  if (!EFI_ERROR (Status)) {
+    Supports &= (UINT64)EFI_PCI_DEVICE_ENABLE;
+    PciIo->Attributes (
+             PciIo,
+             EfiPciIoAttributeOperationDisable,
+             Supports,
+             NULL
+             );
+  }
+
+  //
+  // Restore original PCI attributes
+  //
+  Status = PciIo->Attributes (
+                    PciIo,
+                    EfiPciIoAttributeOperationSet,
+                    Instance->OriginalPciAttributes,
+                    NULL
+                    );
+  ASSERT_EFI_ERROR (Status);
+
   FreePool (Instance);
 
   return Status;
@@ -1334,7 +1339,12 @@ AtaPassThruPassThru (
     Task->Packet         = Packet;
     Task->Event          = Event;
     Task->IsStart        = FALSE;
-    Task->RetryTimes     = 0;
+    Task->RetryTimes     = DivU64x32(Packet->Timeout, 1000) + 1;
+    if (Packet->Timeout == 0) {
+      Task->InfiniteWait = TRUE;
+    } else {
+      Task->InfiniteWait = FALSE;
+    }
 
     OldTpl = gBS->RaiseTPL (TPL_NOTIFY);
     InsertTailList (&Instance->NonBlockingTaskList, &Task->Link);
@@ -1827,6 +1837,57 @@ AtaPassThruResetDevice (
 }
 
 /**
+  Sumbit ATAPI request sense command.
+
+  @param[in] This            A pointer to the EFI_EXT_SCSI_PASS_THRU_PROTOCOL instance.
+  @param[in] Target          The Target is an array of size TARGET_MAX_BYTES and it represents
+                             the id of the SCSI device to send the SCSI Request Packet. Each
+                             transport driver may choose to utilize a subset of this size to suit the needs
+                             of transport target representation. For example, a Fibre Channel driver
+                             may use only 8 bytes (WWN) to represent an FC target.
+  @param[in] Lun             The LUN of the SCSI device to send the SCSI Request Packet.
+  @param[in] SenseData       A pointer to store sense data.
+  @param[in] SenseDataLength The sense data length.
+  @param[in] Timeout         The timeout value to execute this cmd, uses 100ns as a unit.
+
+  @retval EFI_SUCCESS        Send out the ATAPI packet command successfully.
+  @retval EFI_DEVICE_ERROR   The device failed to send data.
+
+**/
+EFI_STATUS
+EFIAPI
+AtaPacketRequestSense (
+  IN  EFI_EXT_SCSI_PASS_THRU_PROTOCOL         *This,
+  IN  UINT8                                   *Target,
+  IN  UINT64                                  Lun,
+  IN  VOID                                    *SenseData,
+  IN  UINT8                                   SenseDataLength,
+  IN  UINT64                                  Timeout
+  )
+{
+  EFI_EXT_SCSI_PASS_THRU_SCSI_REQUEST_PACKET  Packet;
+  UINT8                                       Cdb[12];
+  EFI_STATUS                                  Status;
+
+  ZeroMem (&Packet, sizeof (EFI_EXT_SCSI_PASS_THRU_SCSI_REQUEST_PACKET));
+  ZeroMem (Cdb, 12);
+
+  Cdb[0] = ATA_CMD_REQUEST_SENSE;
+  Cdb[4] = SenseDataLength;
+
+  Packet.Timeout          = Timeout;
+  Packet.Cdb              = Cdb;
+  Packet.CdbLength        = 12;
+  Packet.DataDirection    = EFI_EXT_SCSI_DATA_DIRECTION_READ;
+  Packet.InDataBuffer     = SenseData;
+  Packet.InTransferLength = SenseDataLength;
+
+  Status = ExtScsiPassThruPassThru (This, Target, Lun, &Packet, NULL);
+
+  return Status;
+}
+
+/**
   Sends a SCSI Request Packet to a SCSI device that is attached to the SCSI channel. This function
   supports both blocking I/O and nonblocking I/O. The blocking I/O functionality is required, and the
   nonblocking I/O functionality is optional.
@@ -1884,8 +1945,13 @@ ExtScsiPassThruPassThru (
   EFI_ATA_HC_WORK_MODE            Mode;
   LIST_ENTRY                      *Node;
   EFI_ATA_DEVICE_INFO             *DeviceInfo;
+  BOOLEAN                         SenseReq;
+  EFI_SCSI_SENSE_DATA             *PtrSenseData;
+  UINTN                           SenseDataLen;
+  EFI_STATUS                      SenseStatus;
 
-  Instance = EXT_SCSI_PASS_THRU_PRIVATE_DATA_FROM_THIS (This);
+  SenseDataLen = 0;
+  Instance     = EXT_SCSI_PASS_THRU_PRIVATE_DATA_FROM_THIS (This);
 
   if ((Packet == NULL) || (Packet->Cdb == NULL)) {
     return EFI_INVALID_PARAMETER;
@@ -1896,6 +1962,10 @@ ExtScsiPassThruPassThru (
   //
   if ((Packet->CdbLength != 6) && (Packet->CdbLength != 10) &&
       (Packet->CdbLength != 12) && (Packet->CdbLength != 16)) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  if ((Packet->SenseDataLength != 0) && (Packet->SenseData == NULL)) {
     return EFI_INVALID_PARAMETER;
   }
 
@@ -1946,6 +2016,10 @@ ExtScsiPassThruPassThru (
   //
   if (*((UINT8*)Packet->Cdb) == ATA_CMD_IDENTIFY_DEVICE) {
     CopyMem (Packet->InDataBuffer, DeviceInfo->IdentifyData, sizeof (EFI_IDENTIFY_DATA));
+    //
+    // For IDENTIFY DEVICE cmd, we don't need to get sense data.
+    //
+    Packet->SenseDataLength = 0;
     return EFI_SUCCESS;
   }
 
@@ -1971,6 +2045,46 @@ ExtScsiPassThruPassThru (
       break;
   }
 
+  //
+  // If the cmd doesn't get executed correctly, then check sense data.
+  //
+  if (EFI_ERROR (Status) && (Packet->SenseDataLength != 0) && (*((UINT8*)Packet->Cdb) != ATA_CMD_REQUEST_SENSE)) {
+    PtrSenseData = AllocateAlignedPages (EFI_SIZE_TO_PAGES (sizeof (EFI_SCSI_SENSE_DATA)), This->Mode->IoAlign);
+    if (PtrSenseData == NULL) {
+      return EFI_DEVICE_ERROR;
+    }
+
+    for (SenseReq = TRUE; SenseReq;) {
+      SenseStatus = AtaPacketRequestSense (
+                      This,
+                      Target,
+                      Lun,
+                      PtrSenseData,
+                      sizeof (EFI_SCSI_SENSE_DATA),
+                      Packet->Timeout
+                      );
+      if (EFI_ERROR (SenseStatus)) {
+        break;
+      }
+
+      CopyMem ((UINT8*)Packet->SenseData + SenseDataLen, PtrSenseData, sizeof (EFI_SCSI_SENSE_DATA));
+      SenseDataLen += sizeof (EFI_SCSI_SENSE_DATA);
+
+      //
+      // no more sense key or number of sense keys exceeds predefined,
+      // skip the loop.
+      //
+      if ((PtrSenseData->Sense_Key == EFI_SCSI_SK_NO_SENSE) || 
+          (SenseDataLen + sizeof (EFI_SCSI_SENSE_DATA) > Packet->SenseDataLength)) {
+        SenseReq = FALSE;
+      }
+    }
+    FreeAlignedPages (PtrSenseData, EFI_SIZE_TO_PAGES (sizeof (EFI_SCSI_SENSE_DATA)));
+  }
+  //
+  // Update the SenseDataLength field to the data length received.
+  //
+  Packet->SenseDataLength = (UINT8)SenseDataLen;
   return Status;
 }
 

@@ -1,7 +1,7 @@
 /** @file
   The module entry point for TrEE configuration module.
 
-Copyright (c) 2013, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2013 - 2014, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials 
 are licensed and made available under the terms and conditions of the BSD License 
 which accompanies this distribution.  The full text of the license may be found at 
@@ -94,19 +94,23 @@ TrEEConfigPeimEntryPoint (
   //
   // Validation
   //
-  if (TrEEConfiguration.TpmDevice > TPM_DEVICE_MAX) {
-    TrEEConfiguration.TpmDevice   = TPM_DEVICE_DEFAULT;
+  if ((TrEEConfiguration.TpmDevice > TPM_DEVICE_MAX) || (TrEEConfiguration.TpmDevice < TPM_DEVICE_MIN)) {
+    TrEEConfiguration.TpmDevice = TPM_DEVICE_DEFAULT;
   }
 
   //
   // Although we have SetupVariable info, we still need detect TPM device manually.
   //
-  DEBUG ((EFI_D_ERROR, "TrEEConfiguration.TpmDevice from Setup: %x\n", TrEEConfiguration.TpmDevice));
+  DEBUG ((EFI_D_INFO, "TrEEConfiguration.TpmDevice from Setup: %x\n", TrEEConfiguration.TpmDevice));
 
   if (PcdGetBool (PcdTpmAutoDetection)) {
     TpmDevice = DetectTpmDevice (TrEEConfiguration.TpmDevice);
-    DEBUG ((EFI_D_ERROR, "TrEEConfiguration.TpmDevice final: %x\n", TpmDevice));
-    TrEEConfiguration.TpmDevice = TpmDevice;
+    DEBUG ((EFI_D_INFO, "TpmDevice final: %x\n", TpmDevice));
+    if (TpmDevice != TPM_DEVICE_NULL) {
+      TrEEConfiguration.TpmDevice = TpmDevice;
+    }
+  } else {
+    TpmDevice = TrEEConfiguration.TpmDevice;
   }
 
   //
@@ -114,11 +118,14 @@ TrEEConfigPeimEntryPoint (
   // This is work-around because there is no gurantee DynamicHiiPcd can return correct value in DXE phase.
   // Using DynamicPcd instead.
   //
+  // NOTE: TrEEConfiguration variable contains the desired TpmDevice type,
+  // while PcdTpmInstanceGuid PCD contains the real detected TpmDevice type
+  //
   for (Index = 0; Index < sizeof(mTpmInstanceId)/sizeof(mTpmInstanceId[0]); Index++) {
-    if (TrEEConfiguration.TpmDevice == mTpmInstanceId[Index].TpmDevice) {
+    if (TpmDevice == mTpmInstanceId[Index].TpmDevice) {
       Size = sizeof(mTpmInstanceId[Index].TpmInstanceGuid);
       PcdSetPtr (PcdTpmInstanceGuid, &Size, &mTpmInstanceId[Index].TpmInstanceGuid);
-      DEBUG ((EFI_D_ERROR, "TrEEConfiguration.TpmDevice PCD: %g\n", &mTpmInstanceId[Index].TpmInstanceGuid));
+      DEBUG ((EFI_D_INFO, "TpmDevice PCD: %g\n", &mTpmInstanceId[Index].TpmInstanceGuid));
       break;
     }
   }

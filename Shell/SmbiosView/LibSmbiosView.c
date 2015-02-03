@@ -110,13 +110,13 @@ LibSmbiosGetEPS (
 
 VOID
 LibSmbiosGetStructHead (
-  SMBIOS_STRUCTURE_POINTER *pHead
+  SMBIOS_STRUCTURE_POINTER **pHead
   )
 {
   //
   // return SMBIOS structure table address
   //
-  pHead = mSmbiosStruct;
+  *pHead = mSmbiosStruct;
 }
 
 EFI_STATUS

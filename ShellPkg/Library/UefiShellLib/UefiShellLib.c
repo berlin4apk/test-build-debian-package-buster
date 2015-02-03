@@ -1,7 +1,7 @@
 /** @file
   Provides interface to shell functionality for shell commands and applications.
 
-  Copyright (c) 2006 - 2013, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -1175,7 +1175,7 @@ ShellSetEnvironmentVariable (
   The CommandLine is executed from the current working directory on the current
   device.
 
-  The EnvironmentVariables and Status parameters are ignored in a pre-UEFI Shell 2.0
+  The EnvironmentVariables pararemeter is ignored in a pre-UEFI Shell 2.0
   environment.  The values pointed to by the parameters will be unchanged by the
   ShellExecute() function.  The Output parameter has no effect in a
   UEFI Shell 2.0 environment.
@@ -1203,6 +1203,7 @@ ShellExecute (
   OUT EFI_STATUS                *Status OPTIONAL
   )
 {
+  EFI_STATUS                CmdStatus;
   //
   // Check for UEFI Shell 2.0 protocols
   //
@@ -1221,16 +1222,29 @@ ShellExecute (
   //
   if (mEfiShellEnvironment2 != NULL) {
     //
-    // Call EFI Shell version (not using EnvironmentVariables or Status parameters)
+    // Call EFI Shell version.
     // Due to oddity in the EFI shell we want to dereference the ParentHandle here
     //
-    return (mEfiShellEnvironment2->Execute(*ParentHandle,
+    CmdStatus = (mEfiShellEnvironment2->Execute(*ParentHandle,
                                           CommandLine,
                                           Output));
+    //
+    // No Status output parameter so just use the returned status
+    //
+    if (Status != NULL) {
+      *Status = CmdStatus;
+    }
+    //
+    // If there was an error, we can't tell if it was from the command or from
+    // the Execute() function, so we'll just assume the shell ran successfully
+    // and the error came from the command.
+    //
+    return EFI_SUCCESS;
   }
 
   return (EFI_UNSUPPORTED);
 }
+
 /**
   Retreives the current directory path
 
@@ -1416,25 +1430,29 @@ InternalShellConvertFileListType (
     //
     // allocate new space to copy strings and structure
     //
-    NewInfo->FullName     = AllocateZeroPool(StrSize(OldInfo->FullName));
-    NewInfo->FileName     = AllocateZeroPool(StrSize(OldInfo->FileName));
-    NewInfo->Info         = AllocateZeroPool((UINTN)OldInfo->Info->Size);
+    NewInfo->FullName     = AllocateCopyPool(StrSize(OldInfo->FullName), OldInfo->FullName);
+    NewInfo->FileName     = AllocateCopyPool(StrSize(OldInfo->FileName), OldInfo->FileName);
+    NewInfo->Info         = AllocateCopyPool((UINTN)OldInfo->Info->Size, OldInfo->Info);
 
     //
     // make sure all the memory allocations were sucessful
     //
     if (NULL == NewInfo->FullName || NewInfo->FileName == NULL || NewInfo->Info == NULL) {
+      //
+      // Free the partially allocated new node
+      //
+      SHELL_FREE_NON_NULL(NewInfo->FullName);
+      SHELL_FREE_NON_NULL(NewInfo->FileName);
+      SHELL_FREE_NON_NULL(NewInfo->Info);
+      SHELL_FREE_NON_NULL(NewInfo);
+
+      //
+      // Free the previously converted stuff
+      //
       ShellCloseFileMetaArg((EFI_SHELL_FILE_INFO**)(&ListHead));
       ListHead = NULL;
       break;
     }
-
-    //
-    // Copt the strings and structure
-    //
-    StrCpy(NewInfo->FullName, OldInfo->FullName);
-    StrCpy(NewInfo->FileName, OldInfo->FileName);
-    gBS->CopyMem (NewInfo->Info, OldInfo->Info, (UINTN)OldInfo->Info->Size);
 
     //
     // add that to the list
@@ -1447,8 +1465,8 @@ InternalShellConvertFileListType (
   Opens a group of files based on a path.
 
   This function uses the Arg to open all the matching files. Each matched
-  file has a SHELL_FILE_ARG structure to record the file information. These
-  structures are placed on the list ListHead. Users can get the SHELL_FILE_ARG
+  file has a SHELL_FILE_INFO structure to record the file information. These
+  structures are placed on the list ListHead. Users can get the SHELL_FILE_INFO
   structures from ListHead to access each file. This function supports wildcards
   and will process '?' and '*' as such.  the list must be freed with a call to
   ShellCloseFileMetaArg().
@@ -1476,12 +1494,20 @@ ShellOpenFileMetaArg (
 {
   EFI_STATUS                    Status;
   LIST_ENTRY                    mOldStyleFileList;
+  CHAR16                        *CleanFilePathStr;
 
   //
   // ASSERT that Arg and ListHead are not NULL
   //
   ASSERT(Arg      != NULL);
   ASSERT(ListHead != NULL);
+
+  CleanFilePathStr = NULL;
+
+  Status = InternalShellStripQuotes (Arg, &CleanFilePathStr);
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
 
   //
   // Check for UEFI Shell 2.0 protocols
@@ -1490,11 +1516,12 @@ ShellOpenFileMetaArg (
     if (*ListHead == NULL) {
       *ListHead = (EFI_SHELL_FILE_INFO*)AllocateZeroPool(sizeof(EFI_SHELL_FILE_INFO));
       if (*ListHead == NULL) {
+        FreePool(CleanFilePathStr);
         return (EFI_OUT_OF_RESOURCES);
       }
       InitializeListHead(&((*ListHead)->Link));
     }
-    Status = gEfiShellProtocol->OpenFileList(Arg,
+    Status = gEfiShellProtocol->OpenFileList(CleanFilePathStr,
                                            OpenMode,
                                            ListHead);
     if (EFI_ERROR(Status)) {
@@ -1504,9 +1531,11 @@ ShellOpenFileMetaArg (
     }
     if (*ListHead != NULL && IsListEmpty(&(*ListHead)->Link)) {
       FreePool(*ListHead);
+      FreePool(CleanFilePathStr);
       *ListHead = NULL;
       return (EFI_NOT_FOUND);
     }
+    FreePool(CleanFilePathStr);
     return (Status);
   }
 
@@ -1522,15 +1551,17 @@ ShellOpenFileMetaArg (
     //
     // Get the EFI Shell list of files
     //
-    Status = mEfiShellEnvironment2->FileMetaArg(Arg, &mOldStyleFileList);
+    Status = mEfiShellEnvironment2->FileMetaArg(CleanFilePathStr, &mOldStyleFileList);
     if (EFI_ERROR(Status)) {
       *ListHead = NULL;
+      FreePool(CleanFilePathStr);
       return (Status);
     }
 
     if (*ListHead == NULL) {
       *ListHead = (EFI_SHELL_FILE_INFO    *)AllocateZeroPool(sizeof(EFI_SHELL_FILE_INFO));
       if (*ListHead == NULL) {
+        FreePool(CleanFilePathStr);
         return (EFI_OUT_OF_RESOURCES);
       }
       InitializeListHead(&((*ListHead)->Link));
@@ -1551,9 +1582,11 @@ ShellOpenFileMetaArg (
       *ListHead = NULL;
       Status = EFI_NOT_FOUND;
     }
+    FreePool(CleanFilePathStr);
     return (Status);
   }
 
+  FreePool(CleanFilePathStr);
   return (EFI_UNSUPPORTED);
 }
 /**
@@ -1598,6 +1631,7 @@ ShellCloseFileMetaArg (
       FreePool(((EFI_SHELL_FILE_INFO_NO_CONST*)Node)->Info);
       FreePool((EFI_SHELL_FILE_INFO_NO_CONST*)Node);
     }
+    SHELL_FREE_NON_NULL(*ListHead);
     return EFI_SUCCESS;
   }
 
@@ -1656,8 +1690,8 @@ ShellFindFilePath (
     if (TestPath == NULL) {
       return (NULL);
     }
-    StrCpy(TestPath, Path);
-    StrCat(TestPath, FileName);
+    StrnCpy(TestPath, Path, Size/sizeof(CHAR16) - 1);
+    StrnCat(TestPath, FileName, Size/sizeof(CHAR16) - 1 - StrLen(TestPath));
     Status = ShellOpenFileByName(TestPath, &Handle, EFI_FILE_MODE_READ, 0);
     if (!EFI_ERROR(Status)){
       if (FileHandleIsDirectory(Handle) != EFI_SUCCESS) {
@@ -1689,12 +1723,12 @@ ShellFindFilePath (
           *TempChar = CHAR_NULL;
         }
         if (TestPath[StrLen(TestPath)-1] != L'\\') {
-          StrCat(TestPath, L"\\");
+          StrnCat(TestPath, L"\\", Size/sizeof(CHAR16) - 1 - StrLen(TestPath));
         }
         if (FileName[0] == L'\\') {
           FileName++;
         }
-        StrCat(TestPath, FileName);
+        StrnCat(TestPath, FileName, Size/sizeof(CHAR16) - 1 - StrLen(TestPath));
         if (StrStr(Walker, L";") != NULL) {
           Walker = StrStr(Walker, L";") + 1;
         } else {
@@ -1763,9 +1797,9 @@ ShellFindFilePathEx (
     return (NULL);
   }
   for (ExtensionWalker = FileExtension, TempChar2 = (CHAR16*)FileExtension;  TempChar2 != NULL ; ExtensionWalker = TempChar2 + 1){
-    StrCpy(TestPath, FileName);
+    StrnCpy(TestPath, FileName, Size/sizeof(CHAR16) - 1);
     if (ExtensionWalker != NULL) {
-      StrCat(TestPath, ExtensionWalker);
+      StrnCat(TestPath, ExtensionWalker, Size/sizeof(CHAR16) - 1 - StrLen(TestPath));
     }
     TempChar = StrStr(TestPath, L";");
     if (TempChar != NULL) {
@@ -1869,6 +1903,7 @@ InternalIsOnCheckList (
 
   @param[in] Name               pointer to Name of parameter found
   @param[in] AlwaysAllowNumbers TRUE to allow numbers, FALSE to not.
+  @param[in] TimeNumbers        TRUE to allow numbers with ":", FALSE otherwise.
 
   @retval TRUE                  the Parameter is a flag.
   @retval FALSE                 the Parameter not a flag.
@@ -1877,7 +1912,8 @@ BOOLEAN
 EFIAPI
 InternalIsFlag (
   IN CONST CHAR16               *Name,
-  IN BOOLEAN                    AlwaysAllowNumbers
+  IN CONST BOOLEAN              AlwaysAllowNumbers,
+  IN CONST BOOLEAN              TimeNumbers
   )
 {
   //
@@ -1888,7 +1924,7 @@ InternalIsFlag (
   //
   // If we accept numbers then dont return TRUE. (they will be values)
   //
-  if (((Name[0] == L'-' || Name[0] == L'+') && ShellIsHexaDecimalDigitCharacter(Name[1])) && AlwaysAllowNumbers) {
+  if (((Name[0] == L'-' || Name[0] == L'+') && InternalShellIsHexOrDecimalNumber(Name+1, FALSE, FALSE, TimeNumbers)) && AlwaysAllowNumbers) {
     return (FALSE);
   }
 
@@ -1948,6 +1984,7 @@ InternalCommandLineParse (
   UINTN                         ValueSize;
   UINTN                         Count;
   CONST CHAR16                  *TempPointer;
+  UINTN                         CurrentValueSize;
 
   CurrentItemPackage = NULL;
   GetItemValue = 0;
@@ -2003,13 +2040,12 @@ InternalCommandLineParse (
         *CheckPackage = NULL;
         return (EFI_OUT_OF_RESOURCES);
       }
-      CurrentItemPackage->Name  = AllocateZeroPool(StrSize(Argv[LoopCounter]));
+      CurrentItemPackage->Name  = AllocateCopyPool(StrSize(Argv[LoopCounter]), Argv[LoopCounter]);
       if (CurrentItemPackage->Name == NULL) {
         ShellCommandLineFreeVarList(*CheckPackage);
         *CheckPackage = NULL;
         return (EFI_OUT_OF_RESOURCES);
       }
-      StrCpy(CurrentItemPackage->Name,  Argv[LoopCounter]);
       CurrentItemPackage->Type  = CurrentItemType;
       CurrentItemPackage->OriginalPosition = (UINTN)(-1);
       CurrentItemPackage->Value = NULL;
@@ -2022,6 +2058,7 @@ InternalCommandLineParse (
         // possibly trigger the next loop(s) to populate the value of this item
         //
         case TypeValue:
+        case TypeTimeValue:
           GetItemValue = 1;
           ValueSize = 0;
           break;
@@ -2041,36 +2078,37 @@ InternalCommandLineParse (
           ASSERT(GetItemValue == 0);
           break;
       }
-    } else if (GetItemValue != 0 && !InternalIsFlag(Argv[LoopCounter], AlwaysAllowNumbers)) {
-      ASSERT(CurrentItemPackage != NULL);
+    } else if (GetItemValue != 0 && CurrentItemPackage != NULL && !InternalIsFlag(Argv[LoopCounter], AlwaysAllowNumbers, (CONST BOOLEAN)(CurrentItemPackage->Type == TypeTimeValue))) {
       //
       // get the item VALUE for a previous flag
       //
       if (StrStr(Argv[LoopCounter], L" ") == NULL) {
-        CurrentItemPackage->Value = ReallocatePool(ValueSize, ValueSize + StrSize(Argv[LoopCounter]) + sizeof(CHAR16), CurrentItemPackage->Value);
+        CurrentValueSize = ValueSize + StrSize(Argv[LoopCounter]) + sizeof(CHAR16);
+        CurrentItemPackage->Value = ReallocatePool(ValueSize, CurrentValueSize, CurrentItemPackage->Value);
         ASSERT(CurrentItemPackage->Value != NULL);
         if (ValueSize == 0) {
-          StrCpy(CurrentItemPackage->Value, Argv[LoopCounter]);
+          StrnCpy(CurrentItemPackage->Value, Argv[LoopCounter], CurrentValueSize/sizeof(CHAR16) - 1);
         } else {
-          StrCat(CurrentItemPackage->Value, L" ");
-          StrCat(CurrentItemPackage->Value, Argv[LoopCounter]);
+          StrnCat(CurrentItemPackage->Value, L" ", CurrentValueSize/sizeof(CHAR16) - 1 - StrLen(CurrentItemPackage->Value));
+          StrnCat(CurrentItemPackage->Value, Argv[LoopCounter], CurrentValueSize/sizeof(CHAR16) - 1 - StrLen(CurrentItemPackage->Value));
         }
         ValueSize += StrSize(Argv[LoopCounter]) + sizeof(CHAR16);
       } else {
         //
         // the parameter has spaces.  must be quoted.
         //
-        CurrentItemPackage->Value = ReallocatePool(ValueSize, ValueSize + StrSize(Argv[LoopCounter]) + sizeof(CHAR16) + sizeof(CHAR16) + sizeof(CHAR16), CurrentItemPackage->Value);
+        CurrentValueSize =  ValueSize + StrSize(Argv[LoopCounter]) + sizeof(CHAR16) + sizeof(CHAR16) + sizeof(CHAR16);
+        CurrentItemPackage->Value = ReallocatePool(ValueSize, CurrentValueSize, CurrentItemPackage->Value);
         ASSERT(CurrentItemPackage->Value != NULL);
         if (ValueSize == 0) {
-          StrCpy(CurrentItemPackage->Value, L"\"");
-          StrCat(CurrentItemPackage->Value, Argv[LoopCounter]);
-          StrCat(CurrentItemPackage->Value, L"\"");
+          StrnCpy(CurrentItemPackage->Value, L"\"", CurrentValueSize/sizeof(CHAR16) - 1);
+          StrnCat(CurrentItemPackage->Value, Argv[LoopCounter], CurrentValueSize/sizeof(CHAR16) - 1 - StrLen(CurrentItemPackage->Value));
+          StrnCat(CurrentItemPackage->Value, L"\"", CurrentValueSize/sizeof(CHAR16) - 1 - StrLen(CurrentItemPackage->Value));
         } else {
-          StrCat(CurrentItemPackage->Value, L" ");
-          StrCat(CurrentItemPackage->Value, L"\"");
-          StrCat(CurrentItemPackage->Value, Argv[LoopCounter]);
-          StrCat(CurrentItemPackage->Value, L"\"");
+          StrnCat(CurrentItemPackage->Value, L" ", CurrentValueSize/sizeof(CHAR16) - 1 - StrLen(CurrentItemPackage->Value));
+          StrnCat(CurrentItemPackage->Value, L"\"", CurrentValueSize/sizeof(CHAR16) - 1 - StrLen(CurrentItemPackage->Value));
+          StrnCat(CurrentItemPackage->Value, Argv[LoopCounter], CurrentValueSize/sizeof(CHAR16) - 1 - StrLen(CurrentItemPackage->Value));
+          StrnCat(CurrentItemPackage->Value, L"\"", CurrentValueSize/sizeof(CHAR16) - 1 - StrLen(CurrentItemPackage->Value));
        }
         ValueSize += StrSize(Argv[LoopCounter]) + sizeof(CHAR16);
       }
@@ -2078,7 +2116,7 @@ InternalCommandLineParse (
       if (GetItemValue == 0) {
         InsertHeadList(*CheckPackage, &CurrentItemPackage->Link);
       }
-    } else if (!InternalIsFlag(Argv[LoopCounter], AlwaysAllowNumbers) ){ //|| ProblemParam == NULL) {
+    } else if (!InternalIsFlag(Argv[LoopCounter], AlwaysAllowNumbers, FALSE)){
       //
       // add this one as a non-flag
       //
@@ -2098,13 +2136,12 @@ InternalCommandLineParse (
       }
       CurrentItemPackage->Name  = NULL;
       CurrentItemPackage->Type  = TypePosition;
-      CurrentItemPackage->Value = AllocateZeroPool(StrSize(TempPointer));
+      CurrentItemPackage->Value = AllocateCopyPool(StrSize(TempPointer), TempPointer);
       if (CurrentItemPackage->Value == NULL) {
         ShellCommandLineFreeVarList(*CheckPackage);
         *CheckPackage = NULL;
         return (EFI_OUT_OF_RESOURCES);
       }
-      StrCpy(CurrentItemPackage->Value, TempPointer);
       CurrentItemPackage->OriginalPosition = Count++;
       InsertHeadList(*CheckPackage, &CurrentItemPackage->Link);
     } else {
@@ -2112,10 +2149,7 @@ InternalCommandLineParse (
       // this was a non-recognised flag... error!
       //
       if (ProblemParam != NULL) {
-        *ProblemParam = AllocateZeroPool(StrSize(Argv[LoopCounter]));
-        if (*ProblemParam != NULL) {
-          StrCpy(*ProblemParam, Argv[LoopCounter]);
-        }
+        *ProblemParam = AllocateCopyPool(StrSize(Argv[LoopCounter]), Argv[LoopCounter]);
       }
       ShellCommandLineFreeVarList(*CheckPackage);
       *CheckPackage = NULL;
@@ -2582,7 +2616,7 @@ ShellCopySearchAndReplace(
   if (Replace == NULL) {
     return (EFI_OUT_OF_RESOURCES);
   }
-  NewString = SetMem16(NewString, NewSize, CHAR_NULL);
+  NewString = ZeroMem(NewString, NewSize);
   while (*SourceString != CHAR_NULL) {
     //
     // if we find the FindTarget and either Skip == FALSE or Skip  and we
@@ -2597,7 +2631,7 @@ ShellCopySearchAndReplace(
         FreePool(Replace);
         return (EFI_BUFFER_TOO_SMALL);
       }
-      StrCat(NewString, Replace);
+      StrnCat(NewString, Replace, NewSize/sizeof(CHAR16) - 1 - StrLen(NewString));
     } else {
       Size = StrSize(NewString);
       if (Size + sizeof(CHAR16) > NewSize) {
@@ -3057,8 +3091,34 @@ ShellIsFileInPath(
 }
 
 /**
+  Function return the number converted from a hex representation of a number.
+
+  Note: this function cannot be used when (UINTN)(-1), (0xFFFFFFFF) may be a valid
+  result.  Use ShellConvertStringToUint64 instead.
+
+  @param[in] String   String representation of a number.
+
+  @return             The unsigned integer result of the conversion.
+  @retval (UINTN)(-1) An error occured.
+**/
+UINTN
+EFIAPI
+ShellHexStrToUintn(
+  IN CONST CHAR16 *String
+  )
+{
+  UINT64        RetVal;
+
+  if (!EFI_ERROR(ShellConvertStringToUint64(String, &RetVal, TRUE, TRUE))) {
+    return ((UINTN)RetVal);
+  }
+  
+  return ((UINTN)(-1));
+}
+
+/**
   Function to determine whether a string is decimal or hex representation of a number
-  and return the number converted from the string.
+  and return the number converted from the string.  Spaces are always skipped.
 
   @param[in] String   String representation of a number
 
@@ -3076,7 +3136,7 @@ ShellStrToUintn(
 
   Hex = FALSE;
 
-  if (!InternalShellIsHexOrDecimalNumber(String, Hex, TRUE)) {
+  if (!InternalShellIsHexOrDecimalNumber(String, Hex, TRUE, FALSE)) {
     Hex = TRUE;
   }
 
@@ -3253,7 +3313,9 @@ ShellPromptForResponse (
       //
       gBS->WaitForEvent (1, &gST->ConIn->WaitForKey, &EventIndex);
       Status = gST->ConIn->ReadKeyStroke (gST->ConIn, &Key);
-      ASSERT_EFI_ERROR(Status);
+      if (EFI_ERROR(Status)) {
+        break;
+      }
       ShellPrintEx(-1, -1, L"%c", Key.UnicodeChar);
       if (Key.UnicodeChar == L'Q' || Key.UnicodeChar ==L'q') {
         *Resp = ShellPromptResponseQuit;
@@ -3270,9 +3332,15 @@ ShellPromptForResponse (
       //
       *Resp = ShellPromptResponseMax;
       while (*Resp == ShellPromptResponseMax) {
+        if (ShellGetExecutionBreakFlag()) {
+          Status = EFI_ABORTED;
+          break;
+        }
         gBS->WaitForEvent (1, &gST->ConIn->WaitForKey, &EventIndex);
         Status = gST->ConIn->ReadKeyStroke (gST->ConIn, &Key);
-        ASSERT_EFI_ERROR(Status);
+        if (EFI_ERROR(Status)) {
+          break;
+        }
         ShellPrintEx(-1, -1, L"%c", Key.UnicodeChar);
         switch (Key.UnicodeChar) {
           case L'Y':
@@ -3298,9 +3366,15 @@ ShellPromptForResponse (
       //
       *Resp = ShellPromptResponseMax;
       while (*Resp == ShellPromptResponseMax) {
+        if (ShellGetExecutionBreakFlag()) {
+          Status = EFI_ABORTED;
+          break;
+        }
         gBS->WaitForEvent (1, &gST->ConIn->WaitForKey, &EventIndex);
         Status = gST->ConIn->ReadKeyStroke (gST->ConIn, &Key);
-        ASSERT_EFI_ERROR(Status);
+        if (EFI_ERROR(Status)) {
+          break;
+        }
         ShellPrintEx(-1, -1, L"%c", Key.UnicodeChar);
         switch (Key.UnicodeChar) {
           case L'Y':
@@ -3332,10 +3406,16 @@ ShellPromptForResponse (
       //
       *Resp = ShellPromptResponseMax;
       while (*Resp == ShellPromptResponseMax) {
+        if (ShellGetExecutionBreakFlag()) {
+          Status = EFI_ABORTED;
+          break;
+        }
         gBS->WaitForEvent (1, &gST->ConIn->WaitForKey, &EventIndex);
         if (Type == ShellPromptResponseTypeEnterContinue) {
           Status = gST->ConIn->ReadKeyStroke (gST->ConIn, &Key);
-          ASSERT_EFI_ERROR(Status);
+          if (EFI_ERROR(Status)) {
+            break;
+          }
           ShellPrintEx(-1, -1, L"%c", Key.UnicodeChar);
           if (Key.UnicodeChar == CHAR_CARRIAGE_RETURN) {
             *Resp = ShellPromptResponseContinue;
@@ -3359,9 +3439,15 @@ ShellPromptForResponse (
       //
       *Resp = ShellPromptResponseMax;
       while (*Resp == ShellPromptResponseMax) {
+        if (ShellGetExecutionBreakFlag()) {
+          Status = EFI_ABORTED;
+          break;
+        }
         gBS->WaitForEvent (1, &gST->ConIn->WaitForKey, &EventIndex);
         Status = gST->ConIn->ReadKeyStroke (gST->ConIn, &Key);
-        ASSERT_EFI_ERROR(Status);
+        if (EFI_ERROR(Status)) {
+          break;
+        }
         ShellPrintEx(-1, -1, L"%c", Key.UnicodeChar);
         switch (Key.UnicodeChar) {
           case L'Y':
@@ -3380,9 +3466,15 @@ ShellPromptForResponse (
         ShellPrintEx(-1, -1, L"%s", Prompt);
       }
       while(1) {
+        if (ShellGetExecutionBreakFlag()) {
+          Status = EFI_ABORTED;
+          break;
+        }
         gBS->WaitForEvent (1, &gST->ConIn->WaitForKey, &EventIndex);
         Status = gST->ConIn->ReadKeyStroke (gST->ConIn, &Key);
-        ASSERT_EFI_ERROR(Status);
+        if (EFI_ERROR(Status)) {
+          break;
+        }
         ShellPrintEx(-1, -1, L"%c", Key.UnicodeChar);
         if (Key.UnicodeChar == CHAR_CARRIAGE_RETURN) {
           break;
@@ -3393,6 +3485,7 @@ ShellPromptForResponse (
       break;
     //
     // This is the location to add new prompt types.
+    // If your new type loops remember to add ExecutionBreak support.
     //
     default:
       ASSERT(FALSE);
@@ -3460,6 +3553,7 @@ ShellPromptForResponseHii (
   @param[in] String       The string to evaluate.
   @param[in] ForceHex     TRUE - always assume hex.
   @param[in] StopAtSpace  TRUE to halt upon finding a space, FALSE to keep going.
+  @param[in] TimeNumbers        TRUE to allow numbers with ":", FALSE otherwise.
 
   @retval TRUE        It is all numeric (dec/hex) characters.
   @retval FALSE       There is a non-numeric character.
@@ -3469,7 +3563,8 @@ EFIAPI
 InternalShellIsHexOrDecimalNumber (
   IN CONST CHAR16   *String,
   IN CONST BOOLEAN  ForceHex,
-  IN CONST BOOLEAN  StopAtSpace
+  IN CONST BOOLEAN  StopAtSpace,
+  IN CONST BOOLEAN  TimeNumbers
   )
 {
   BOOLEAN Hex;
@@ -3513,6 +3608,9 @@ InternalShellIsHexOrDecimalNumber (
   // loop through the remaining characters and use the lib function
   //
   for ( ; String != NULL && *String != CHAR_NULL && !(StopAtSpace && *String == L' ') ; String++){
+    if (TimeNumbers && (String[0] == L':')) {
+      continue;
+    }
     if (Hex) {
       if (!ShellIsHexaDecimalDigitCharacter(*String)) {
         return (FALSE);
@@ -3836,10 +3934,10 @@ ShellConvertStringToUint64(
 
   Hex = ForceHex;
 
-  if (!InternalShellIsHexOrDecimalNumber(String, Hex, StopAtSpace)) {
+  if (!InternalShellIsHexOrDecimalNumber(String, Hex, StopAtSpace, FALSE)) {
     if (!Hex) {
       Hex = TRUE;
-      if (!InternalShellIsHexOrDecimalNumber(String, Hex, StopAtSpace)) {
+      if (!InternalShellIsHexOrDecimalNumber(String, Hex, StopAtSpace, FALSE)) {
         return (EFI_INVALID_PARAMETER);
       }
     } else {
@@ -3855,7 +3953,7 @@ ShellConvertStringToUint64(
   //
   // make sure we have something left that is numeric.
   //
-  if (Walker == NULL || *Walker == CHAR_NULL || !InternalShellIsHexOrDecimalNumber(Walker, Hex, StopAtSpace)) {
+  if (Walker == NULL || *Walker == CHAR_NULL || !InternalShellIsHexOrDecimalNumber(Walker, Hex, StopAtSpace, FALSE)) {
     return (EFI_INVALID_PARAMETER);
   }
 
@@ -4164,3 +4262,41 @@ ShellDeleteFileByName(
   return(Status);
   
 }
+
+/**
+  Cleans off all the quotes in the string.
+
+  @param[in]     OriginalString   pointer to the string to be cleaned.
+  @param[out]   CleanString      The new string with all quotes removed. 
+                                                  Memory allocated in the function and free 
+                                                  by caller.
+
+  @retval EFI_SUCCESS   The operation was successful.
+**/
+EFI_STATUS
+EFIAPI
+InternalShellStripQuotes (
+  IN  CONST CHAR16     *OriginalString,
+  OUT CHAR16           **CleanString
+  )
+{
+  CHAR16            *Walker;
+  
+  if (OriginalString == NULL || CleanString == NULL) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  *CleanString = AllocateCopyPool (StrSize (OriginalString), OriginalString);
+  if (*CleanString == NULL) {
+    return EFI_OUT_OF_RESOURCES;
+  }
+
+  for (Walker = *CleanString; Walker != NULL && *Walker != CHAR_NULL ; Walker++) {
+    if (*Walker == L'\"') {
+      CopyMem(Walker, Walker+1, StrSize(Walker) - sizeof(Walker[0]));
+    }
+  }
+
+  return EFI_SUCCESS;
+}
+

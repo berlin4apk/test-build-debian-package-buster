@@ -1,7 +1,7 @@
 /** @file
 *  Main file supporting the SEC Phase for Versatile Express
 *
-*  Copyright (c) 2011-2012, ARM Limited. All rights reserved.
+*  Copyright (c) 2011-2014, ARM Limited. All rights reserved.
 *
 *  This program and the accompanying materials
 *  are licensed and made available under the terms and conditions of the BSD License
@@ -283,9 +283,10 @@ InitializeDebugAgent (
   EFI_FFS_FILE_HEADER   *FfsHeader;
   PE_COFF_LOADER_IMAGE_CONTEXT  ImageContext;
 
-  // Now we've got UART, make the check:
-  // - The Vector table must be 32-byte aligned
-  //Need to fix basetools ASSERT(((UINTN)DebugAgentVectorTable & ARM_VECTOR_TABLE_ALIGNMENT) == 0);
+  // Now we've got UART, check the Debug Agent Vector Table
+  // Note: The AArch64 Vector table must be 2k-byte aligned - if this assertion fails ensure
+  // 'Align=4K' is defined into your FDF for this module.
+  ASSERT (((UINTN)DebugAgentVectorTable & ARM_VECTOR_TABLE_ALIGNMENT) == 0);
   ArmWriteVBar ((UINTN)DebugAgentVectorTable);
 
   // We use InitFlag to know if DebugAgent has been intialized from
@@ -295,7 +296,7 @@ InitializeDebugAgent (
     //
     // Get the Sec or PrePeiCore module (defined as SEC type module)
     //
-    Status = GetFfsFile ((EFI_FIRMWARE_VOLUME_HEADER*)(UINTN)PcdGet32(PcdSecureFvBaseAddress), EFI_FV_FILETYPE_SECURITY_CORE, &FfsHeader);
+    Status = GetFfsFile ((EFI_FIRMWARE_VOLUME_HEADER*)(UINTN)PcdGet64 (PcdSecureFvBaseAddress), EFI_FV_FILETYPE_SECURITY_CORE, &FfsHeader);
     if (!EFI_ERROR(Status)) {
       Status = GetImageContext (FfsHeader,&ImageContext);
       if (!EFI_ERROR(Status)) {
@@ -306,7 +307,7 @@ InitializeDebugAgent (
     //
     // Get the PrePi or PrePeiCore module (defined as SEC type module)
     //
-    Status = GetFfsFile ((EFI_FIRMWARE_VOLUME_HEADER*)(UINTN)PcdGet32(PcdFvBaseAddress), EFI_FV_FILETYPE_SECURITY_CORE, &FfsHeader);
+    Status = GetFfsFile ((EFI_FIRMWARE_VOLUME_HEADER*)(UINTN)PcdGet64 (PcdFvBaseAddress), EFI_FV_FILETYPE_SECURITY_CORE, &FfsHeader);
     if (!EFI_ERROR(Status)) {
       Status = GetImageContext (FfsHeader,&ImageContext);
       if (!EFI_ERROR(Status)) {
@@ -317,7 +318,7 @@ InitializeDebugAgent (
     //
     // Get the PeiCore module (defined as PEI_CORE type module)
     //
-    Status = GetFfsFile ((EFI_FIRMWARE_VOLUME_HEADER*)(UINTN)PcdGet32(PcdFvBaseAddress), EFI_FV_FILETYPE_PEI_CORE, &FfsHeader);
+    Status = GetFfsFile ((EFI_FIRMWARE_VOLUME_HEADER*)(UINTN)PcdGet64 (PcdFvBaseAddress), EFI_FV_FILETYPE_PEI_CORE, &FfsHeader);
     if (!EFI_ERROR(Status)) {
       Status = GetImageContext (FfsHeader,&ImageContext);
       if (!EFI_ERROR(Status)) {

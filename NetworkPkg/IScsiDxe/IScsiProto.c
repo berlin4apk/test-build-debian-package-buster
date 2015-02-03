@@ -1,7 +1,7 @@
 /** @file
   The implementation of iSCSI protocol based on RFC3720.
 
-Copyright (c) 2004 - 2013, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2014, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -228,7 +228,7 @@ IScsiCreateConnection (
   Conn->PartialRspRcvd  = FALSE;
   Conn->ParamNegotiated = FALSE;
   Conn->Cid             = Session->NextCid++;
-  Conn->Ipv6Flag        = mPrivate->Ipv6Flag;
+  Conn->Ipv6Flag        = NvData->IpMode == IP_MODE_IP6 || Session->ConfigData->AutoConfigureMode == IP_MODE_AUTOCONFIG_IP6;
 
   Status = gBS->CreateEvent (
                   EVT_TIMER,
@@ -472,7 +472,7 @@ IScsiSessionLogin (
   if (!EFI_ERROR (Status)) {
     Session->State = SESSION_STATE_LOGGED_IN;
 
-    if (!mPrivate->Ipv6Flag) {
+    if (!Conn->Ipv6Flag) {
       ProtocolGuid = &gEfiTcp4ProtocolGuid;      
     } else {
       ProtocolGuid = &gEfiTcp6ProtocolGuid;
@@ -489,7 +489,7 @@ IScsiSessionLogin (
 
     ASSERT_EFI_ERROR (Status);
 
-    if (mPrivate->Ipv6Flag) {
+    if (Conn->Ipv6Flag) {
       Status = IScsiGetIp6NicInfo (Conn);
     }
   }
@@ -603,6 +603,8 @@ IScsiReceiveLoginRsp (
 {
   EFI_STATUS  Status;
   NET_BUF     *Pdu;
+
+  Pdu = NULL;
 
   //
   // Receive the iSCSI login response.
@@ -2820,6 +2822,7 @@ IScsiOnNopInRcvd (
   @retval EFI_DEVICE_ERROR     Session state was not as required.
   @retval EFI_OUT_OF_RESOURCES Failed to allocate memory.
   @retval EFI_PROTOCOL_ERROR   There is no such data in the net buffer.
+  @retval EFI_NOT_READY        The target can not accept new commands.
   @retval Others               Other errors as indicated.
 
 **/
@@ -2996,15 +2999,6 @@ ON_EXIT:
 
   if (Tcb != NULL) {
     IScsiDelTcb (Tcb);
-  }
-
-  if ((Status != EFI_SUCCESS) && (Status != EFI_NOT_READY)) {
-    //
-    // Reinstate the session.
-    //
-    if (EFI_ERROR (IScsiSessionReinstatement (Session))) {
-      Status = EFI_DEVICE_ERROR;
-    }
   }
 
   return Status;

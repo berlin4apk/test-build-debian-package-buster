@@ -1,7 +1,7 @@
 /** @file
   This implementation of EFI_PXE_BASE_CODE_PROTOCOL and EFI_LOAD_FILE_PROTOCOL.
 
-  Copyright (c) 2007 - 2013, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -121,6 +121,14 @@ EfiPxeBcStart (
                     Private,
                     &Private->Icmp6Token.Event
                     );
+    if (EFI_ERROR (Status)) {
+      goto ON_ERROR;
+    }
+
+    //
+    // Set Ip6 policy to Automatic to start the IP6 router discovery.
+    //
+    Status = PxeBcSetIp6Policy (Private);
     if (EFI_ERROR (Status)) {
       goto ON_ERROR;
     }
@@ -345,6 +353,10 @@ EfiPxeBcStop (
   Private->BootFileSize = 0;
   Private->SolicitTimes = 0;
   Private->ElapsedTime  = 0;
+  ZeroMem (&Private->StationIp, sizeof (EFI_IP_ADDRESS));
+  ZeroMem (&Private->SubnetMask, sizeof (EFI_IP_ADDRESS));
+  ZeroMem (&Private->GatewayIp, sizeof (EFI_IP_ADDRESS));
+  ZeroMem (&Private->ServerIp, sizeof (EFI_IP_ADDRESS));
 
   //
   // Reset the mode data.
@@ -596,6 +608,7 @@ EfiPxeBcDiscover (
     if (EFI_ERROR (Status)) {
       goto ON_EXIT;
     }
+    ASSERT (NewCreatedInfo != NULL);
     Info = NewCreatedInfo;
   } else {
     //
@@ -2020,7 +2033,7 @@ EfiPxeBcSetStationIP (
     CopyMem (&Private->SubnetMask ,NewSubnetMask, sizeof (EFI_IP_ADDRESS));
   }
 
-  Status = PxeBcFlushStaionIp (Private, NewStationIp, NewSubnetMask);
+  Status = PxeBcFlushStationIp (Private, NewStationIp, NewSubnetMask);
 ON_EXIT:
   return Status;
 }

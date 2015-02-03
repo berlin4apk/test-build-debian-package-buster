@@ -1,6 +1,6 @@
 /** @file
 *
-*  Copyright (c) 2011-2013, ARM Limited. All rights reserved.
+*  Copyright (c) 2011-2014, ARM Limited. All rights reserved.
 *
 *  This program and the accompanying materials
 *  are licensed and made available under the terms and conditions of the BSD License
@@ -18,7 +18,6 @@
 #include <PiDxe.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/BdsLib.h>
-#include <Library/BdsUnixLib.h>
 #include <Library/DebugLib.h>
 #include <Library/DevicePathLib.h>
 #include <Library/UefiLib.h>
@@ -40,10 +39,14 @@
 
 #define ARM_BDS_OPTIONAL_DATA_SIGNATURE   SIGNATURE_32('a', 'b', 'o', 'd')
 
-#define IS_ARM_BDS_BOOTENTRY(ptr)  (ReadUnaligned32 ((CONST UINT32*)&((ARM_BDS_LOADER_OPTIONAL_DATA*)((ptr)->OptionalData))->Header.Signature) == ARM_BDS_OPTIONAL_DATA_SIGNATURE)
+#define IS_ARM_BDS_BOOTENTRY(ptr)  \
+  (((ptr)->OptionalData != NULL) && \
+   (ReadUnaligned32 ((CONST UINT32*)&((ARM_BDS_LOADER_OPTIONAL_DATA*)((ptr)->OptionalData))->Header.Signature) \
+      == ARM_BDS_OPTIONAL_DATA_SIGNATURE))
 
 #define UPDATE_BOOT_ENTRY L"Update entry: "
 #define DELETE_BOOT_ENTRY L"Delete entry: "
+#define MOVE_BOOT_ENTRY   L"Move entry: "
 
 typedef enum {
     BDS_LOADER_EFI_APPLICATION = 0,
@@ -100,8 +103,12 @@ typedef struct _BDS_LOAD_OPTION_SUPPORT {
   BDS_SUPPORTED_DEVICE_TYPE   Type;
   EFI_STATUS    (*ListDevices)(IN OUT LIST_ENTRY* BdsLoadOptionList);
   BOOLEAN       (*IsSupported)(IN  EFI_DEVICE_PATH *DevicePath);
-  EFI_STATUS    (*CreateDevicePathNode)(IN CHAR16* FileName, OUT EFI_DEVICE_PATH_PROTOCOL **DevicePathNodes, OUT ARM_BDS_LOADER_TYPE *BootType, OUT UINT32 *Attributes);
-  EFI_STATUS    (*UpdateDevicePathNode)(IN EFI_DEVICE_PATH *OldDevicePath, IN CHAR16* FileName, OUT EFI_DEVICE_PATH_PROTOCOL** NewDevicePath, OUT ARM_BDS_LOADER_TYPE *BootType, OUT UINT32 *Attributes);
+  EFI_STATUS    (*CreateDevicePathNode)(IN CHAR16* FileName, OUT EFI_DEVICE_PATH_PROTOCOL **DevicePathNodes);
+  EFI_STATUS    (*UpdateDevicePathNode)(IN EFI_DEVICE_PATH *OldDevicePath, IN CHAR16* FileName, OUT EFI_DEVICE_PATH_PROTOCOL** NewDevicePath);
+
+  /// Define if the boot menu should request if the file is a EFI binary or a Linux kernel
+  /// Example: PXE boot always deliver a UEFI application.
+  BOOLEAN       RequestBootType;
 } BDS_LOAD_OPTION_SUPPORT;
 
 #define LOAD_OPTION_ENTRY_FROM_LINK(a)  BASE_CR(a, BDS_LOAD_OPTION_ENTRY, Link)
@@ -156,6 +163,12 @@ GetHIInputInteger (
 EFI_STATUS
 GetHIInputIP (
   OUT EFI_IP_ADDRESS   *Ip
+  );
+
+EFI_STATUS
+EditHIInputIP (
+  IN  EFI_IP_ADDRESS  *InIpAddr,
+  OUT EFI_IP_ADDRESS  *OutIpAddr
   );
 
 EFI_STATUS
@@ -217,7 +230,8 @@ BootOptionCreate (
   IN  CHAR16*                   BootDescription,
   IN  EFI_DEVICE_PATH_PROTOCOL* DevicePath,
   IN  ARM_BDS_LOADER_TYPE       BootType,
-  IN  ARM_BDS_LOADER_ARGUMENTS* BootArguments,
+  IN  UINT8*                    OptionalData,
+  IN  UINTN                     OptionalDataSize,
   OUT BDS_LOAD_OPTION**         BdsLoadOption
   );
 
@@ -228,7 +242,8 @@ BootOptionUpdate (
   IN  CHAR16*                   BootDescription,
   IN  EFI_DEVICE_PATH_PROTOCOL* DevicePath,
   IN  ARM_BDS_LOADER_TYPE       BootType,
-  IN  ARM_BDS_LOADER_ARGUMENTS* BootArguments
+  IN UINT8*                     OptionalData,
+  IN UINTN                      OptionalDataSize
   );
 
 EFI_STATUS
@@ -237,8 +252,56 @@ BootOptionDelete (
   );
 
 EFI_STATUS
+BootDeviceGetType (
+  IN  EFI_DEVICE_PATH* DevicePath,
+  OUT ARM_BDS_LOADER_TYPE *BootType,
+  OUT UINT32 *Attributes
+  );
+
+EFI_STATUS
 BootMenuMain (
   VOID
+  );
+
+BOOLEAN
+IsUnicodeString (
+  IN VOID* String
+  );
+
+/*
+ * Try to detect if the given string is an ASCII or Unicode string
+ *
+ * There are actually few limitation to this function but it is mainly to give
+ * a user friendly output.
+ *
+ * Some limitations:
+ *   - it only supports unicode string that use ASCII character (< 0x100)
+ *   - single character ASCII strings are interpreted as Unicode string
+ *   - string cannot be longer than 2 x BOOT_DEVICE_OPTION_MAX (600 bytes)
+ *
+ * @param String    Buffer that might contain a Unicode or Ascii string
+ * @param IsUnicode If not NULL this boolean value returns if the string is an
+ *                  ASCII or Unicode string.
+ */
+BOOLEAN
+IsPrintableString (
+  IN  VOID*    String,
+  OUT BOOLEAN *IsUnicode
+  );
+
+/**
+  An empty function to pass error checking of CreateEventEx ().
+
+  @param  Event                 Event whose notification function is being invoked.
+  @param  Context               Pointer to the notification function's context,
+                                which is implementation-dependent.
+
+**/
+VOID
+EFIAPI
+EmptyCallbackFunction (
+  IN EFI_EVENT                Event,
+  IN VOID                     *Context
   );
 
 #endif /* _BDSINTERNAL_H_ */

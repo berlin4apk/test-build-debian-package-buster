@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------ ;
-# Copyright (c) 2012, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2012 - 2014, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -21,114 +21,81 @@
 #------------------------------------------------------------------------------
 
 
-#EXTRN ASM_PFX(mErrorCodeFlag):DWORD # Error code flags for exceptions
 
 ASM_GLOBAL ASM_PFX(CommonExceptionHandler)
-ASM_GLOBAL ASM_PFX(CommonInterruptEntry)
 
-
+#EXTRN ASM_PFX(mErrorCodeFlag):DWORD    # Error code flags for exceptions
+#EXTRN ASM_PFX(mDoFarReturnFlag):QWORD  # Do far return flag
 .text
 
-#
-# point to the external interrupt vector table
-#
-Exception0Handle:
-    pushq   $0
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception1Handle:
-    pushq   $1
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception2Handle:
-    pushq   $2
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception3Handle:
-    pushq   $3
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception4Handle:
-    pushq   $4
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception5Handle:
-    pushq   $5
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception6Handle:
-    pushq   $6
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception7Handle:
-    pushq   $7
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception8Handle:
-    pushq   $8
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception9Handle:
-    pushq   $9
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception10Handle:
-    pushq   $10
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception11Handle:
-    pushq   $11
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception12Handle:
-    pushq   $12
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception13Handle:
-    pushq   $13
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception14Handle:
-    pushq   $14
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception15Handle:
-    pushq   $15
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception16Handle:
-    pushq   $16
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception17Handle:
-    pushq   $17
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception18Handle:
-    pushq   $18
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception19Handle:
-    pushq   $19
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception20Handle:
-    pushq   $20
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception21Handle:
-    pushq   $21
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception22Handle:
-    pushq   $22
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception23Handle:
-    pushq   $23
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception24Handle:
-    pushq   $24
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception25Handle:
-    pushq   $25
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception26Handle:
-    pushq   $26
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception27Handle:
-    pushq   $27
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception28Handle:
-    pushq   $28
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception29Handle:
-    pushq   $29
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception30Handle:
-    pushq   $30
-    jmp     ASM_PFX(CommonInterruptEntry)
-Exception31Handle:
-    pushq   $31
-    jmp     ASM_PFX(CommonInterruptEntry)
+#ifdef __APPLE__
+# macros are different between GNU and Xcode as. 
+.macro IDT_MACRO 
+  push     $0
+#else
+.macro IDT_MACRO arg
+  push    \arg
+#endif
+  jmp    ASM_PFX(CommonInterruptEntry)
+.endm
 
+AsmIdtVectorBegin:
+  IDT_MACRO $0
+  IDT_MACRO $1
+  IDT_MACRO $2
+  IDT_MACRO $3
+  IDT_MACRO $4
+  IDT_MACRO $5
+  IDT_MACRO $6
+  IDT_MACRO $7
+  IDT_MACRO $8
+  IDT_MACRO $9
+  IDT_MACRO $10
+  IDT_MACRO $11
+  IDT_MACRO $12
+  IDT_MACRO $13
+  IDT_MACRO $14
+  IDT_MACRO $15
+  IDT_MACRO $16
+  IDT_MACRO $17
+  IDT_MACRO $18
+  IDT_MACRO $19
+  IDT_MACRO $20
+  IDT_MACRO $21
+  IDT_MACRO $22
+  IDT_MACRO $23
+  IDT_MACRO $24
+  IDT_MACRO $25
+  IDT_MACRO $26
+  IDT_MACRO $27
+  IDT_MACRO $28
+  IDT_MACRO $29
+  IDT_MACRO $30
+  IDT_MACRO $31
+AsmIdtVectorEnd:
+
+HookAfterStubHeaderBegin:
+    .byte   0x6a      # push
+PatchVectorNum:
+    .byte   0         # 0 will be fixed 
+    .byte   0xe9      # jmp     ASM_PFX(HookAfterStubHeaderEnd)
+PatchFuncAddress:
+     .set   HOOK_ADDRESS, ASM_PFX(HookAfterStubHeaderEnd) - . - 4
+    .long   HOOK_ADDRESS  # will be fixed
+ASM_GLOBAL ASM_PFX(HookAfterStubHeaderEnd)
+ASM_PFX(HookAfterStubHeaderEnd):
+    pushq   %rax
+    movq    %rsp, %rax
+    andl    $0x0fffffff0, %esp  # make sure 16-byte aligned for exception context
+    subq    $0x18, %rsp         # reserve room for filling exception data later
+    pushq   %rcx
+    movq    8(%rax), %rcx
+    bt      %ecx, ASM_PFX(mErrorCodeFlag)(%rip)
+    jnc     NoErrorData
+    pushq   (%rsp)            # push additional rcx to make stack alignment
+NoErrorData:
+    xchgq   (%rsp), %rcx      # restore rcx, save Exception Number in stack
+    movq    (%rax), %rax      # restore rax
 
 #---------------------------------------;
 # CommonInterruptEntry                  ;
@@ -145,12 +112,13 @@ ASM_PFX(CommonInterruptEntry):
     #
     # Calculate vector number
     #
-    xchgq   (%rsp), %rcx # get the return address of call, actually, it is the address of vector number.
+    xchgq   (%rsp), %rcx       # get the return address of call, actually, it is the address of vector number.
+    andq     $0x0FF, %rcx
     cmp     $32, %ecx          # Intel reserved vector for exceptions?
     jae     NoErrorCode
     pushq   %rax
-    leaq    ASM_PFX(mErrorCodeFlag)(%rip), %rax
-    bt      %ecx, (%rax) 
+    movl    ASM_PFX(mErrorCodeFlag)(%rip), %eax
+    bt      %ecx, %eax
     popq    %rax
     jc      CommonInterruptEntry_al_0000
 
@@ -165,6 +133,8 @@ NoErrorCode:
 CommonInterruptEntry_al_0000:
     pushq   %rbp
     movq    %rsp, %rbp
+    pushq   $0          # check EXCEPTION_HANDLER_CONTEXT.OldIdtHandler
+    pushq   $0          # check EXCEPTION_HANDLER_CONTEXT.ExceptionDataFlag
 
     #
     # Stack:
@@ -218,13 +188,13 @@ CommonInterruptEntry_al_0000:
     pushq   %rax                      # for ss
     movzwq  32(%rbp), %rax
     pushq   %rax                      # for cs
-    movl    %ds, %eax
+    mov     %ds, %rax
     pushq   %rax
-    movl    %es, %eax
+    mov     %es, %rax
     pushq   %rax
-    movl    %fs, %eax
+    mov     %fs, %rax
     pushq   %rax
-    movl    %gs, %eax
+    mov     %gs, %rax
     pushq   %rax
 
     movq    %rcx, 8(%rbp)                # save vector number
@@ -357,9 +327,9 @@ CommonInterruptEntry_al_0000:
     # mov   %rax, %fs ; not for fs
     # (X64 will not use fs and gs, so we do not restore it)
     popq    %rax
-    movl    %eax, %es
+    mov     %rax, %es
     popq    %rax
-    movl    %eax, %ds
+    mov     %rax, %ds
     popq    32(%rbp)  # for cs
     popq    56(%rbp)  # for ss
 
@@ -385,21 +355,78 @@ CommonInterruptEntry_al_0000:
     movq    %rbp, %rsp
     popq    %rbp
     addq    $16, %rsp
+    cmpq    $0, -32(%rsp)      # check EXCEPTION_HANDLER_CONTEXT.OldIdtHandler
+    jz      DoReturn           # check EXCEPTION_HANDLER_CONTEXT.ExceptionDataFlag
+    cmpb    $1, -40(%rsp)
+    jz      ErrorCode
+    jmp     *-32(%rsp)
+ErrorCode:
+    subq    $8, %rsp
+    jmp     *-24(%rsp)
+
+DoReturn:
+    pushq   %rax
+    movq    ASM_PFX(mDoFarReturnFlag)(%rip), %rax
+    cmpq    $0, %rax          # Check if need to do far return instead of IRET
+    popq    %rax
+    jz      DoIret
+    pushq   %rax
+    movq    %rsp, %rax        # save old RSP to rax
+    movq    0x20(%rsp), %rsp
+    pushq   0x10(%rax)        # save CS in new location
+    pushq   0x8(%rax)         # save EIP in new location
+    pushq   0x18(%rax)        # save EFLAGS in new location
+    movq    (%rax), %rax      # restore rax
+    popfq                     # restore EFLAGS
+    lretq                     # far return
+DoIret:
     iretq
 
 
 #-------------------------------------------------------------------------------------
-#  AsmGetAddressMap (&AddressMap);
+#  AsmGetTemplateAddressMap (&AddressMap);
 #-------------------------------------------------------------------------------------
 # comments here for definition of address map
-ASM_GLOBAL ASM_PFX(GetTemplateAddressMap)
-ASM_PFX(GetTemplateAddressMap):
+ASM_GLOBAL ASM_PFX(AsmGetTemplateAddressMap)
+ASM_PFX(AsmGetTemplateAddressMap):
+    pushq     %rbp
+    movq      %rsp, %rbp
 
-        movabsq      $Exception0Handle, %rax
-        movq         %rax, (%rcx)
-        movq         $(Exception1Handle - Exception0Handle), 0x08(%rcx)
+    leaq         AsmIdtVectorBegin(%rip), %rax
+    movq         %rax, (%rcx)
+    .set         ENTRY_SIZE, ASM_PFX(HookAfterStubHeaderEnd) - HookAfterStubHeaderBegin
+    movq         $(ENTRY_SIZE), 0x08(%rcx)
+    leaq         HookAfterStubHeaderBegin(%rip), %rax
+    movq         %rax, 0x10(%rcx)
 
-        ret
+    popq      %rbp
+    ret
+
+#-------------------------------------------------------------------------------------
+# VOID
+# EFIAPI
+# AsmVectorNumFixup (
+#   IN VOID    *NewVectorAddr,  // RCX
+#   IN UINT8   VectorNum        // RDX
+#   IN VOID    *OldVectorAddr,  // R8
+#  );
+#-------------------------------------------------------------------------------------
+ASM_GLOBAL ASM_PFX(AsmVectorNumFixup)
+ASM_PFX(AsmVectorNumFixup):
+    pushq     %rbp
+    movq      %rsp, %rbp
+
+# Patch vector #
+    movb      %dl, (PatchVectorNum - HookAfterStubHeaderBegin)(%rcx)
+
+# Patch Function address
+    subq      %rcx, %r8     # Calculate the offset value
+    movl      (PatchFuncAddress - HookAfterStubHeaderBegin)(%rcx), %eax
+    addq      %r8, %rax
+    movl      %eax, (PatchFuncAddress - HookAfterStubHeaderBegin)(%rcx)
+
+    popq      %rbp
+    ret
 
 #END
 

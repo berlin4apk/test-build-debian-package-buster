@@ -1,17 +1,18 @@
 /** @file
 *
-*  Copyright (c) 2011-2013, ARM Limited. All rights reserved.
-*  
-*  This program and the accompanying materials                          
-*  are licensed and made available under the terms and conditions of the BSD License         
-*  which accompanies this distribution.  The full text of the license may be found at        
-*  http://opensource.org/licenses/bsd-license.php                                            
+*  Copyright (c) 2011 - 2014, ARM Limited. All rights reserved.
 *
-*  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,                     
-*  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.             
+*  This program and the accompanying materials
+*  are licensed and made available under the terms and conditions of the BSD License
+*  which accompanies this distribution.  The full text of the license may be found at
+*  http://opensource.org/licenses/bsd-license.php
+*
+*  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+*  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 *
 **/
 
+#include <Library/NetLib.h>
 #include "BdsInternal.h"
 
 EFI_STATUS
@@ -35,7 +36,7 @@ EditHIInputStr (
   Print (CmdLine);
 
   // To prevent a buffer overflow, we only allow to enter (MaxCmdLine-1) characters
-  for (CmdLineIndex = StrLen (CmdLine); CmdLineIndex < MaxCmdLine - 1; ) {
+  for (CmdLineIndex = StrLen (CmdLine); CmdLineIndex < MaxCmdLine; ) {
     Status = gBS->WaitForEvent (1, &gST->ConIn->WaitForKey, &WaitIndex);
     ASSERT_EFI_ERROR (Status);
 
@@ -52,7 +53,7 @@ EditHIInputStr (
 
     if ((Char == CHAR_LINEFEED) || (Char == CHAR_CARRIAGE_RETURN) || (Char == 0x7f)) {
       CmdLine[CmdLineIndex] = '\0';
-      Print (L"\n\r");
+      Print (L"\r\n");
 
       return EFI_SUCCESS;
     } else if ((Key.UnicodeChar == L'\b') || (Key.ScanCode == SCAN_LEFT) || (Key.ScanCode == SCAN_DELETE)){
@@ -62,7 +63,7 @@ EditHIInputStr (
       }
     } else if ((Key.ScanCode == SCAN_ESC) || (Char == 0x1B) || (Char == 0x0)) {
       return EFI_INVALID_PARAMETER;
-    } else {
+    } else if (CmdLineIndex < (MaxCmdLine-1)) {
       CmdLine[CmdLineIndex++] = Key.UnicodeChar;
       Print (L"%c", Key.UnicodeChar);
     }
@@ -137,44 +138,99 @@ GetHIInputInteger (
   return Status;
 }
 
+/**
+  Get an IPv4 address
+
+  The function asks the user for an IPv4 address. If the input
+  string defines a valid IPv4 address, the four bytes of the
+  corresponding IPv4 address are extracted from the string and returned by
+  the function. As long as the user does not define a valid IP
+  address, he is asked for one. He can always escape by
+  pressing ESC.
+
+  @param[out]  EFI_IP_ADDRESS  OutIpAddr  Returned IPv4 address. Valid if
+                                          and only if the returned value
+                                          is equal to EFI_SUCCESS
+
+  @retval  EFI_SUCCESS            Input completed
+  @retval  EFI_ABORTED            Editing aborted by the user
+  @retval  EFI_OUT_OF_RESOURCES   Fail to perform the operation due to
+                                  lack of resource
+**/
 EFI_STATUS
 GetHIInputIP (
-  OUT EFI_IP_ADDRESS   *Ip
+  OUT  EFI_IP_ADDRESS  *OutIpAddr
   )
 {
-  CHAR16  CmdLine[255];
-  CHAR16  *Str;
   EFI_STATUS  Status;
+  CHAR16      CmdLine[48];
 
-  CmdLine[0] = '\0';
-  Status = EditHIInputStr (CmdLine,255);
-  if (!EFI_ERROR(Status)) {
-    Str = CmdLine;
-    Ip->v4.Addr[0] = (UINT8)StrDecimalToUintn (Str);
-
-    Str = StrStr (Str, L".");
-    if (Str == NULL) {
-      return EFI_INVALID_PARAMETER;
+  while (TRUE) {
+    CmdLine[0] = '\0';
+    Status = EditHIInputStr (CmdLine, 48);
+    if (EFI_ERROR (Status)) {
+      return EFI_ABORTED;
     }
 
-    Ip->v4.Addr[1] = (UINT8)StrDecimalToUintn (++Str);
-
-    Str = StrStr (Str, L".");
-    if (Str == NULL) {
-      return EFI_INVALID_PARAMETER;
+    Status = NetLibStrToIp4 (CmdLine, &OutIpAddr->v4);
+    if (Status == EFI_INVALID_PARAMETER) {
+      Print (L"Invalid address\n");
+    } else {
+      return Status;
     }
-
-    Ip->v4.Addr[2] = (UINT8)StrDecimalToUintn (++Str);
-
-    Str = StrStr (Str, L".");
-    if (Str == NULL) {
-      return EFI_INVALID_PARAMETER;
-    }
-
-    Ip->v4.Addr[3] = (UINT8)StrDecimalToUintn (++Str);
   }
+}
 
-  return Status;
+/**
+  Edit an IPv4 address
+
+  The function displays as a string following the "%d.%d.%d.%d" format the
+  IPv4 address that is passed in and asks the user to modify it. If the
+  resulting string defines a valid IPv4 address, the four bytes of the
+  corresponding IPv4 address are extracted from the string and returned by
+  the function. As long as the user does not define a valid IP
+  address, he is asked for one. He can always escape by
+  pressing ESC.
+
+  @param[in ]  EFI_IP_ADDRESS  InIpAddr   Input IPv4 address
+  @param[out]  EFI_IP_ADDRESS  OutIpAddr  Returned IPv4 address. Valid if
+                                          and only if the returned value
+                                          is equal to EFI_SUCCESS
+
+  @retval  EFI_SUCCESS            Update completed
+  @retval  EFI_ABORTED            Editing aborted by the user
+  @retval  EFI_INVALID_PARAMETER  The string returned by the user is
+                                  mal-formated
+  @retval  EFI_OUT_OF_RESOURCES   Fail to perform the operation due to
+                                  lack of resource
+**/
+EFI_STATUS
+EditHIInputIP (
+  IN   EFI_IP_ADDRESS  *InIpAddr,
+  OUT  EFI_IP_ADDRESS  *OutIpAddr
+  )
+{
+  EFI_STATUS  Status;
+  CHAR16      CmdLine[48];
+
+  while (TRUE) {
+    UnicodeSPrint (
+      CmdLine, 48, L"%d.%d.%d.%d",
+      InIpAddr->v4.Addr[0], InIpAddr->v4.Addr[1],
+      InIpAddr->v4.Addr[2], InIpAddr->v4.Addr[3]
+      );
+
+    Status = EditHIInputStr (CmdLine, 48);
+    if (EFI_ERROR (Status)) {
+      return EFI_ABORTED;
+    }
+    Status = NetLibStrToIp4 (CmdLine, &OutIpAddr->v4);
+    if (Status == EFI_INVALID_PARAMETER) {
+      Print (L"Invalid address\n");
+    } else {
+      return Status;
+    }
+  }
 }
 
 EFI_STATUS
@@ -323,3 +379,96 @@ GetAlignedDevicePath (
   }
 }
 
+BOOLEAN
+IsUnicodeString (
+  IN VOID* String
+  )
+{
+  // We do not support NULL pointer
+  ASSERT (String != NULL);
+
+  if (*(CHAR16*)String < 0x100) {
+    //Note: We could get issue if the string is an empty Ascii string...
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+/*
+ * Try to detect if the given string is an ASCII or Unicode string
+ *
+ * There are actually few limitation to this function but it is mainly to give
+ * a user friendly output.
+ *
+ * Some limitations:
+ *   - it only supports unicode string that use ASCII character (< 0x100)
+ *   - single character ASCII strings are interpreted as Unicode string
+ *   - string cannot be longer than BOOT_DEVICE_OPTION_MAX characters and
+ *     thus (BOOT_DEVICE_OPTION_MAX*2) bytes for an Unicode string and
+ *     BOOT_DEVICE_OPTION_MAX bytes for an ASCII string.
+ *
+ * @param String    Buffer that might contain a Unicode or Ascii string
+ * @param IsUnicode If not NULL this boolean value returns if the string is an
+ *                  ASCII or Unicode string.
+ */
+BOOLEAN
+IsPrintableString (
+  IN  VOID*    String,
+  OUT BOOLEAN *IsUnicode
+  )
+{
+  BOOLEAN UnicodeDetected;
+  BOOLEAN IsPrintable;
+  UINTN Index;
+  CHAR16 Character;
+
+  // We do not support NULL pointer
+  ASSERT (String != NULL);
+
+  // Test empty string
+  if (*(CHAR16*)String == L'\0') {
+    if (IsUnicode) {
+      *IsUnicode = TRUE;
+    }
+    return TRUE;
+  } else if (*(CHAR16*)String == '\0') {
+    if (IsUnicode) {
+      *IsUnicode = FALSE;
+    }
+    return TRUE;
+  }
+
+  // Limitation: if the string is an ASCII single character string. This comparison
+  // will assume it is a Unicode string.
+  if (*(CHAR16*)String < 0x100) {
+    UnicodeDetected = TRUE;
+  } else {
+    UnicodeDetected = FALSE;
+  }
+
+  IsPrintable = FALSE;
+  for (Index = 0; Index < BOOT_DEVICE_OPTION_MAX; Index++) {
+    if (UnicodeDetected) {
+      Character = ((CHAR16*)String)[Index];
+    } else {
+      Character = ((CHAR8*)String)[Index];
+    }
+
+    if (Character == '\0') {
+      // End of the string
+      IsPrintable = TRUE;
+      break;
+    } else if ((Character < 0x20) || (Character > 0x7f)) {
+      // We only support the range of printable ASCII character
+      IsPrintable = FALSE;
+      break;
+    }
+  }
+
+  if (IsPrintable && IsUnicode) {
+    *IsUnicode = UnicodeDetected;
+  }
+
+  return IsPrintable;
+}

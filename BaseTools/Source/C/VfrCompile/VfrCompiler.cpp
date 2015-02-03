@@ -2,7 +2,7 @@
   
   VfrCompiler main class and main function.
 
-Copyright (c) 2004 - 2012, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2014, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials                          
 are licensed and made available under the terms and conditions of the BSD License         
 which accompanies this distribution.  The full text of the license may be found at        
@@ -94,6 +94,10 @@ CVfrCompiler::OptionInitialization (
   for (Index = 1; (Index < Argc) && (Argv[Index][0] == '-'); Index++) {
     if ((stricmp(Argv[Index], "-h") == 0) || (stricmp(Argv[Index], "--help") == 0)) {
       Usage ();
+      SET_RUN_STATUS (STATUS_DEAD);
+      return;
+    } else if (stricmp(Argv[Index], "--version") == 0) {
+      Version ();
       SET_RUN_STATUS (STATUS_DEAD);
       return;
     } else if (stricmp(Argv[Index], "-l") == 0) {
@@ -372,6 +376,8 @@ CVfrCompiler::CVfrCompiler (
   mPreProcessCmd = (CHAR8 *) PREPROCESSOR_COMMAND;
   mPreProcessOpt = (CHAR8 *) PREPROCESSOR_OPTIONS;
 
+  SET_RUN_STATUS (STATUS_STARTED);
+
   OptionInitialization(Argc, Argv);
 
   if ((IS_RUN_STATUS(STATUS_FAILED)) || (IS_RUN_STATUS(STATUS_DEAD))) {
@@ -406,13 +412,14 @@ CVfrCompiler::Usage (
   UINT32 Index;
   CONST  CHAR8 *Help[] = {
     " ", 
-    "VfrCompile version " VFR_COMPILER_VERSION __BUILD_VERSION VFR_COMPILER_UPDATE_TIME,
-    "Copyright (c) 2004-2011 Intel Corporation. All rights reserved.",
+    "VfrCompile version " VFR_COMPILER_VERSION __BUILD_VERSION,
+    "Copyright (c) 2004-2014 Intel Corporation. All rights reserved.",
     " ",
     "Usage: VfrCompile [options] VfrFile",
     " ",
     "Options:",
     "  -h, --help     prints this help",
+    "  --version      prints version info",
     "  -l             create an output IFR listing file",
     "  -o DIR, --output-directory DIR",
     "                 deposit all output files to directory OutputDir",
@@ -437,6 +444,21 @@ CVfrCompiler::Usage (
   }
 }
 
+VOID 
+CVfrCompiler::Version (
+  VOID
+  )
+{
+  UINT32 Index;
+  CONST  CHAR8 *Help[] = {
+    "VfrCompile version " VFR_COMPILER_VERSION __BUILD_VERSION,
+    NULL
+    };
+  for (Index = 0; Help[Index] != NULL; Index++) {
+    fprintf (stdout, "%s\n", Help[Index]);
+  }
+}
+
 VOID
 CVfrCompiler::PreProcess (
   VOID
@@ -454,7 +476,7 @@ CVfrCompiler::PreProcess (
     goto Out;
   }
 
-  if ((pVfrFile = fopen (mOptions.VfrFileName, "r")) == NULL) {
+  if ((pVfrFile = fopen (LongFilePath (mOptions.VfrFileName), "r")) == NULL) {
     DebugError (NULL, 0, 0001, "Error opening the input VFR file", mOptions.VfrFileName);
     goto Fail;
   }
@@ -523,7 +545,7 @@ CVfrCompiler::Compile (
   gCVfrErrorHandle.SetInputFile (InFileName);
   gCVfrErrorHandle.SetWarningAsError(mOptions.WarningAsError);
 
-  if ((pInFile = fopen (InFileName, "r")) == NULL) {
+  if ((pInFile = fopen (LongFilePath (InFileName), "r")) == NULL) {
     DebugError (NULL, 0, 0001, "Error opening the input file", InFileName);
     goto Fail;
   }
@@ -677,7 +699,7 @@ CVfrCompiler::GenBinary (
   }
 
   if (mOptions.CreateIfrPkgFile == TRUE) {
-    if ((pFile = fopen (mOptions.PkgOutputFileName, "wb")) == NULL) {
+    if ((pFile = fopen (LongFilePath (mOptions.PkgOutputFileName), "wb")) == NULL) {
       DebugError (NULL, 0, 0001, "Error opening file", mOptions.PkgOutputFileName);
       goto Fail;
     }
@@ -720,7 +742,7 @@ CVfrCompiler::GenCFile (
   }
   
   if (!mOptions.CreateIfrPkgFile || mOptions.CompatibleMode) {
-    if ((pFile = fopen (mOptions.COutputFileName, "w")) == NULL) {
+    if ((pFile = fopen (LongFilePath (mOptions.COutputFileName), "w")) == NULL) {
       DebugError (NULL, 0, 0001, "Error opening output C file", mOptions.COutputFileName);
       goto Fail;
     }
@@ -767,12 +789,12 @@ CVfrCompiler::GenRecordListFile (
       return;
     }
 
-    if ((pInFile = fopen (InFileName, "r")) == NULL) {
+    if ((pInFile = fopen (LongFilePath (InFileName), "r")) == NULL) {
       DebugError (NULL, 0, 0001, "Error opening the input VFR preprocessor output file", InFileName);
       return;
     }
 
-    if ((pOutFile = fopen (mOptions.RecordListFile, "w")) == NULL) {
+    if ((pOutFile = fopen (LongFilePath (mOptions.RecordListFile), "w")) == NULL) {
       DebugError (NULL, 0, 0001, "Error opening the record list file", mOptions.RecordListFile);
       goto Err1;
     }
