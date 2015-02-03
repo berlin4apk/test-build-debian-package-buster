@@ -6,30 +6,16 @@ Reviewed-by: Eric Dong <eric.dong@intel.com>
 Last-Update: 2014-12-18
 Applied-Upstream: commit:r2667
 
-Index: edk2-0~20131112.2590861a/BaseTools/Source/C/VfrCompile/VfrCompiler.cpp
+Index: edk2/BaseTools/Source/C/VfrCompile/VfrCompiler.cpp
 ===================================================================
---- edk2-0~20131112.2590861a.orig/BaseTools/Source/C/VfrCompile/VfrCompiler.cpp
-+++ edk2-0~20131112.2590861a/BaseTools/Source/C/VfrCompile/VfrCompiler.cpp
-@@ -372,6 +372,8 @@ CVfrCompiler::CVfrCompiler (
-   mPreProcessCmd = (CHAR8 *) PREPROCESSOR_COMMAND;
-   mPreProcessOpt = (CHAR8 *) PREPROCESSOR_OPTIONS;
+--- edk2.orig/BaseTools/Source/C/VfrCompile/VfrCompiler.cpp
++++ edk2/BaseTools/Source/C/VfrCompile/VfrCompiler.cpp
+@@ -378,6 +378,8 @@
+ 
+   SET_RUN_STATUS (STATUS_STARTED);
  
 +  SET_RUN_STATUS (STATUS_STARTED);
 +
    OptionInitialization(Argc, Argv);
  
    if ((IS_RUN_STATUS(STATUS_FAILED)) || (IS_RUN_STATUS(STATUS_DEAD))) {
-Index: edk2-0~20131112.2590861a/BaseTools/Source/C/VfrCompile/VfrCompiler.h
-===================================================================
---- edk2-0~20131112.2590861a.orig/BaseTools/Source/C/VfrCompile/VfrCompiler.h
-+++ edk2-0~20131112.2590861a/BaseTools/Source/C/VfrCompile/VfrCompiler.h
-@@ -61,7 +61,8 @@ typedef struct {
- } OPTIONS;
- 
- typedef enum {
--  STATUS_INITIALIZED = 1,
-+  STATUS_STARTED = 0,
-+  STATUS_INITIALIZED,
-   STATUS_PREPROCESSED,
-   STATUS_COMPILEED,
-   STATUS_GENBINARY,
