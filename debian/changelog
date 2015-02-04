@@ -6,6 +6,8 @@ edk2 (0~20150106.5c2d456b-1) UNRELEASED; urgency=medium
     <dannf@debian.org>.
   * debian/patches/FatPkg-AARCH64.diff: AARCH64 support.  Thanks to dann
     frazier <dannf@debian.org>.
+  * Drop debian/patches/fix-undefined-behavior-in-vfrcompiler.patch, included
+    upstream.
 
  -- Steve Langasek <vorlon@debian.org>  Tue, 03 Feb 2015 16:47:08 +0200
 
