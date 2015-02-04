@@ -8,6 +8,8 @@ edk2 (0~20150106.5c2d456b-1) UNRELEASED; urgency=medium
     frazier <dannf@debian.org>.
   * Drop debian/patches/fix-undefined-behavior-in-vfrcompiler.patch, included
     upstream.
+  * Drop debian/patches/gcc-4.9-align.patch in favor of using the GCC49
+    upstream toolchain rules.
 
  -- Steve Langasek <vorlon@debian.org>  Tue, 03 Feb 2015 16:47:08 +0200
 
