@@ -1,1 +1,1 @@
-Build/OvmfX64/RELEASE_GCC49/FV/OVMF.fd /usr/share/ovmf/
+Build/OvmfX64/RELEASE_*GCC*/FV/OVMF.fd /usr/share/ovmf/
