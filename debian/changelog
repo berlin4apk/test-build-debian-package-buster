@@ -19,6 +19,8 @@ edk2 (0~20150106.5c2d456b-1) UNRELEASED; urgency=medium
 
   [ Steve Langasek ]
   * Refactor debian/rules to support cross-building.
+  * debian/patches/no-stack-protector-all-archs.diff: pass
+    -fno-stack-protector to all ARM GCC toolchains.
 
  -- Steve Langasek <vorlon@debian.org>  Tue, 03 Feb 2015 16:47:08 +0200
 
