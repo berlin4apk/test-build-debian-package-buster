@@ -1,4 +1,4 @@
-edk2 (0~20150106.5c2d456b-1) UNRELEASED; urgency=medium
+edk2 (0~20150106.5c2d456b-1) unstable; urgency=medium
 
   * New upstream release, for arm64 support.
   * debian/patches/no-missing-braces.diff: Add -Wno-missing-braces to
@@ -28,7 +28,7 @@ edk2 (0~20150106.5c2d456b-1) UNRELEASED; urgency=medium
   * Fix Vcs-Git URI in debian/control.
   * Standards-Version 3.9.6.
 
- -- Steve Langasek <vorlon@debian.org>  Tue, 03 Feb 2015 16:47:08 +0200
+ -- Steve Langasek <vorlon@debian.org>  Thu, 05 Feb 2015 14:57:40 +0000
 
 edk2 (0~20131112.2590861a-3) unstable; urgency=medium
 
