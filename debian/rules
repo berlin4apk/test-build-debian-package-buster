@@ -13,36 +13,61 @@ SHELL_REV  = 64
 
 # Only used for creating our build tools.
 DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+
 ifeq ($(DEB_BUILD_ARCH),amd64)
-	EDK2_ARCH=X64
-	EDK2_ARCH_DIR=X64
+	EDK2_BUILD_ARCH=X64
 endif
 ifeq ($(DEB_BUILD_ARCH),i386)
-	EDK2_ARCH=IA32
-	EDK2_ARCH_DIR=X64
+	EDK2_BUILD_ARCH=IA32
 endif
 ifeq ($(DEB_BUILD_ARCH),arm64)
-	EDK2_ARCH=AARCH64
-	EDK2_ARCH_DIR=AArch64
+	EDK2_BUILD_ARCH=AARCH64
 endif
+
+ifeq ($(DEB_HOST_ARCH),amd64)
+	EDK2_HOST_ARCH=X64
+endif
+ifeq ($(DEB_HOST_ARCH),i386)
+	EDK2_HOST_ARCH=IA32
+endif
+ifeq ($(DEB_HOST_ARCH),arm64)
+	EDK2_HOST_ARCH=AARCH64
+endif
+
 EDK2_TOOLCHAIN = GCC49
+
+ifneq ($(DEB_HOST_ARCH),$(DEB_BUILD_ARCH))
+	CROSS_COMPILE=$(DEB_HOST_GNU_TYPE)-
+	# It's horrible that this is only supported for the ARMGCC target,
+	# but we go with it to possibly support cross-building.
+	EDK2_TOOLCHAIN=ARMGCC
+endif
 
 ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
 
 %:
 	dh $@
 
-override_dh_auto_build:
-	make -C BaseTools ARCH=$(EDK2_ARCH)
+override_dh_auto_build: setup-build build-qemu-efi build-ovmf
+
+setup-build:
+	make -C BaseTools ARCH=$(EDK2_BUILD_ARCH)
 	# We call this twice because it modifies the shell environment,
 	# and it's excessively awkward to do all the subsequent work in a
 	# single shell invocation
 	. ./edksetup.sh
 	QUILT_PC=.pc-post QUILT_PATCHES=debian/post-patches quilt push -a || [ $$? = 2 ]
+
+build-ovmf: EDK2_ARCH_DIR=X64
+build-ovmf: EDK2_TOOLCHAIN=GCC49
+build-ovmf:
 ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 	cd CryptoPkg/Library/OpensslLib/ && ./Install.sh
 	cd UefiCpuPkg/ResetVector/Vtf0 && python Build.py
-	mkdir -p EdkShellBinPkg/FullShell/$(EDK2_ARCH_DIR) FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
+	mkdir -p EdkShellBinPkg/FullShell/$(EDK2_ARCH_DIR) \
+	         FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
 	set -e; . ./edksetup.sh; build -p EdkShellPkg/EdkShellPkg.dsc \
 			-m Shell/ShellFull.inf -b RELEASE; \
 		cp -a Build/EdkShellPkg/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_ARCH_DIR)/ShellFull.efi \
@@ -53,17 +78,25 @@ ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 			FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)/Fat.efi; \
 		build -DSECURE_BOOT_ENABLE=TRUE -DFD_SIZE_2MB -b RELEASE
 endif
-ifeq ($(DEB_BUILD_ARCH),arm64)
+
+build-qemu-efi: EDK2_ARCH_DIR=AArch64
+build-qemu-efi:
+ifeq ($(DEB_HOST_ARCH),arm64)
 	mkdir -p ShellBinPkg/UefiShell/$(EDK2_ARCH_DIR) FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
 	set -e; . ./edksetup.sh; \
-		build -a $(EDK2_ARCH) -p ShellPkg/ShellPkg.dsc -b RELEASE; \
+		CROSS_COMPILE=$(CROSS_COMPILE) build -a $(EDK2_HOST_ARCH) \
+			-p ShellPkg/ShellPkg.dsc -b RELEASE -t $(EDK2_TOOLCHAIN); \
 		cp -a Build/Shell/RELEASE_$(EDK2_TOOLCHAIN)/AARCH64/Shell.efi \
 			ShellBinPkg/UefiShell/$(EDK2_ARCH_DIR)/Shell.efi; \
-		build -a $(EDK2_ARCH) -p FatPkg/FatPkg.dsc -m FatPkg/EnhancedFatDxe/Fat.inf \
-			-b RELEASE; \
-		cp -a Build/Fat/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_ARCH)/Fat.efi \
+		CROSS_COMPILE=$(CROSS_COMPILE) build -a $(EDK2_HOST_ARCH) \
+			-p FatPkg/FatPkg.dsc -m FatPkg/EnhancedFatDxe/Fat.inf \
+			-t $(EDK2_TOOLCHAIN) -b RELEASE; \
+		cp -a Build/Fat/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_HOST_ARCH)/Fat.efi \
 			FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)/Fat.efi; \
-		build -a $(EDK2_ARCH) -t $(EDK2_TOOLCHAIN) -p ArmPlatformPkg/ArmVirtualizationPkg/ArmVirtualizationQemu.dsc -b RELEASE
+		CROSS_COMPILE=$(CROSS_COMPILE) build -a $(EDK2_HOST_ARCH) \
+			-t $(EDK2_TOOLCHAIN) \
+			-p ArmPlatformPkg/ArmVirtualizationPkg/ArmVirtualizationQemu.dsc \
+			-b RELEASE
 endif
 
 override_dh_auto_clean:
@@ -102,3 +135,5 @@ get-orig-source:
 	cd edk2-$(ver)/Shell && patch -p1 < ../EdkShellPkg/ShellR$(SHELL_REV).patch 
 	tar Jcvf ../edk2_$(ver).orig.tar.xz edk2-$(ver)
 	rm -rf edk2-$(ver) $(OPENSSL_SRC)
+
+.PHONY: setup-build build-ovmf build-qemu-efi
