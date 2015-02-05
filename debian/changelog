@@ -25,6 +25,7 @@ edk2 (0~20150106.5c2d456b-1) UNRELEASED; urgency=medium
     measure pending standardization, to work around Launchpad builder
     behavior which would try to build our arch: all package on an arm64
     builder instead of an x86 one.
+  * Fix Vcs-Git URI in debian/control.
 
  -- Steve Langasek <vorlon@debian.org>  Tue, 03 Feb 2015 16:47:08 +0200
 
