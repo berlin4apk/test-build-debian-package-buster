@@ -10,6 +10,9 @@ edk2 (0~20150106.5c2d456b-1) UNRELEASED; urgency=medium
     upstream.
   * Drop debian/patches/gcc-4.9-align.patch in favor of using the GCC49
     upstream toolchain rules.
+  * Adjust debian/rules to only build ovmf when building with -b, in
+    preparation for enabling other architecture builds (which currently can't
+    be Arch: all due to lack of cross-compilers in the Debian archive).
 
  -- Steve Langasek <vorlon@debian.org>  Tue, 03 Feb 2015 16:47:08 +0200
 
