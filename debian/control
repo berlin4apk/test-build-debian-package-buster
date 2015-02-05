@@ -8,6 +8,7 @@ Standards-Version: 3.9.4
 Homepage: http://www.tianocore.org
 Vcs-Git: git+ssh://git.debian.org/git/pkg-qemu/edk2.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-qemu/edk2.git
+XS-Build-Indep-Architecture: amd64
 
 Package: ovmf
 Architecture: all
