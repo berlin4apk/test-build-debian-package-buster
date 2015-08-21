@@ -32,18 +32,6 @@ endif
 ifeq ($(DEB_HOST_ARCH),i386)
 	EDK2_HOST_ARCH=IA32
 endif
-ifeq ($(DEB_HOST_ARCH),arm64)
-	EDK2_HOST_ARCH=AARCH64
-endif
-
-EDK2_TOOLCHAIN = GCC49
-
-ifneq ($(DEB_HOST_ARCH),$(DEB_BUILD_ARCH))
-	CROSS_COMPILE=$(DEB_HOST_GNU_TYPE)-
-	# It's horrible that this is only supported for the ARMGCC target,
-	# but we go with it to possibly support cross-building.
-	EDK2_TOOLCHAIN=ARMGCC
-endif
 
 ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
 
@@ -79,9 +67,11 @@ ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 		build -DSECURE_BOOT_ENABLE=TRUE -DFD_SIZE_2MB -b RELEASE
 endif
 
+build-qemu-efi: EDK2_TOOLCHAIN=ARMGCC
 build-qemu-efi: EDK2_ARCH_DIR=AArch64
+build-qemu-efi: EDK2_HOST_ARCH=AARCH64
+build-qemu-efi: CROSS_COMPILE=aarch64-linux-gnu-
 build-qemu-efi:
-ifeq ($(DEB_HOST_ARCH),arm64)
 	mkdir -p ShellBinPkg/UefiShell/$(EDK2_ARCH_DIR) FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
 	set -e; . ./edksetup.sh; \
 		CROSS_COMPILE=$(CROSS_COMPILE) build -a $(EDK2_HOST_ARCH) \
@@ -97,7 +87,6 @@ ifeq ($(DEB_HOST_ARCH),arm64)
 			-t $(EDK2_TOOLCHAIN) \
 			-p ArmPlatformPkg/ArmVirtualizationPkg/ArmVirtualizationQemu.dsc \
 			-b RELEASE
-endif
 
 override_dh_auto_clean:
 	set -e; \
