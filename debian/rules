@@ -86,6 +86,7 @@ build-qemu-efi:
 		CROSS_COMPILE=$(CROSS_COMPILE) build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p ArmPlatformPkg/ArmVirtualizationPkg/ArmVirtualizationQemu.dsc \
+			-DINTEL_BDS \
 			-b RELEASE
 
 override_dh_auto_clean:
