@@ -1,0 +1,23 @@
+Description: Workaround ARM64 compiler issue by disabling certain optimizations
+ GCC5 introduced a regression when building edk2. The symptom is that KVM
+ VMs hang before displaying any EFI messages. This was bisected down to the
+ introduction of some bswap optimizations that can be disabled with
+ -fno-expensive-optimizations.
+Author: dann frazier <dannf@ubuntu.com>
+Last-Update: 2015-09-03
+Bug-Ubuntu: http://bugs.launchpad.net/bugs/1489560
+Forwarded: no
+
+diff --git a/BaseTools/Conf/tools_def.template b/BaseTools/Conf/tools_def.template
+index c3166e5..3848dc2 100644
+--- a/BaseTools/Conf/tools_def.template
++++ b/BaseTools/Conf/tools_def.template
+@@ -6732,7 +6732,7 @@ RELEASE_ARMGCC_ARM_CC_FLAGS = $(ARCHCC_FLAGS) $(PLATFORM_FLAGS) DEF(GCC_ARM_CC_F
+ #
+ # Use default values, or override in DSC file
+ #
+-*_ARMGCC_AARCH64_ARCHCC_FLAGS    = -fno-stack-protector
++*_ARMGCC_AARCH64_ARCHCC_FLAGS    = -fno-stack-protector -fno-expensive-optimizations
+ *_ARMGCC_AARCH64_ARCHASM_FLAGS   =
+ *_ARMGCC_AARCH64_ARCHDLINK_FLAGS =
+ *_ARMGCC_AARCH64_PLATFORM_FLAGS  =
