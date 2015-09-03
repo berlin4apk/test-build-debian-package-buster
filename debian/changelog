@@ -1,4 +1,4 @@
-edk2 (0~20150106.5c2d456b-2) UNRELEASED; urgency=medium
+edk2 (0~20150106.5c2d456b-2) unstable; urgency=medium
 
   [ Steve Langasek ]
   * Build-depend on gcc-aarch64-linux-gnu and make qemu-efi an Arch: all
@@ -15,7 +15,7 @@ edk2 (0~20150106.5c2d456b-2) UNRELEASED; urgency=medium
     ARM64 compiler issue by disabling certain optimizations.
     Closes: LP #1489560
 
- -- Steve Langasek <steve.langasek@ubuntu.com>  Fri, 21 Aug 2015 10:00:20 -0700
+ -- Steve Langasek <vorlon@debian.org>  Thu, 03 Sep 2015 22:08:41 +0000
 
 edk2 (0~20150106.5c2d456b-1) unstable; urgency=medium
 
