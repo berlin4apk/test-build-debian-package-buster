@@ -85,7 +85,7 @@ build-qemu-efi:
 			FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)/Fat.efi; \
 		GCC49_AARCH64_PREFIX=$(GCC49_AARCH64_PREFIX) build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
-			-p ArmPlatformPkg/ArmVirtualizationPkg/ArmVirtualizationQemu.dsc \
+			-p ArmVirtPkg/ArmVirtQemu.dsc \
 			-DINTEL_BDS \
 			-b RELEASE
 
