@@ -16,6 +16,8 @@ DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
 DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
 DEB_HOST_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
 
+EDK2_TOOLCHAIN = GCC49
+
 ifeq ($(DEB_BUILD_ARCH),amd64)
 	EDK2_BUILD_ARCH=X64
 endif
@@ -49,7 +51,6 @@ setup-build:
 	QUILT_PC=.pc-post QUILT_PATCHES=debian/post-patches quilt push -a || [ $$? = 2 ]
 
 build-ovmf: EDK2_ARCH_DIR=X64
-build-ovmf: EDK2_TOOLCHAIN=GCC49
 build-ovmf:
 ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 	cd CryptoPkg/Library/OpensslLib/ && ./Install.sh
@@ -67,23 +68,22 @@ ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 		build -DSECURE_BOOT_ENABLE=TRUE -DFD_SIZE_2MB -b RELEASE
 endif
 
-build-qemu-efi: EDK2_TOOLCHAIN=ARMGCC
 build-qemu-efi: EDK2_ARCH_DIR=AArch64
 build-qemu-efi: EDK2_HOST_ARCH=AARCH64
-build-qemu-efi: CROSS_COMPILE=aarch64-linux-gnu-
+build-qemu-efi: GCC49_AARCH64_PREFIX=aarch64-linux-gnu-
 build-qemu-efi:
 	mkdir -p ShellBinPkg/UefiShell/$(EDK2_ARCH_DIR) FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
 	set -e; . ./edksetup.sh; \
-		CROSS_COMPILE=$(CROSS_COMPILE) build -a $(EDK2_HOST_ARCH) \
+		GCC49_AARCH64_PREFIX=$(GCC49_AARCH64_PREFIX) build -a $(EDK2_HOST_ARCH) \
 			-p ShellPkg/ShellPkg.dsc -b RELEASE -t $(EDK2_TOOLCHAIN); \
 		cp -a Build/Shell/RELEASE_$(EDK2_TOOLCHAIN)/AARCH64/Shell.efi \
 			ShellBinPkg/UefiShell/$(EDK2_ARCH_DIR)/Shell.efi; \
-		CROSS_COMPILE=$(CROSS_COMPILE) build -a $(EDK2_HOST_ARCH) \
+		GCC49_AARCH64_PREFIX=$(GCC49_AARCH64_PREFIX) build -a $(EDK2_HOST_ARCH) \
 			-p FatPkg/FatPkg.dsc -m FatPkg/EnhancedFatDxe/Fat.inf \
 			-t $(EDK2_TOOLCHAIN) -b RELEASE; \
 		cp -a Build/Fat/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_HOST_ARCH)/Fat.efi \
 			FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)/Fat.efi; \
-		CROSS_COMPILE=$(CROSS_COMPILE) build -a $(EDK2_HOST_ARCH) \
+		GCC49_AARCH64_PREFIX=$(GCC49_AARCH64_PREFIX) build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p ArmPlatformPkg/ArmVirtualizationPkg/ArmVirtualizationQemu.dsc \
 			-DINTEL_BDS \
