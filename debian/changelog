@@ -7,6 +7,8 @@ edk2 (0~20160104.c2a892d7-1) UNRELEASED; urgency=medium
   [ dann frazier ]
   * Use GCC49 toolchain for all architectures; the ARMGCC toolchain has
     been dropped upstream.
+  * Supersede debian/patches/arm64-no-expensive-optimizations.patch
+    with debian/patches/arm64-mstrict-align.patch.  Closes LP: #1489460.
 
  -- Steve Langasek <vorlon@debian.org>  Wed, 27 Jan 2016 13:01:36 -0800
 

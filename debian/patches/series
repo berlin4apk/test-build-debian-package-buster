@@ -3,4 +3,4 @@ enable-nvme
 no-missing-braces.diff
 FatPkg-AARCH64.diff
 no-stack-protector-all-archs.diff
-arm64-no-expensive-optimizations.patch
+arm64-mstrict-align.patch
