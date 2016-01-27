@@ -1,9 +1,8 @@
 Author: Steve Langasek <steve.langasek@ubuntu.com>
-Description: pass -fno-stack-protector to all ARM GCC toolchains
+Description: pass -fno-stack-protector to all GCC toolchains
  The upstream build rules inexplicably pass -fno-stack-protector only
- when building for i386 and amd64.  Add this essential argument to both the
- generic rules for gcc 4.4 and later, as well as to the ARMGCC toolchain
- target (since we want the latter for cross-building).
+ when building for i386 and amd64.  Add this essential argument to the
+ generic rules for gcc 4.4 and later.
 Index: edk2/BaseTools/Conf/tools_def.template
 ===================================================================
 --- edk2.orig/BaseTools/Conf/tools_def.template
