@@ -8,16 +8,16 @@ Last-Update: 2015-09-03
 Bug-Ubuntu: http://bugs.launchpad.net/bugs/1489560
 Forwarded: no
 
-diff --git a/BaseTools/Conf/tools_def.template b/BaseTools/Conf/tools_def.template
-index c3166e5..3848dc2 100644
---- a/BaseTools/Conf/tools_def.template
-+++ b/BaseTools/Conf/tools_def.template
-@@ -6732,7 +6732,7 @@ RELEASE_ARMGCC_ARM_CC_FLAGS = $(ARCHCC_FLAGS) $(PLATFORM_FLAGS) DEF(GCC_ARM_CC_F
- #
- # Use default values, or override in DSC file
- #
--*_ARMGCC_AARCH64_ARCHCC_FLAGS    = -fno-stack-protector
-+*_ARMGCC_AARCH64_ARCHCC_FLAGS    = -fno-stack-protector -fno-expensive-optimizations
- *_ARMGCC_AARCH64_ARCHASM_FLAGS   =
- *_ARMGCC_AARCH64_ARCHDLINK_FLAGS =
- *_ARMGCC_AARCH64_PLATFORM_FLAGS  =
+Index: edk2/BaseTools/Conf/tools_def.template
+===================================================================
+--- edk2.orig/BaseTools/Conf/tools_def.template
++++ edk2/BaseTools/Conf/tools_def.template
+@@ -4437,7 +4437,7 @@
+ DEFINE GCC49_ARM_ASM_FLAGS           = DEF(GCC48_ARM_ASM_FLAGS)
+ DEFINE GCC49_AARCH64_ASM_FLAGS       = DEF(GCC48_AARCH64_ASM_FLAGS)
+ DEFINE GCC49_ARM_CC_FLAGS            = DEF(GCC48_ARM_CC_FLAGS)
+-DEFINE GCC49_AARCH64_CC_FLAGS        = $(ARCHCC_FLAGS) $(PLATFORM_FLAGS) DEF(GCC44_ALL_CC_FLAGS) -mcmodel=tiny DEF(GCC_AARCH64_CC_FLAGS)
++DEFINE GCC49_AARCH64_CC_FLAGS        = $(ARCHCC_FLAGS) $(PLATFORM_FLAGS) DEF(GCC44_ALL_CC_FLAGS) -fno-expensive-optimizations -mcmodel=tiny DEF(GCC_AARCH64_CC_FLAGS)
+ DEFINE GCC49_ARM_DLINK_FLAGS         = DEF(GCC48_ARM_DLINK_FLAGS)
+ DEFINE GCC49_ARM_DLINK2_FLAGS        = DEF(GCC48_ARM_DLINK2_FLAGS)
+ DEFINE GCC49_AARCH64_DLINK_FLAGS     = DEF(GCC48_AARCH64_DLINK_FLAGS)
