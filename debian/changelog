@@ -1,3 +1,11 @@
+edk2 (0~20160104.c2a892d7-1) UNRELEASED; urgency=medium
+
+  * New upstream version.
+    - Fixes support for kvm GPU passthrough.  Closes: #810163.
+    - Adds GICv3 support.  Closes: #810495.
+
+ -- Steve Langasek <vorlon@debian.org>  Wed, 27 Jan 2016 13:01:36 -0800
+
 edk2 (0~20150106.5c2d456b-2) unstable; urgency=medium
 
   [ Steve Langasek ]
