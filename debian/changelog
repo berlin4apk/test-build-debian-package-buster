@@ -1,4 +1,4 @@
-edk2 (0~20160104.c2a892d7-1) UNRELEASED; urgency=medium
+edk2 (0~20160104.c2a892d7-1) unstable; urgency=medium
 
   * New upstream version.
     - Fixes support for kvm GPU passthrough.  Closes: #810163.
@@ -10,7 +10,7 @@ edk2 (0~20160104.c2a892d7-1) UNRELEASED; urgency=medium
   * Supersede debian/patches/arm64-no-expensive-optimizations.patch
     with debian/patches/arm64-mstrict-align.patch.  Closes LP: #1489460.
 
- -- Steve Langasek <vorlon@debian.org>  Wed, 27 Jan 2016 13:01:36 -0800
+ -- Steve Langasek <vorlon@debian.org>  Thu, 28 Jan 2016 01:35:30 +0000
 
 edk2 (0~20150106.5c2d456b-2) unstable; urgency=medium
 
