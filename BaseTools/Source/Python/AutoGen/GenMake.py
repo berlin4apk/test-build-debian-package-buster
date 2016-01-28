@@ -19,7 +19,7 @@ import string
 import re
 import os.path as path
 from Common.LongFilePathSupport import OpenLongFilePath as open
-
+from Common.MultipleWorkspace import MultipleWorkspace as mws
 from Common.BuildToolError import *
 from Common.Misc import *
 from Common.String import *
@@ -27,7 +27,7 @@ from BuildEngine import *
 import Common.GlobalData as GlobalData
 
 ## Regular expression for finding header file inclusions
-gIncludePattern = re.compile(r"^[ \t]*#?[ \t]*include(?:[ \t]*(?:\\(?:\r\n|\r|\n))*[ \t]*)*(?:\(?[\"<]?[ \t]*)([-\w.\\/() \t]+)(?:[ \t]*[\">]?\)?)", re.MULTILINE|re.UNICODE|re.IGNORECASE)
+gIncludePattern = re.compile(r"^[ \t]*#?[ \t]*include(?:[ \t]*(?:\\(?:\r\n|\r|\n))*[ \t]*)*(?:\(?[\"<]?[ \t]*)([-\w.\\/() \t]+)(?:[ \t]*[\">]?\)?)", re.MULTILINE | re.UNICODE | re.IGNORECASE)
 
 ## Regular expression for matching macro used in header file inclusion
 gMacroPattern = re.compile("([_A-Z][_A-Z0-9]*)[ \t]*\((.+)\)", re.UNICODE)
@@ -241,6 +241,7 @@ PLATFORM_OUTPUT_DIR = ${platform_output_directory}
 #
 MODULE_NAME = ${module_name}
 MODULE_GUID = ${module_guid}
+MODULE_NAME_GUID = ${module_name_guid}
 MODULE_VERSION = ${module_version}
 MODULE_TYPE = ${module_type}
 MODULE_FILE = ${module_file}
@@ -498,7 +499,7 @@ cleanlib:
 
         # convert source files and binary files to build targets
         self.ResultFileList = [str(T.Target) for T in self._AutoGenObject.CodaTargetList]
-        if len(self.ResultFileList) == 0 and len(self._AutoGenObject.SourceFileList) <> 0:        
+        if len(self.ResultFileList) == 0 and len(self._AutoGenObject.SourceFileList) <> 0:
             EdkLogger.error("build", AUTOGEN_ERROR, "Nothing to build",
                             ExtraData="[%s]" % str(self._AutoGenObject))
 
@@ -519,9 +520,9 @@ cleanlib:
         FileMacro = ""
         IncludePathList = []
         for P in  self._AutoGenObject.IncludePathList:
-            IncludePathList.append(IncPrefix+self.PlaceMacro(P, self.Macros))
+            IncludePathList.append(IncPrefix + self.PlaceMacro(P, self.Macros))
             if FileBuildRule.INC_LIST_MACRO in self.ListFileMacros:
-                self.ListFileMacros[FileBuildRule.INC_LIST_MACRO].append(IncPrefix+P)
+                self.ListFileMacros[FileBuildRule.INC_LIST_MACRO].append(IncPrefix + P)
         FileMacro += self._FILE_MACRO_TEMPLATE.Replace(
                                                 {
                                                     "macro_name"   : "INC",
@@ -532,7 +533,7 @@ cleanlib:
 
         # Generate macros used to represent files containing list of input files
         for ListFileMacro in self.ListFileMacros:
-            ListFileName = os.path.join(self._AutoGenObject.OutputDir, "%s.lst" % ListFileMacro.lower()[:len(ListFileMacro)-5])
+            ListFileName = os.path.join(self._AutoGenObject.OutputDir, "%s.lst" % ListFileMacro.lower()[:len(ListFileMacro) - 5])
             FileMacroList.append("%s = %s" % (ListFileMacro, ListFileName))
             SaveFileOnChange(
                 ListFileName,
@@ -554,8 +555,16 @@ cleanlib:
             LibraryMakeCommandList.append(Command)
 
         package_rel_dir = self._AutoGenObject.SourceDir
-        if os.sep in package_rel_dir:
-            package_rel_dir = package_rel_dir[package_rel_dir.index(os.sep) + 1:]
+        current_dir = self.Macros["WORKSPACE"]
+        found = False
+        while not found and os.sep in package_rel_dir:
+            index = package_rel_dir.index(os.sep)
+            current_dir = mws.join(current_dir, package_rel_dir[:index])
+            for fl in os.listdir(current_dir):
+                if fl.endswith('.dec'):
+                    found = True
+                    break
+            package_rel_dir = package_rel_dir[index + 1:]
 
         MakefileTemplateDict = {
             "makefile_header"           : self._FILE_HEADER_[self._FileType],
@@ -569,6 +578,7 @@ cleanlib:
 
             "module_name"               : self._AutoGenObject.Name,
             "module_guid"               : self._AutoGenObject.Guid,
+            "module_name_guid"          : self._AutoGenObject._GetUniqueBaseName(),
             "module_version"            : self._AutoGenObject.Version,
             "module_type"               : self._AutoGenObject.ModuleType,
             "module_file"               : self._AutoGenObject.MetaFile.Name,
@@ -757,7 +767,7 @@ cleanlib:
                 try:
                     Fd = open(F.Path, 'r')
                 except BaseException, X:
-                    EdkLogger.error("build", FILE_OPEN_FAILURE, ExtraData=F.Path+"\n\t"+str(X))
+                    EdkLogger.error("build", FILE_OPEN_FAILURE, ExtraData=F.Path + "\n\t" + str(X))
 
                 FileContent = Fd.read()
                 Fd.close()
@@ -846,6 +856,7 @@ PLATFORM_OUTPUT_DIR = ${platform_output_directory}
 #
 MODULE_NAME = ${module_name}
 MODULE_GUID = ${module_guid}
+MODULE_NAME_GUID = ${module_name_guid}
 MODULE_VERSION = ${module_version}
 MODULE_TYPE = ${module_type}
 MODULE_FILE = ${module_file}
@@ -970,6 +981,7 @@ ${BEGIN}\t-@${create_directory_command}\n${END}\
 
             "module_name"               : self._AutoGenObject.Name,
             "module_guid"               : self._AutoGenObject.Guid,
+            "module_name_guid"          : self._AutoGenObject._GetUniqueBaseName(),
             "module_version"            : self._AutoGenObject.Version,
             "module_type"               : self._AutoGenObject.ModuleType,
             "module_file"               : self._AutoGenObject.MetaFile,

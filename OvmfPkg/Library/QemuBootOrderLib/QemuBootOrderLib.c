@@ -27,19 +27,25 @@
 #include <Guid/GlobalVariable.h>
 #include <Guid/VirtioMmioTransport.h>
 
+#include "ExtraRootBusMap.h"
 
 /**
   OpenFirmware to UEFI device path translation output buffer size in CHAR16's.
 **/
 #define TRANSLATION_OUTPUT_SIZE 0x100
 
+/**
+  Output buffer size for OpenFirmware to UEFI device path fragment translation,
+  in CHAR16's, for a sequence of PCI bridges.
+**/
+#define BRIDGE_TRANSLATION_OUTPUT_SIZE 0x40
 
 /**
   Numbers of nodes in OpenFirmware device paths that are required and examined.
 **/
 #define REQUIRED_PCI_OFW_NODES  2
 #define REQUIRED_MMIO_OFW_NODES 1
-#define EXAMINED_OFW_NODES      4
+#define EXAMINED_OFW_NODES      6
 
 
 /**
@@ -551,6 +557,11 @@ ParseOfwNode (
 
   @param[in]     NumNodes        Number of elements in OfwNode.
 
+  @param[in]     ExtraPciRoots   An EXTRA_ROOT_BUS_MAP object created with
+                                 CreateExtraRootBusMap(), to be used for
+                                 translating positions of extra root buses to
+                                 bus numbers.
+
   @param[out]    Translated      Destination array receiving the UEFI path
                                  fragment, allocated by the caller. If the
                                  return value differs from RETURN_SUCCESS, its
@@ -571,32 +582,134 @@ ParseOfwNode (
   @retval RETURN_UNSUPPORTED       The array of OpenFirmware device nodes can't
                                    be translated in the current implementation.
 
+  @retval RETURN_PROTOCOL_ERROR    The initial OpenFirmware node refers to an
+                                   extra PCI root bus (by serial number) that
+                                   is invalid according to ExtraPciRoots.
+
 **/
 STATIC
 RETURN_STATUS
 TranslatePciOfwNodes (
-  IN      CONST OFW_NODE *OfwNode,
-  IN      UINTN          NumNodes,
-  OUT     CHAR16         *Translated,
-  IN OUT  UINTN          *TranslatedSize
+  IN      CONST OFW_NODE           *OfwNode,
+  IN      UINTN                    NumNodes,
+  IN      CONST EXTRA_ROOT_BUS_MAP *ExtraPciRoots,
+  OUT     CHAR16                   *Translated,
+  IN OUT  UINTN                    *TranslatedSize
   )
 {
+  UINT32 PciRoot;
+  CHAR8  *Comma;
+  UINTN  FirstNonBridge;
+  CHAR16 Bridges[BRIDGE_TRANSLATION_OUTPUT_SIZE];
+  UINTN  BridgesLen;
   UINT64 PciDevFun[2];
   UINTN  NumEntries;
   UINTN  Written;
 
   //
-  // Get PCI device and optional PCI function. Assume a single PCI root.
+  // Resolve the PCI root bus number.
+  //
+  // The initial OFW node for the main root bus (ie. bus number 0) is:
+  //
+  //   /pci@i0cf8
+  //
+  // For extra root buses, the initial OFW node is
+  //
+  //   /pci@i0cf8,4
+  //              ^
+  //              root bus serial number (not PCI bus number)
   //
   if (NumNodes < REQUIRED_PCI_OFW_NODES ||
       !SubstringEq (OfwNode[0].DriverName, "pci")
       ) {
     return RETURN_UNSUPPORTED;
   }
+
+  PciRoot = 0;
+  Comma = ScanMem8 (OfwNode[0].UnitAddress.Ptr, OfwNode[0].UnitAddress.Len,
+            ',');
+  if (Comma != NULL) {
+    SUBSTRING PciRootSerialSubString;
+    UINT64    PciRootSerial;
+
+    //
+    // Parse the root bus serial number from the unit address after the comma.
+    //
+    PciRootSerialSubString.Ptr = Comma + 1;
+    PciRootSerialSubString.Len = OfwNode[0].UnitAddress.Len -
+                                 (PciRootSerialSubString.Ptr -
+                                  OfwNode[0].UnitAddress.Ptr);
+    NumEntries = 1;
+    if (RETURN_ERROR (ParseUnitAddressHexList (PciRootSerialSubString,
+                      &PciRootSerial, &NumEntries))) {
+      return RETURN_UNSUPPORTED;
+    }
+
+    //
+    // Map the extra root bus's serial number to its actual bus number.
+    //
+    if (EFI_ERROR (MapRootBusPosToBusNr (ExtraPciRoots, PciRootSerial,
+                     &PciRoot))) {
+      return RETURN_PROTOCOL_ERROR;
+    }
+  }
+
+  //
+  // Translate a sequence of PCI bridges. For each bridge, the OFW node is:
+  //
+  //   pci-bridge@1e[,0]
+  //              ^   ^
+  //              PCI slot & function on the parent, holding the bridge
+  //
+  // and the UEFI device path node is:
+  //
+  //   Pci(0x1E,0x0)
+  //
+  FirstNonBridge = 1;
+  Bridges[0] = L'\0';
+  BridgesLen = 0;
+  do {
+    UINT64 BridgeDevFun[2];
+    UINTN  BridgesFreeBytes;
+
+    if (!SubstringEq (OfwNode[FirstNonBridge].DriverName, "pci-bridge")) {
+      break;
+    }
+
+    BridgeDevFun[1] = 0;
+    NumEntries = sizeof BridgeDevFun / sizeof BridgeDevFun[0];
+    if (ParseUnitAddressHexList (OfwNode[FirstNonBridge].UnitAddress,
+          BridgeDevFun, &NumEntries) != RETURN_SUCCESS) {
+      return RETURN_UNSUPPORTED;
+    }
+
+    BridgesFreeBytes = sizeof Bridges - BridgesLen * sizeof Bridges[0];
+    Written = UnicodeSPrintAsciiFormat (Bridges + BridgesLen, BridgesFreeBytes,
+                "/Pci(0x%Lx,0x%Lx)", BridgeDevFun[0], BridgeDevFun[1]);
+    BridgesLen += Written;
+
+    //
+    // There's no way to differentiate between "completely used up without
+    // truncation" and "truncated", so treat the former as the latter.
+    //
+    if (BridgesLen + 1 == BRIDGE_TRANSLATION_OUTPUT_SIZE) {
+      return RETURN_UNSUPPORTED;
+    }
+
+    ++FirstNonBridge;
+  } while (FirstNonBridge < NumNodes);
+
+  if (FirstNonBridge == NumNodes) {
+    return RETURN_UNSUPPORTED;
+  }
+
+  //
+  // Parse the OFW nodes starting with the first non-bridge node.
+  //
   PciDevFun[1] = 0;
   NumEntries = sizeof (PciDevFun) / sizeof (PciDevFun[0]);
   if (ParseUnitAddressHexList (
-        OfwNode[1].UnitAddress,
+        OfwNode[FirstNonBridge].UnitAddress,
         PciDevFun,
         &NumEntries
         ) != RETURN_SUCCESS
@@ -604,10 +717,10 @@ TranslatePciOfwNodes (
     return RETURN_UNSUPPORTED;
   }
 
-  if (NumNodes >= 4 &&
-      SubstringEq (OfwNode[1].DriverName, "ide") &&
-      SubstringEq (OfwNode[2].DriverName, "drive") &&
-      SubstringEq (OfwNode[3].DriverName, "disk")
+  if (NumNodes >= FirstNonBridge + 3 &&
+      SubstringEq (OfwNode[FirstNonBridge + 0].DriverName, "ide") &&
+      SubstringEq (OfwNode[FirstNonBridge + 1].DriverName, "drive") &&
+      SubstringEq (OfwNode[FirstNonBridge + 2].DriverName, "disk")
       ) {
     //
     // OpenFirmware device path (IDE disk, IDE CD-ROM):
@@ -630,13 +743,13 @@ TranslatePciOfwNodes (
 
     NumEntries = 1;
     if (ParseUnitAddressHexList (
-          OfwNode[2].UnitAddress,
+          OfwNode[FirstNonBridge + 1].UnitAddress,
           &Secondary,
           &NumEntries
           ) != RETURN_SUCCESS ||
         Secondary > 1 ||
         ParseUnitAddressHexList (
-          OfwNode[3].UnitAddress,
+          OfwNode[FirstNonBridge + 2].UnitAddress,
           &Slave,
           &NumEntries // reuse after previous single-element call
           ) != RETURN_SUCCESS ||
@@ -648,16 +761,61 @@ TranslatePciOfwNodes (
     Written = UnicodeSPrintAsciiFormat (
       Translated,
       *TranslatedSize * sizeof (*Translated), // BufferSize in bytes
-      "PciRoot(0x0)/Pci(0x%Lx,0x%Lx)/Ata(%a,%a,0x0)",
+      "PciRoot(0x%x)%s/Pci(0x%Lx,0x%Lx)/Ata(%a,%a,0x0)",
+      PciRoot,
+      Bridges,
       PciDevFun[0],
       PciDevFun[1],
       Secondary ? "Secondary" : "Primary",
       Slave ? "Slave" : "Master"
       );
-  } else if (NumNodes >= 4 &&
-             SubstringEq (OfwNode[1].DriverName, "isa") &&
-             SubstringEq (OfwNode[2].DriverName, "fdc") &&
-             SubstringEq (OfwNode[3].DriverName, "floppy")
+  } else if (NumNodes >= FirstNonBridge + 3 &&
+      SubstringEq (OfwNode[FirstNonBridge + 0].DriverName, "pci8086,2922") &&
+      SubstringEq (OfwNode[FirstNonBridge + 1].DriverName, "drive") &&
+      SubstringEq (OfwNode[FirstNonBridge + 2].DriverName, "disk")
+      ) {
+    //
+    // OpenFirmware device path (Q35 SATA disk and CD-ROM):
+    //
+    //   /pci@i0cf8/pci8086,2922@1f,2/drive@1/disk@0
+    //        ^                  ^  ^       ^      ^
+    //        |                  |  |       |      device number (fixed 0)
+    //        |                  |  |       channel (port) number
+    //        |                  PCI slot & function holding SATA HBA
+    //        PCI root at system bus port, PIO
+    //
+    // UEFI device path:
+    //
+    //   PciRoot(0x0)/Pci(0x1F,0x2)/Sata(0x1,0x0,0x0)
+    //                                   ^   ^   ^
+    //                                   |   |   LUN (always 0 on Q35)
+    //                                   |   port multiplier port number,
+    //                                   |   always 0 on Q35
+    //                                   channel (port) number
+    //
+    UINT64 Channel;
+
+    NumEntries = 1;
+    if (RETURN_ERROR (ParseUnitAddressHexList (
+                        OfwNode[FirstNonBridge + 1].UnitAddress, &Channel,
+                        &NumEntries))) {
+      return RETURN_UNSUPPORTED;
+    }
+
+    Written = UnicodeSPrintAsciiFormat (
+      Translated,
+      *TranslatedSize * sizeof (*Translated), // BufferSize in bytes
+      "PciRoot(0x%x)%s/Pci(0x%Lx,0x%Lx)/Sata(0x%Lx,0x0,0x0)",
+      PciRoot,
+      Bridges,
+      PciDevFun[0],
+      PciDevFun[1],
+      Channel
+      );
+  } else if (NumNodes >= FirstNonBridge + 3 &&
+             SubstringEq (OfwNode[FirstNonBridge + 0].DriverName, "isa") &&
+             SubstringEq (OfwNode[FirstNonBridge + 1].DriverName, "fdc") &&
+             SubstringEq (OfwNode[FirstNonBridge + 2].DriverName, "floppy")
              ) {
     //
     // OpenFirmware device path (floppy disk):
@@ -679,7 +837,7 @@ TranslatePciOfwNodes (
 
     NumEntries = 1;
     if (ParseUnitAddressHexList (
-          OfwNode[3].UnitAddress,
+          OfwNode[FirstNonBridge + 2].UnitAddress,
           &AcpiUid,
           &NumEntries
           ) != RETURN_SUCCESS ||
@@ -691,14 +849,16 @@ TranslatePciOfwNodes (
     Written = UnicodeSPrintAsciiFormat (
       Translated,
       *TranslatedSize * sizeof (*Translated), // BufferSize in bytes
-      "PciRoot(0x0)/Pci(0x%Lx,0x%Lx)/Floppy(0x%Lx)",
+      "PciRoot(0x%x)%s/Pci(0x%Lx,0x%Lx)/Floppy(0x%Lx)",
+      PciRoot,
+      Bridges,
       PciDevFun[0],
       PciDevFun[1],
       AcpiUid
       );
-  } else if (NumNodes >= 3 &&
-             SubstringEq (OfwNode[1].DriverName, "scsi") &&
-             SubstringEq (OfwNode[2].DriverName, "disk")
+  } else if (NumNodes >= FirstNonBridge + 2 &&
+             SubstringEq (OfwNode[FirstNonBridge + 0].DriverName, "scsi") &&
+             SubstringEq (OfwNode[FirstNonBridge + 1].DriverName, "disk")
              ) {
     //
     // OpenFirmware device path (virtio-blk disk):
@@ -718,14 +878,16 @@ TranslatePciOfwNodes (
     Written = UnicodeSPrintAsciiFormat (
       Translated,
       *TranslatedSize * sizeof (*Translated), // BufferSize in bytes
-      "PciRoot(0x0)/Pci(0x%Lx,0x%Lx)/HD(",
+      "PciRoot(0x%x)%s/Pci(0x%Lx,0x%Lx)/HD(",
+      PciRoot,
+      Bridges,
       PciDevFun[0],
       PciDevFun[1]
       );
-  } else if (NumNodes >= 4 &&
-             SubstringEq (OfwNode[1].DriverName, "scsi") &&
-             SubstringEq (OfwNode[2].DriverName, "channel") &&
-             SubstringEq (OfwNode[3].DriverName, "disk")
+  } else if (NumNodes >= FirstNonBridge + 3 &&
+             SubstringEq (OfwNode[FirstNonBridge + 0].DriverName, "scsi") &&
+             SubstringEq (OfwNode[FirstNonBridge + 1].DriverName, "channel") &&
+             SubstringEq (OfwNode[FirstNonBridge + 2].DriverName, "disk")
              ) {
     //
     // OpenFirmware device path (virtio-scsi disk):
@@ -750,7 +912,7 @@ TranslatePciOfwNodes (
     TargetLun[1] = 0;
     NumEntries = sizeof (TargetLun) / sizeof (TargetLun[0]);
     if (ParseUnitAddressHexList (
-          OfwNode[3].UnitAddress,
+          OfwNode[FirstNonBridge + 2].UnitAddress,
           TargetLun,
           &NumEntries
           ) != RETURN_SUCCESS
@@ -761,7 +923,9 @@ TranslatePciOfwNodes (
     Written = UnicodeSPrintAsciiFormat (
       Translated,
       *TranslatedSize * sizeof (*Translated), // BufferSize in bytes
-      "PciRoot(0x0)/Pci(0x%Lx,0x%Lx)/Scsi(0x%Lx,0x%Lx)",
+      "PciRoot(0x%x)%s/Pci(0x%Lx,0x%Lx)/Scsi(0x%Lx,0x%Lx)",
+      PciRoot,
+      Bridges,
       PciDevFun[0],
       PciDevFun[1],
       TargetLun[0],
@@ -784,7 +948,9 @@ TranslatePciOfwNodes (
     Written = UnicodeSPrintAsciiFormat (
       Translated,
       *TranslatedSize * sizeof (*Translated), // BufferSize in bytes
-      "PciRoot(0x0)/Pci(0x%Lx,0x%Lx)",
+      "PciRoot(0x%x)%s/Pci(0x%Lx,0x%Lx)",
+      PciRoot,
+      Bridges,
       PciDevFun[0],
       PciDevFun[1]
       );
@@ -991,6 +1157,11 @@ TranslateMmioOfwNodes (
 
   @param[in]     NumNodes        Number of elements in OfwNode.
 
+  @param[in]     ExtraPciRoots   An EXTRA_ROOT_BUS_MAP object created with
+                                 CreateExtraRootBusMap(), to be used for
+                                 translating positions of extra root buses to
+                                 bus numbers.
+
   @param[out]    Translated      Destination array receiving the UEFI path
                                  fragment, allocated by the caller. If the
                                  return value differs from RETURN_SUCCESS, its
@@ -1011,14 +1182,19 @@ TranslateMmioOfwNodes (
   @retval RETURN_UNSUPPORTED       The array of OpenFirmware device nodes can't
                                    be translated in the current implementation.
 
+  @retval RETURN_PROTOCOL_ERROR    The array of OpenFirmware device nodes has
+                                   been (partially) recognized, but it contains
+                                   a logic error / doesn't match system state.
+
 **/
 STATIC
 RETURN_STATUS
 TranslateOfwNodes (
-  IN      CONST OFW_NODE *OfwNode,
-  IN      UINTN          NumNodes,
-  OUT     CHAR16         *Translated,
-  IN OUT  UINTN          *TranslatedSize
+  IN      CONST OFW_NODE           *OfwNode,
+  IN      UINTN                    NumNodes,
+  IN      CONST EXTRA_ROOT_BUS_MAP *ExtraPciRoots,
+  OUT     CHAR16                   *Translated,
+  IN OUT  UINTN                    *TranslatedSize
   )
 {
   RETURN_STATUS Status;
@@ -1026,8 +1202,8 @@ TranslateOfwNodes (
   Status = RETURN_UNSUPPORTED;
 
   if (FeaturePcdGet (PcdQemuBootOrderPciTranslation)) {
-    Status = TranslatePciOfwNodes (OfwNode, NumNodes, Translated,
-               TranslatedSize);
+    Status = TranslatePciOfwNodes (OfwNode, NumNodes, ExtraPciRoots,
+               Translated, TranslatedSize);
   }
   if (Status == RETURN_UNSUPPORTED &&
       FeaturePcdGet (PcdQemuBootOrderMmioTranslation)) {
@@ -1050,6 +1226,11 @@ TranslateOfwNodes (
                                  byte immediately following the consumed
                                  characters. In other error cases, it points to
                                  the byte that caused the error.
+
+  @param[in]     ExtraPciRoots   An EXTRA_ROOT_BUS_MAP object created with
+                                 CreateExtraRootBusMap(), to be used for
+                                 translating positions of extra root buses to
+                                 bus numbers.
 
   @param[out]    Translated      Destination array receiving the UEFI path
                                  fragment, allocated by the caller. If the
@@ -1076,6 +1257,12 @@ TranslateOfwNodes (
                                     the current implementation. Further calls
                                     to this function are possible.
 
+  @retval RETURN_PROTOCOL_ERROR     The OpenFirmware device path has been
+                                    (partially) recognized, but it contains a
+                                    logic error / doesn't match system state.
+                                    Further calls to this function are
+                                    possible.
+
   @retval RETURN_NOT_FOUND          Translation terminated. On input, *Ptr was
                                     pointing to the empty string or "HALT". On
                                     output, *Ptr points to the empty string
@@ -1088,9 +1275,10 @@ TranslateOfwNodes (
 STATIC
 RETURN_STATUS
 TranslateOfwPath (
-  IN OUT  CONST CHAR8 **Ptr,
-  OUT     CHAR16      *Translated,
-  IN OUT  UINTN       *TranslatedSize
+  IN OUT  CONST CHAR8              **Ptr,
+  IN      CONST EXTRA_ROOT_BUS_MAP *ExtraPciRoots,
+  OUT     CHAR16                   *Translated,
+  IN OUT  UINTN                    *TranslatedSize
   )
 {
   UINTN         NumNodes;
@@ -1138,6 +1326,7 @@ TranslateOfwPath (
   Status = TranslateOfwNodes (
              Node,
              NumNodes < EXAMINED_OFW_NODES ? NumNodes : EXAMINED_OFW_NODES,
+             ExtraPciRoots,
              Translated,
              TranslatedSize);
   switch (Status) {
@@ -1151,6 +1340,11 @@ TranslateOfwPath (
 
   case RETURN_UNSUPPORTED:
     DEBUG ((DEBUG_VERBOSE, "%a: unsupported\n", __FUNCTION__));
+    break;
+
+  case RETURN_PROTOCOL_ERROR:
+    DEBUG ((DEBUG_VERBOSE, "%a: logic error / system state mismatch\n",
+      __FUNCTION__));
     break;
 
   default:
@@ -1446,6 +1640,8 @@ SetBootOrderFromQemu (
   ACTIVE_OPTION                    *ActiveOption;
   UINTN                            ActiveCount;
 
+  EXTRA_ROOT_BUS_MAP               *ExtraPciRoots;
+
   UINTN                            TranslatedSize;
   CHAR16                           Translated[TRANSLATION_OUTPUT_SIZE];
 
@@ -1490,13 +1686,24 @@ SetBootOrderFromQemu (
     goto ErrorFreeBootOrder;
   }
 
+  if (FeaturePcdGet (PcdQemuBootOrderPciTranslation)) {
+    Status = CreateExtraRootBusMap (&ExtraPciRoots);
+    if (EFI_ERROR (Status)) {
+      goto ErrorFreeActiveOption;
+    }
+  } else {
+    ExtraPciRoots = NULL;
+  }
+
   //
   // translate each OpenFirmware path
   //
   TranslatedSize = sizeof (Translated) / sizeof (Translated[0]);
-  Status = TranslateOfwPath (&FwCfgPtr, Translated, &TranslatedSize);
+  Status = TranslateOfwPath (&FwCfgPtr, ExtraPciRoots, Translated,
+             &TranslatedSize);
   while (Status == RETURN_SUCCESS ||
          Status == RETURN_UNSUPPORTED ||
+         Status == RETURN_PROTOCOL_ERROR ||
          Status == RETURN_BUFFER_TOO_SMALL) {
     if (Status == RETURN_SUCCESS) {
       UINTN Idx;
@@ -1516,7 +1723,7 @@ SetBootOrderFromQemu (
           //
           Status = BootOrderAppend (&BootOrder, &ActiveOption[Idx]);
           if (Status != RETURN_SUCCESS) {
-            goto ErrorFreeActiveOption;
+            goto ErrorFreeExtraPciRoots;
           }
           break;
         }
@@ -1524,7 +1731,8 @@ SetBootOrderFromQemu (
     }   // translation successful
 
     TranslatedSize = sizeof (Translated) / sizeof (Translated[0]);
-    Status = TranslateOfwPath (&FwCfgPtr, Translated, &TranslatedSize);
+    Status = TranslateOfwPath (&FwCfgPtr, ExtraPciRoots, Translated,
+               &TranslatedSize);
   } // scanning of OpenFirmware paths done
 
   if (Status == RETURN_NOT_FOUND && BootOrder.Produced > 0) {
@@ -1535,7 +1743,7 @@ SetBootOrderFromQemu (
     //
     Status = BootOrderComplete (&BootOrder, ActiveOption, ActiveCount);
     if (RETURN_ERROR (Status)) {
-      goto ErrorFreeActiveOption;
+      goto ErrorFreeExtraPciRoots;
     }
 
     //
@@ -1553,11 +1761,16 @@ SetBootOrderFromQemu (
                     );
     if (EFI_ERROR (Status)) {
       DEBUG ((DEBUG_ERROR, "%a: setting BootOrder: %r\n", __FUNCTION__, Status));
-      goto ErrorFreeActiveOption;
+      goto ErrorFreeExtraPciRoots;
     }
 
     DEBUG ((DEBUG_INFO, "%a: setting BootOrder: success\n", __FUNCTION__));
     PruneBootVariables (ActiveOption, ActiveCount);
+  }
+
+ErrorFreeExtraPciRoots:
+  if (ExtraPciRoots != NULL) {
+    DestroyExtraRootBusMap (ExtraPciRoots);
   }
 
 ErrorFreeActiveOption:
@@ -1570,4 +1783,54 @@ ErrorFreeFwCfg:
   FreePool (FwCfg);
 
   return Status;
+}
+
+
+/**
+  Calculate the number of seconds we should be showing the FrontPage progress
+  bar for.
+
+  @return  The TimeoutDefault argument for PlatformBdsEnterFrontPage().
+**/
+UINT16
+GetFrontPageTimeoutFromQemu (
+  VOID
+  )
+{
+  FIRMWARE_CONFIG_ITEM BootMenuWaitItem;
+  UINTN                BootMenuWaitSize;
+
+  QemuFwCfgSelectItem (QemuFwCfgItemBootMenu);
+  if (QemuFwCfgRead16 () == 0) {
+    //
+    // The user specified "-boot menu=off", or didn't specify "-boot
+    // menu=(on|off)" at all. Return the platform default.
+    //
+    return PcdGet16 (PcdPlatformBootTimeOut);
+  }
+
+  if (RETURN_ERROR (QemuFwCfgFindFile ("etc/boot-menu-wait", &BootMenuWaitItem,
+                      &BootMenuWaitSize)) ||
+      BootMenuWaitSize != sizeof (UINT16)) {
+    //
+    // "-boot menu=on" was specified without "splash-time=N". In this case,
+    // return three seconds if the platform default would cause us to skip the
+    // front page, and return the platform default otherwise.
+    //
+    UINT16 Timeout;
+
+    Timeout = PcdGet16 (PcdPlatformBootTimeOut);
+    if (Timeout == 0) {
+      Timeout = 3;
+    }
+    return Timeout;
+  }
+
+  //
+  // "-boot menu=on,splash-time=N" was specified, where N is in units of
+  // milliseconds. The Intel BDS Front Page progress bar only supports whole
+  // seconds, round N up.
+  //
+  QemuFwCfgSelectItem (BootMenuWaitItem);
+  return (UINT16)((QemuFwCfgRead16 () + 999) / 1000);
 }

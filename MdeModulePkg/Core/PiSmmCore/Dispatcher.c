@@ -103,7 +103,8 @@ BOOLEAN  gRequestDispatch = FALSE;
 //
 EFI_FV_FILETYPE mSmmFileTypes[] = {
   EFI_FV_FILETYPE_SMM,
-  EFI_FV_FILETYPE_COMBINED_SMM_DXE
+  EFI_FV_FILETYPE_COMBINED_SMM_DXE,
+  EFI_FV_FILETYPE_SMM_CORE,
   //
   // Note: DXE core will process the FV image file, so skip it in SMM core
   // EFI_FV_FILETYPE_FIRMWARE_VOLUME_IMAGE
@@ -881,6 +882,20 @@ SmmDispatcher (
       if (EFI_ERROR(Status)){
         UnregisterSmramProfileImage (DriverEntry, TRUE);
         SmmFreePages(DriverEntry->ImageBuffer, DriverEntry->NumberOfPage);
+        //
+        // Uninstall LoadedImage
+        //
+        Status = gBS->UninstallProtocolInterface (
+                        DriverEntry->ImageHandle,
+                        &gEfiLoadedImageProtocolGuid,
+                        DriverEntry->LoadedImage
+                        );
+        if (!EFI_ERROR (Status)) {
+          if (DriverEntry->LoadedImage->FilePath != NULL) {
+            gBS->FreePool (DriverEntry->LoadedImage->FilePath);
+          }
+          gBS->FreePool (DriverEntry->LoadedImage);
+        }
       }
 
       REPORT_STATUS_CODE_WITH_EXTENDED_DATA (
@@ -1215,7 +1230,9 @@ SmmDriverDispatchHandler (
   EFI_SMM_DRIVER_ENTRY          *DriverEntry;
   EFI_GUID                      *AprioriFile;
   UINTN                         AprioriEntryCount;
-  UINTN                         Index;
+  UINTN                         HandleIndex;
+  UINTN                         SmmTypeIndex;
+  UINTN                         AprioriIndex;
   LIST_ENTRY                    *Link;
   UINT32                        AuthenticationStatus;
   UINTN                         SizeOfBuffer;
@@ -1232,8 +1249,8 @@ SmmDriverDispatchHandler (
     return EFI_NOT_FOUND;
   }
 
-  for (Index = 0; Index < HandleCount; Index++) {
-    FvHandle = HandleBuffer[Index];
+  for (HandleIndex = 0; HandleIndex < HandleCount; HandleIndex++) {
+    FvHandle = HandleBuffer[HandleIndex];
 
     if (FvHasBeenProcessed (FvHandle)) {
       //
@@ -1267,14 +1284,15 @@ SmmDriverDispatchHandler (
     //
     // Discover Drivers in FV and add them to the Discovered Driver List.
     // Process EFI_FV_FILETYPE_SMM type and then EFI_FV_FILETYPE_COMBINED_SMM_DXE
+    //  EFI_FV_FILETYPE_SMM_CORE is processed to produce a Loaded Image protocol for the core
     //
-    for (Index = 0; Index < sizeof (mSmmFileTypes)/sizeof (EFI_FV_FILETYPE); Index++) {
+    for (SmmTypeIndex = 0; SmmTypeIndex < sizeof (mSmmFileTypes)/sizeof (EFI_FV_FILETYPE); SmmTypeIndex++) {
       //
       // Initialize the search key
       //
       Key = 0;
       do {
-        Type = mSmmFileTypes[Index];
+        Type = mSmmFileTypes[SmmTypeIndex];
         GetNextFileStatus = Fv->GetNextFile (
                                   Fv,
                                   &Key,
@@ -1284,7 +1302,34 @@ SmmDriverDispatchHandler (
                                   &Size
                                   );
         if (!EFI_ERROR (GetNextFileStatus)) {
-          SmmAddToDriverList (Fv, FvHandle, &NameGuid);
+          if (Type == EFI_FV_FILETYPE_SMM_CORE) {
+            //
+            // If this is the SMM core fill in it's DevicePath & DeviceHandle
+            //
+            if (mSmmCoreLoadedImage->FilePath == NULL) {
+              //
+              // Maybe one special FV contains only one SMM_CORE module, so its device path must
+              // be initialized completely.
+              //
+              EfiInitializeFwVolDevicepathNode (&mFvDevicePath.File, &NameGuid);
+              SetDevicePathEndNode (&mFvDevicePath.End);
+
+              //
+              // Make an EfiBootServicesData buffer copy of FilePath
+              //
+              Status = gBS->AllocatePool (
+                              EfiBootServicesData,
+                              GetDevicePathSize ((EFI_DEVICE_PATH_PROTOCOL *)&mFvDevicePath),
+                              (VOID **)&mSmmCoreLoadedImage->FilePath
+                              );
+              ASSERT_EFI_ERROR (Status);
+              CopyMem (mSmmCoreLoadedImage->FilePath, &mFvDevicePath, GetDevicePathSize ((EFI_DEVICE_PATH_PROTOCOL *)&mFvDevicePath));
+
+              mSmmCoreLoadedImage->DeviceHandle = FvHandle;
+            }
+          } else {
+            SmmAddToDriverList (Fv, FvHandle, &NameGuid);
+          }
         }
       } while (!EFI_ERROR (GetNextFileStatus));
     }
@@ -1315,10 +1360,10 @@ SmmDriverDispatchHandler (
     // is only valid for the FV that it resided in.
     //
 
-    for (Index = 0; Index < AprioriEntryCount; Index++) {
+    for (AprioriIndex = 0; AprioriIndex < AprioriEntryCount; AprioriIndex++) {
       for (Link = mDiscoveredList.ForwardLink; Link != &mDiscoveredList; Link = Link->ForwardLink) {
         DriverEntry = CR(Link, EFI_SMM_DRIVER_ENTRY, Link, EFI_SMM_DRIVER_ENTRY_SIGNATURE);
-        if (CompareGuid (&DriverEntry->FileName, &AprioriFile[Index]) &&
+        if (CompareGuid (&DriverEntry->FileName, &AprioriFile[AprioriIndex]) &&
             (FvHandle == DriverEntry->FvHandle)) {
           DriverEntry->Dependent = FALSE;
           DriverEntry->Scheduled = TRUE;

@@ -1,7 +1,7 @@
 /** @file
   Image signature database are defined for the signed image validation.
 
-  Copyright (c) 2009 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -11,7 +11,7 @@
   WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
   @par Revision Reference:
-  GUIDs defined in UEFI 2.4 spec.
+  GUIDs defined in UEFI 2.5 spec.
 **/
 
 #ifndef __IMAGE_AUTHTICATION_H__
@@ -43,9 +43,20 @@
 
 #define SECURE_BOOT_MODE_ENABLE           1
 #define SECURE_BOOT_MODE_DISABLE          0
+///
+/// Depricated value definition for SetupMode variable 
+///
 #define SETUP_MODE                        1
 #define USER_MODE                         0
-
+///
+/// Value definition for SetupMode/DeployedMode/AuditMode variable
+///
+#define SETUP_MODE_ENABLE                 1
+#define SETUP_MODE_DISABLE                0
+#define DEPLOYED_MODE_ENABLE              1
+#define DEPLOYED_MODE_DISABLE             0
+#define AUDIT_MODE_ENABLE                 1
+#define AUDIT_MODE_DISABLE                0
 
 //***********************************************************************
 // Signature Database
@@ -318,8 +329,8 @@ typedef struct {
   ///
   /// Zero or more image signatures. If the image contained no signatures,
   /// then this field is empty.
-  ///
-  EFI_SIGNATURE_LIST            Signature;
+  /// EFI_SIGNATURE_LIST            Signature;
+  /// 
 } EFI_IMAGE_EXECUTION_INFO;
 
 

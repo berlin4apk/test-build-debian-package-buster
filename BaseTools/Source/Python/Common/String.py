@@ -1,7 +1,7 @@
 ## @file
 # This file is used to define common string related functions used in parsing process
 #
-# Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -24,6 +24,7 @@ import GlobalData
 from BuildToolError import *
 from CommonDataClass.Exceptions import *
 from Common.LongFilePathSupport import OpenLongFilePath as open
+from Common.MultipleWorkspace import MultipleWorkspace as mws
 
 gHexVerPatt = re.compile('0x[a-f0-9]{4}[a-f0-9]{4}$', re.IGNORECASE)
 gHumanReadableVerPatt = re.compile(r'([1-9][0-9]*|0)\.[0-9]{1,2}$')
@@ -272,7 +273,8 @@ def ReplaceMacro(String, MacroDefinitions={}, SelfReplacement=False, RaiseError=
                 if SelfReplacement:
                     String = String.replace("$(%s)" % Macro, '')
                 continue
-            String = String.replace("$(%s)" % Macro, MacroDefinitions[Macro])
+            if "$(%s)" % Macro not in MacroDefinitions[Macro]:
+                String = String.replace("$(%s)" % Macro, MacroDefinitions[Macro])
         # in case there's macro not defined
         if String == LastString:
             break
@@ -304,6 +306,11 @@ def NormPath(Path, Defines={}):
         # To local path format
         #
         Path = os.path.normpath(Path)
+        if Path.startswith(GlobalData.gWorkspace) and not os.path.exists(Path):
+            Path = Path[len (GlobalData.gWorkspace):]
+            if Path[0] == os.path.sep:
+                Path = Path[1:]
+            Path = mws.join(GlobalData.gWorkspace, Path)
 
     if IsRelativePath and Path[0] != '.':
         Path = os.path.join('.', Path)
@@ -701,7 +708,7 @@ def RaiseParserError(Line, Section, File, Format='', LineNo= -1):
 # @retval string A full path
 #
 def WorkspaceFile(WorkspaceDir, Filename):
-    return os.path.join(NormPath(WorkspaceDir), NormPath(Filename))
+    return mws.join(NormPath(WorkspaceDir), NormPath(Filename))
 
 ## Split string
 #

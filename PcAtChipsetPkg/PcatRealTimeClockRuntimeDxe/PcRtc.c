@@ -1,7 +1,7 @@
 /** @file
   RTC Architectural Protocol GUID as defined in DxeCis 0.96.
 
-Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -100,7 +100,6 @@ PcRtcInit (
   RTC_REGISTER_A  RegisterA;
   RTC_REGISTER_B  RegisterB;
   RTC_REGISTER_D  RegisterD;
-  UINT8           Century;
   EFI_TIME        Time;
   UINTN           DataSize;
   UINT32          TimerVar;
@@ -163,13 +162,12 @@ PcRtcInit (
   Time.Month  = RtcRead (RTC_ADDRESS_MONTH);
   Time.Year   = RtcRead (RTC_ADDRESS_YEAR);
 
-  Century = RtcRead (RTC_ADDRESS_CENTURY);
-  
   //
   // Set RTC configuration after get original time
   // The value of bit AIE should be reserved.
   //
-  RtcWrite (RTC_ADDRESS_REGISTER_B, (UINT8)(RTC_INIT_REGISTER_B | (RegisterB.Data & BIT5)));
+  RegisterB.Data = RTC_INIT_REGISTER_B | (RegisterB.Data & BIT5);
+  RtcWrite (RTC_ADDRESS_REGISTER_B, RegisterB.Data);
 
   //
   // Release RTC Lock.
@@ -201,7 +199,7 @@ PcRtcInit (
   //
   // Validate time fields
   //
-  Status = ConvertRtcTimeToEfiTime (&Time, Century, RegisterB);
+  Status = ConvertRtcTimeToEfiTime (&Time, RegisterB);
   if (!EFI_ERROR (Status)) {
     Status = RtcTimeFieldsValid (&Time);
   }
@@ -218,7 +216,7 @@ PcRtcInit (
     Time.Hour   = RTC_INIT_HOUR;
     Time.Day    = RTC_INIT_DAY;
     Time.Month  = RTC_INIT_MONTH;
-    Time.Year   = RTC_INIT_YEAR;
+    Time.Year   = PcdGet16 (PcdMinimalValidYear);
     Time.Nanosecond  = 0;
     Time.TimeZone = EFI_UNSPECIFIED_TIMEZONE;
     Time.Daylight = 0;
@@ -251,7 +249,7 @@ PcRtcInit (
   Time.Hour   = RTC_INIT_HOUR;
   Time.Day    = RTC_INIT_DAY;
   Time.Month  = RTC_INIT_MONTH;
-  Time.Year   = RTC_INIT_YEAR;
+  Time.Year   = PcdGet16 (PcdMinimalValidYear);
   Time.Nanosecond  = 0;
   Time.TimeZone = Global->SavedTimeZone;
   Time.Daylight = Global->Daylight;;
@@ -272,8 +270,8 @@ PcRtcInit (
     }
     return EFI_DEVICE_ERROR;
   }
-  
-  ConvertEfiTimeToRtcTime (&Time, RegisterB, &Century);
+
+  ConvertEfiTimeToRtcTime (&Time, RegisterB);
 
   //
   // Set the Y/M/D info to variable as it has no corresponding hw registers.
@@ -343,7 +341,6 @@ PcRtcGetTime (
 {
   EFI_STATUS      Status;
   RTC_REGISTER_B  RegisterB;
-  UINT8           Century;
 
   //
   // Check parameters for null pointer
@@ -383,8 +380,6 @@ PcRtcGetTime (
   Time->Month   = RtcRead (RTC_ADDRESS_MONTH);
   Time->Year    = RtcRead (RTC_ADDRESS_YEAR);
 
-  Century = RtcRead (RTC_ADDRESS_CENTURY);
-  
   //
   // Release RTC Lock.
   //
@@ -401,7 +396,7 @@ PcRtcGetTime (
   //
   // Make sure all field values are in correct range
   //
-  Status = ConvertRtcTimeToEfiTime (Time, Century, RegisterB);
+  Status = ConvertRtcTimeToEfiTime (Time, RegisterB);
   if (!EFI_ERROR (Status)) {
     Status = RtcTimeFieldsValid (Time);
   }
@@ -447,7 +442,6 @@ PcRtcSetTime (
   EFI_STATUS      Status;
   EFI_TIME        RtcTime;
   RTC_REGISTER_B  RegisterB;
-  UINT8           Century;
   UINT32          TimerVar;
 
   if (Time == NULL) {
@@ -506,7 +500,14 @@ PcRtcSetTime (
   RegisterB.Bits.Set  = 1;
   RtcWrite (RTC_ADDRESS_REGISTER_B, RegisterB.Data);
 
-  ConvertEfiTimeToRtcTime (&RtcTime, RegisterB, &Century);
+  //
+  // Store the century value to RTC before converting to BCD format.
+  //
+  if (Global->CenturyRtcAddress != 0) {
+    RtcWrite (Global->CenturyRtcAddress, DecimalToBcd8 ((UINT8) (RtcTime.Year / 100)));
+  }
+
+  ConvertEfiTimeToRtcTime (&RtcTime, RegisterB);
 
   RtcWrite (RTC_ADDRESS_SECONDS, RtcTime.Second);
   RtcWrite (RTC_ADDRESS_MINUTES, RtcTime.Minute);
@@ -514,7 +515,6 @@ PcRtcSetTime (
   RtcWrite (RTC_ADDRESS_DAY_OF_THE_MONTH, RtcTime.Day);
   RtcWrite (RTC_ADDRESS_MONTH, RtcTime.Month);
   RtcWrite (RTC_ADDRESS_YEAR, (UINT8) RtcTime.Year);
-  RtcWrite (RTC_ADDRESS_CENTURY, Century);
 
   //
   // Allow updates of the RTC registers
@@ -564,7 +564,6 @@ PcRtcGetWakeupTime (
   EFI_STATUS      Status;
   RTC_REGISTER_B  RegisterB;
   RTC_REGISTER_C  RegisterC;
-  UINT8           Century;
   EFI_TIME        RtcTime;
   UINTN           DataSize;
 
@@ -612,8 +611,6 @@ PcRtcGetWakeupTime (
   Time->TimeZone = Global->SavedTimeZone;
   Time->Daylight = Global->Daylight;
 
-  Century = RtcRead (RTC_ADDRESS_CENTURY);
-
   //
   // Get the alarm info from variable
   //
@@ -644,7 +641,7 @@ PcRtcGetWakeupTime (
   //
   // Make sure all field values are in correct range
   //
-  Status = ConvertRtcTimeToEfiTime (Time, Century, RegisterB);
+  Status = ConvertRtcTimeToEfiTime (Time, RegisterB);
   if (!EFI_ERROR (Status)) {
     Status = RtcTimeFieldsValid (Time);
   }
@@ -680,7 +677,6 @@ PcRtcSetWakeupTime (
   EFI_STATUS            Status;
   EFI_TIME              RtcTime;
   RTC_REGISTER_B        RegisterB;
-  UINT8                 Century;
   EFI_TIME_CAPABILITIES Capabilities;
 
   ZeroMem (&RtcTime, sizeof (RtcTime));
@@ -736,7 +732,7 @@ PcRtcSetWakeupTime (
   RegisterB.Data = RtcRead (RTC_ADDRESS_REGISTER_B);
 
   if (Enable) {
-    ConvertEfiTimeToRtcTime (&RtcTime, RegisterB, &Century);
+    ConvertEfiTimeToRtcTime (&RtcTime, RegisterB);
   } else {
     //
     // if the alarm is disable, record the current setting.
@@ -837,7 +833,6 @@ CheckAndConvertBcd8ToDecimal8 (
 
   @param   Time       On input, the time data read from RTC to convert
                       On output, the time converted to UEFI format
-  @param   Century    Value of century read from RTC.
   @param   RegisterB  Value of Register B of RTC, indicating data mode
                       and hour format.
 
@@ -848,11 +843,11 @@ CheckAndConvertBcd8ToDecimal8 (
 EFI_STATUS
 ConvertRtcTimeToEfiTime (
   IN OUT EFI_TIME        *Time,
-  IN     UINT8           Century,
   IN     RTC_REGISTER_B  RegisterB
   )
 {
   BOOLEAN IsPM;
+  UINT8   Century;
 
   if ((Time->Hour & 0x80) != 0) {
     IsPM = TRUE;
@@ -870,14 +865,21 @@ ConvertRtcTimeToEfiTime (
     Time->Minute  = CheckAndConvertBcd8ToDecimal8 (Time->Minute);
     Time->Second  = CheckAndConvertBcd8ToDecimal8 (Time->Second);
   }
-  Century       = CheckAndConvertBcd8ToDecimal8 (Century);
 
   if (Time->Year == 0xff || Time->Month == 0xff || Time->Day == 0xff ||
-      Time->Hour == 0xff || Time->Minute == 0xff || Time->Second == 0xff ||
-      Century == 0xff) {
+      Time->Hour == 0xff || Time->Minute == 0xff || Time->Second == 0xff) {
     return EFI_INVALID_PARAMETER;
   }
 
+  //
+  // For minimal/maximum year range [1970, 2069],
+  //   Century is 19 if RTC year >= 70,
+  //   Century is 20 otherwise.
+  //
+  Century = (UINT8) (PcdGet16 (PcdMinimalValidYear) / 100);
+  if (Time->Year < PcdGet16 (PcdMinimalValidYear) % 100) {
+    Century++;
+  }
   Time->Year = (UINT16) (Century * 100 + Time->Year);
 
   //
@@ -955,8 +957,8 @@ RtcTimeFieldsValid (
   IN EFI_TIME *Time
   )
 {
-  if (Time->Year < 1998 ||
-      Time->Year > 2099 ||
+  if (Time->Year < PcdGet16 (PcdMinimalValidYear) ||
+      Time->Year > PcdGet16 (PcdMaximalValidYear) ||
       Time->Month < 1 ||
       Time->Month > 12 ||
       (!DayValid (Time)) ||
@@ -1053,14 +1055,11 @@ IsLeapYear (
   @param   Time       On input, the time data read from UEFI to convert
                       On output, the time converted to RTC format
   @param   RegisterB  Value of Register B of RTC, indicating data mode
-  @param   Century    It is set according to EFI_TIME Time.
-
 **/
 VOID
 ConvertEfiTimeToRtcTime (
   IN OUT EFI_TIME        *Time,
-  IN     RTC_REGISTER_B  RegisterB,
-     OUT UINT8           *Century
+  IN     RTC_REGISTER_B  RegisterB
   )
 {
   BOOLEAN IsPM;
@@ -1081,10 +1080,8 @@ ConvertEfiTimeToRtcTime (
     }
   }
   //
-  // Set the Time/Date/Daylight Savings values.
+  // Set the Time/Date values.
   //
-  *Century    = DecimalToBcd8 ((UINT8) (Time->Year / 100));
-
   Time->Year  = (UINT16) (Time->Year % 100);
 
   if (RegisterB.Bits.Dm == 0) {
@@ -1208,3 +1205,108 @@ IsWithinOneDay (
   return Adjacent;
 }
 
+/**
+  This function find ACPI table with the specified signature in RSDT or XSDT.
+
+  @param Sdt              ACPI RSDT or XSDT.
+  @param Signature        ACPI table signature.
+  @param TablePointerSize Size of table pointer: 4 or 8.
+
+  @return ACPI table or NULL if not found.
+**/
+VOID *
+ScanTableInSDT (
+  IN EFI_ACPI_DESCRIPTION_HEADER    *Sdt,
+  IN UINT32                         Signature,
+  IN UINTN                          TablePointerSize
+  )
+{
+  UINTN                          Index;
+  UINTN                          EntryCount;
+  UINTN                          EntryBase;
+  EFI_ACPI_DESCRIPTION_HEADER    *Table;
+
+  EntryCount = (Sdt->Length - sizeof (EFI_ACPI_DESCRIPTION_HEADER)) / TablePointerSize;
+
+  EntryBase = (UINTN) (Sdt + 1);
+  for (Index = 0; Index < EntryCount; Index++) {
+    //
+    // When TablePointerSize is 4 while sizeof (VOID *) is 8, make sure the upper 4 bytes are zero.
+    //
+    Table = 0;
+    CopyMem (&Table, (VOID *) (EntryBase + Index * TablePointerSize), TablePointerSize);
+    if (Table->Signature == Signature) {
+      return Table;
+    }
+  }
+
+  return NULL;
+}
+
+/**
+  Notification function of ACPI Table change.
+
+  This is a notification function registered on ACPI Table change event.
+  It saves the Century address stored in ACPI FADT table.
+
+  @param  Event        Event whose notification function is being invoked.
+  @param  Context      Pointer to the notification function's context.
+
+**/
+VOID
+EFIAPI
+PcRtcAcpiTableChangeCallback (
+  IN EFI_EVENT        Event,
+  IN VOID             *Context
+  )
+{
+  EFI_STATUS                                    Status;
+  EFI_ACPI_2_0_ROOT_SYSTEM_DESCRIPTION_POINTER  *Rsdp;
+  EFI_ACPI_DESCRIPTION_HEADER                   *Rsdt;
+  EFI_ACPI_DESCRIPTION_HEADER                   *Xsdt;
+  EFI_ACPI_2_0_FIXED_ACPI_DESCRIPTION_TABLE     *Fadt;
+  EFI_TIME                                      Time;
+  UINT8                                         Century;
+
+  Status = EfiGetSystemConfigurationTable (&gEfiAcpiTableGuid, (VOID **) &Rsdp);
+  if (EFI_ERROR (Status)) {
+    Status = EfiGetSystemConfigurationTable (&gEfiAcpi10TableGuid, (VOID **) &Rsdp);
+  }
+
+  if (EFI_ERROR (Status)) {
+    return;
+  }
+
+  ASSERT (Rsdp != NULL);
+
+  //
+  // Find FADT in XSDT
+  //
+  Fadt = NULL;
+  if (Rsdp->Revision >= EFI_ACPI_2_0_ROOT_SYSTEM_DESCRIPTION_POINTER_REVISION) {
+    Xsdt = (EFI_ACPI_DESCRIPTION_HEADER *) (UINTN) Rsdp->XsdtAddress;
+    Fadt = ScanTableInSDT (Xsdt, EFI_ACPI_2_0_FIXED_ACPI_DESCRIPTION_TABLE_SIGNATURE, sizeof (UINT64));
+  }
+
+  if (Fadt == NULL) {
+    //
+    // Find FADT in RSDT
+    //
+    Rsdt = (EFI_ACPI_DESCRIPTION_HEADER *) (UINTN) Rsdp->RsdtAddress;
+    Fadt = ScanTableInSDT (Rsdt, EFI_ACPI_2_0_FIXED_ACPI_DESCRIPTION_TABLE_SIGNATURE, sizeof (UINT32));
+  }
+
+  if ((Fadt != NULL) &&
+      (Fadt->Century > RTC_ADDRESS_REGISTER_D) && (Fadt->Century < 0x80) &&
+      (mModuleGlobal.CenturyRtcAddress != Fadt->Century)
+      ) {
+    mModuleGlobal.CenturyRtcAddress = Fadt->Century;
+    Status = PcRtcGetTime (&Time, NULL, &mModuleGlobal);
+    if (!EFI_ERROR (Status)) {
+      Century = (UINT8) (Time.Year / 100);
+      Century = DecimalToBcd8 (Century);
+      DEBUG ((EFI_D_INFO, "PcRtc: Write 0x%x to CMOS location 0x%x\n", Century, mModuleGlobal.CenturyRtcAddress));
+      RtcWrite (mModuleGlobal.CenturyRtcAddress, Century);
+    }
+  }
+}

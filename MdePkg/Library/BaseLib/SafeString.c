@@ -141,7 +141,7 @@ StrnLenS (
   // String then StrnLenS returns MaxSize. At most the first MaxSize characters of String shall
   // be accessed by StrnLenS.
   //
-  for (Length = 0; (*String != 0) && (Length < MaxSize); String++, Length++) {
+  for (Length = 0; (Length < MaxSize) && (*String != 0); String++, Length++) {
     ;
   }
   return Length;
@@ -153,6 +153,7 @@ StrnLenS (
 
   If Destination is not aligned on a 16-bit boundary, then ASSERT().
   If Source is not aligned on a 16-bit boundary, then ASSERT().
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Unicode string.
   @param  DestMax                  The maximum number of Destination Unicode
@@ -230,6 +231,7 @@ StrCpyS (
 
   If Length > 0 and Destination is not aligned on a 16-bit boundary, then ASSERT().
   If Length > 0 and Source is not aligned on a 16-bit boundary, then ASSERT().
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Unicode string.
   @param  DestMax                  The maximum number of Destination Unicode
@@ -318,6 +320,7 @@ StrnCpyS (
 
   If Destination is not aligned on a 16-bit boundary, then ASSERT().
   If Source is not aligned on a 16-bit boundary, then ASSERT().
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Unicode string.
   @param  DestMax                  The maximum number of Destination Unicode
@@ -413,7 +416,8 @@ StrCatS (
   set to null.
 
   If Destination is not aligned on a 16-bit boundary, then ASSERT().
-  If and Source is not aligned on a 16-bit boundary, then ASSERT().
+  If Source is not aligned on a 16-bit boundary, then ASSERT().
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Unicode string.
   @param  DestMax                  The maximum number of Destination Unicode
@@ -547,7 +551,7 @@ AsciiStrnLenS (
   // String then AsciiStrnLenS returns MaxSize. At most the first MaxSize characters of String shall
   // be accessed by AsciiStrnLenS.
   //
-  for (Length = 0; (*String != 0) && (Length < MaxSize); String++, Length++) {
+  for (Length = 0; (Length < MaxSize) && (*String != 0); String++, Length++) {
     ;
   }
   return Length;
@@ -556,6 +560,8 @@ AsciiStrnLenS (
 /**
   Copies the string pointed to by Source (including the terminating null char)
   to the array pointed to by Destination.
+
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Ascii string.
   @param  DestMax                  The maximum number of Destination Ascii
@@ -627,6 +633,8 @@ AsciiStrCpyS (
   Copies not more than Length successive char from the string pointed to by
   Source to the array pointed to by Destination. If no null char is copied from
   Source, then Destination[Length] is always set to null.
+
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Ascii string.
   @param  DestMax                  The maximum number of Destination Ascii
@@ -709,6 +717,8 @@ AsciiStrnCpyS (
 /**
   Appends a copy of the string pointed to by Source (including the terminating
   null char) to the end of the string pointed to by Destination.
+
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Ascii string.
   @param  DestMax                  The maximum number of Destination Ascii
@@ -799,6 +809,8 @@ AsciiStrCatS (
   Source to the end of the string pointed to by Destination. If no null char is
   copied from Source, then Destination[StrLen(Destination) + Length] is always
   set to null.
+
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Ascii string.
   @param  DestMax                  The maximum number of Destination Ascii

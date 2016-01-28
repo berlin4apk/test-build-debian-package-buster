@@ -1,7 +1,8 @@
 /** @file
   The implementation for Ping shell command.
 
-  Copyright (c) 2009 - 2012, Intel Corporation. All rights reserved.<BR>
+  (C) Copyright 2015 Hewlett-Packard Development Company, L.P.<BR>
+  Copyright (c) 2009 - 2015, Intel Corporation. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -17,7 +18,7 @@
 
 #define PING_IP4_COPY_ADDRESS(Dest, Src) (CopyMem ((Dest), (Src), sizeof (EFI_IPv4_ADDRESS)))
 
-UINT64          CurrentTick = 0;
+UINT64          mCurrentTick = 0;
 
 //
 // Function templates to match the IPv4 and IPv6 commands that we use.
@@ -234,25 +235,25 @@ ReadTime (
 
   ASSERT (gCpu != NULL);
 
-  Status = gCpu->GetTimerValue (gCpu, 0, &CurrentTick, &TimerPeriod);
+  Status = gCpu->GetTimerValue (gCpu, 0, &mCurrentTick, &TimerPeriod);
   if (EFI_ERROR (Status)) {
     //
     // The WinntGetTimerValue will return EFI_UNSUPPORTED. Set the
     // TimerPeriod by ourselves.
     //
-    CurrentTick += 1000000;
+    mCurrentTick += 1000000;
   }
   
-  return CurrentTick;
+  return mCurrentTick;
 }
 
 
 /**
-  Get and caculate the frequency in tick/ms.
-  The result is saved in the globle variable mFrequency
+  Get and calculate the frequency in ticks/ms.
+  The result is saved in the global variable mFrequency
 
-  @retval EFI_SUCCESS    Caculated the frequency successfully.
-  @retval Others         Failed to caculate the frequency.
+  @retval EFI_SUCCESS    Calculated the frequency successfully.
+  @retval Others         Failed to calculate the frequency.
 
 **/
 EFI_STATUS
@@ -278,7 +279,7 @@ GetFrequency (
 
   //
   // The timer period is in femtosecond (1 femtosecond is 1e-15 second).
-  // So 1e+12 is divided by timer period to produce the freq in tick/ms.
+  // So 1e+12 is divided by timer period to produce the freq in ticks/ms.
   //
   mFrequency = DivU64x64Remainder (1000000000000ULL, TimerPeriod, NULL);
 
@@ -286,7 +287,7 @@ GetFrequency (
 }
 
 /**
-  Caculate a duration in ms.
+  Calculate a duration in ms.
 
   @param[in]  Begin     The start point of time.
   @param[in]  End       The end point of time.
@@ -597,7 +598,7 @@ PingGenerateToken (
   //
   Request->Type        = (UINT8)(Private->IpChoice==PING_IP_CHOICE_IP6?ICMP_V6_ECHO_REQUEST:ICMP_V4_ECHO_REQUEST);
   Request->Code        = 0;
-  Request->SequenceNum = SequenceNum;
+  Request->SequenceNum = SequenceNum; 
   Request->Identifier  = 0;
   Request->Checksum    = 0;
 
@@ -605,6 +606,7 @@ PingGenerateToken (
   // Assembly token for transmit.
   //
   if (Private->IpChoice==PING_IP_CHOICE_IP6) {
+    Request->TimeStamp   = TimeStamp;
     ((EFI_IP6_TRANSMIT_DATA*)TxData)->ExtHdrsLength                   = 0;
     ((EFI_IP6_TRANSMIT_DATA*)TxData)->ExtHdrs                         = NULL;
     ((EFI_IP6_TRANSMIT_DATA*)TxData)->OverrideData                    = 0;
@@ -803,11 +805,6 @@ Ping6OnTimerRoutine (
       RemoveEntryList (&TxInfo->Link);
       PingDestroyTxInfo (TxInfo, Private->IpChoice);
 
-      //
-      // We dont need to wait for this some other time...
-      //
-      Private->RxCount++;
-
       if (IsListEmpty (&Private->TxList) && (Private->TxCount == Private->SendNum)) {
         //
         // All the left icmp6 echo request in the list timeout.
@@ -910,7 +907,7 @@ PingCreateIpInstance (
     if (NetIp6IsLinkLocalAddr ((EFI_IPv6_ADDRESS*)&Private->DstAddress) &&
         NetIp6IsUnspecifiedAddr ((EFI_IPv6_ADDRESS*)&Private->SrcAddress) &&
         (HandleNum > 1)) {
-      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PROBLEM), gShellNetwork1HiiHandle, mSrcString);
+      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PARAM_INV), gShellNetwork1HiiHandle, L"ping", mSrcString);  
       Status = EFI_INVALID_PARAMETER;
       goto ON_ERROR;
     }
@@ -919,7 +916,7 @@ PingCreateIpInstance (
     if (PingNetIp4IsLinkLocalAddr ((EFI_IPv4_ADDRESS*)&Private->DstAddress) &&
         PingNetIp4IsUnspecifiedAddr ((EFI_IPv4_ADDRESS*)&Private->SrcAddress) &&
         (HandleNum > 1)) {
-      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PROBLEM), gShellNetwork1HiiHandle, mSrcString);
+      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PARAM_INV), gShellNetwork1HiiHandle, L"ping", mSrcString);  
       Status = EFI_INVALID_PARAMETER;
       goto ON_ERROR;
     }
@@ -954,7 +951,7 @@ PingCreateIpInstance (
       //
       Status = gBS->HandleProtocol (
                       HandleBuffer[HandleIndex],
-                      Private->IpChoice == PING_IP_CHOICE_IP6?&gEfiIp6ConfigProtocolGuid:&gEfiIp4ConfigProtocolGuid,
+                      Private->IpChoice == PING_IP_CHOICE_IP6?&gEfiIp6ConfigProtocolGuid:&gEfiIp4Config2ProtocolGuid,
                       (VOID **) &IpXCfg
                       );
 
@@ -972,8 +969,9 @@ PingCreateIpInstance (
                            NULL
                            );
       } else {
-        Status = ((EFI_IP4_CONFIG_PROTOCOL*)IpXCfg)->GetData (
+        Status = ((EFI_IP4_CONFIG2_PROTOCOL*)IpXCfg)->GetData (
                            IpXCfg,
+                           Ip4Config2DataTypeInterfaceInfo,
                            &IfInfoSize,
                            NULL
                            );
@@ -1008,8 +1006,9 @@ PingCreateIpInstance (
                            IpXInterfaceInfo
                            );
       } else {
-        Status = ((EFI_IP4_CONFIG_PROTOCOL*)IpXCfg)->GetData (
+        Status = ((EFI_IP4_CONFIG2_PROTOCOL*)IpXCfg)->GetData (
                            IpXCfg,
+                           Ip4Config2DataTypeInterfaceInfo,
                            &IfInfoSize,
                            IpXInterfaceInfo
                            );
@@ -1044,7 +1043,7 @@ PingCreateIpInstance (
         //
         // IP4 address check
         //
-        if (EFI_IP4_EQUAL (&Private->SrcAddress, &((EFI_IP4_IPCONFIG_DATA*)IpXInterfaceInfo)->StationAddress)) {
+        if (EFI_IP4_EQUAL (&Private->SrcAddress, &((EFI_IP4_CONFIG2_INTERFACE_INFO*)IpXInterfaceInfo)->StationAddress)) {
           //
           // Match a certain interface address.
           //
@@ -1061,7 +1060,7 @@ PingCreateIpInstance (
   //
 
   if (HandleIndex == HandleNum) {
-    ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PROBLEM), gShellNetwork1HiiHandle, mSrcString);
+    ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_PING_CONFIGD_NIC_NF), gShellNetwork1HiiHandle, L"ping");  
     Status = EFI_NOT_FOUND;
     goto ON_ERROR;
   }
@@ -1136,11 +1135,6 @@ PingCreateIpInstance (
     //
     // Configure the ip4 instance for icmp4 packet exchange.
     //
-//    PING_IP4_COPY_ADDRESS (&Ip4Config.StationAddress,     &Private->SrcAddress);
-//    Ip4Config.SubnetMask.Addr[0] = 0xFF;
-//    Ip4Config.SubnetMask.Addr[1] = 0xFF;
-//    Ip4Config.SubnetMask.Addr[2] = 0xFF;
-//    Ip4Config.SubnetMask.Addr[3] = 0x00;
     Ip4Config.DefaultProtocol   = 1;
     Ip4Config.AcceptAnyProtocol = FALSE;
     Ip4Config.AcceptBroadcast   = FALSE;
@@ -1321,7 +1315,7 @@ ShellPing (
     } else if (Status == RETURN_NO_MAPPING) {
       ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_PING_NOROUTE_FOUND), gShellNetwork1HiiHandle, mDstString, mSrcString);
     } else {
-      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_PING_NETWORK_ERROR), gShellNetwork1HiiHandle, Status);
+      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_PING_NETWORK_ERROR), gShellNetwork1HiiHandle, L"ping", Status);  
     }
 
     goto ON_EXIT;
@@ -1428,6 +1422,10 @@ ON_EXIT:
 
   @param[in] ImageHandle  Handle to the Image (NULL if Internal).
   @param[in] SystemTable  Pointer to the System Table (NULL if Internal).
+
+  @retval SHELL_SUCCESS  The ping processed successfullly.
+  @retval others         The ping processed unsuccessfully.
+  
 **/
 SHELL_STATUS
 EFIAPI
@@ -1446,6 +1444,7 @@ ShellCommandRunPing (
   CONST CHAR16        *ValueStr;
   UINTN               NonOptionCount;
   UINT32              IpChoice;
+  CHAR16              *ProblemParam;
 
   //
   // we use IPv6 buffers to hold items... 
@@ -1457,10 +1456,11 @@ ShellCommandRunPing (
   IpChoice = PING_IP_CHOICE_IP4;
 
   ShellStatus = SHELL_SUCCESS;
+  ProblemParam = NULL;
 
-  Status = ShellCommandLineParseEx (PingParamList, &ParamPackage, NULL, TRUE, FALSE);
+  Status = ShellCommandLineParseEx (PingParamList, &ParamPackage, &ProblemParam, TRUE, FALSE);
   if (EFI_ERROR(Status)) {
-    ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PARAM_INV), gShellNetwork1HiiHandle);
+    ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PARAM_INV), gShellNetwork1HiiHandle, L"ping", ProblemParam);
     ShellStatus = SHELL_INVALID_PARAMETER;
     goto ON_EXIT;
   }
@@ -1480,7 +1480,7 @@ ShellCommandRunPing (
     // ShellStrToUintn will return 0 when input is 0 or an invalid input string.
     //
     if ((SendNumber == 0) || (SendNumber > MAX_SEND_NUMBER)) {
-      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PROBLEM), gShellNetwork1HiiHandle, ValueStr);
+      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PARAM_INV), gShellNetwork1HiiHandle, L"ping", ValueStr);  
       ShellStatus = SHELL_INVALID_PARAMETER;
       goto ON_EXIT;
     }
@@ -1498,7 +1498,7 @@ ShellCommandRunPing (
     // ShellStrToUintn will return 0 when input is 0 or an invalid input string.
     //
     if ((BufferSize < 16) || (BufferSize > MAX_BUFFER_SIZE)) {
-      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PROBLEM), gShellNetwork1HiiHandle, ValueStr);
+      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PARAM_INV), gShellNetwork1HiiHandle, L"ping", ValueStr);  
       ShellStatus = SHELL_INVALID_PARAMETER;
       goto ON_EXIT;
     }
@@ -1521,7 +1521,7 @@ ShellCommandRunPing (
       Status = NetLibStrToIp4 (ValueStr, (EFI_IPv4_ADDRESS*)&SrcAddress);
     }
     if (EFI_ERROR (Status)) {
-      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PROBLEM), gShellNetwork1HiiHandle, ValueStr);
+      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PARAM_INV), gShellNetwork1HiiHandle, L"ping", ValueStr);  
       ShellStatus = SHELL_INVALID_PARAMETER;
       goto ON_EXIT;
     }
@@ -1531,12 +1531,12 @@ ShellCommandRunPing (
   //
   NonOptionCount = ShellCommandLineGetCount(ParamPackage);
   if (NonOptionCount < 2) {
-    ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_TOO_FEW), gShellNetwork1HiiHandle);
+    ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_TOO_FEW), gShellNetwork1HiiHandle, L"ping");  
     ShellStatus = SHELL_INVALID_PARAMETER;
     goto ON_EXIT;
   }
   if (NonOptionCount > 2) {
-    ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_TOO_MANY), gShellNetwork1HiiHandle);
+    ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_TOO_MANY), gShellNetwork1HiiHandle, L"ping");  
     ShellStatus = SHELL_INVALID_PARAMETER;
     goto ON_EXIT;
   }
@@ -1549,7 +1549,7 @@ ShellCommandRunPing (
       Status = NetLibStrToIp4 (ValueStr, (EFI_IPv4_ADDRESS*)&DstAddress);
     }
     if (EFI_ERROR (Status)) {
-      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PROBLEM), gShellNetwork1HiiHandle, ValueStr);
+      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_GEN_PARAM_INV), gShellNetwork1HiiHandle, L"ping", ValueStr);  
       ShellStatus = SHELL_INVALID_PARAMETER;
       goto ON_EXIT;
     }

@@ -2,7 +2,7 @@
   This EFI_PXE_BASE_CODE_PROTOCOL and EFI_LOAD_FILE_PROTOCOL.
   interfaces declaration.
 
-  Copyright (c) 2007 - 2012, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -24,6 +24,7 @@
 #include <Protocol/NetworkInterfaceIdentifier.h>
 #include <Protocol/Arp.h>
 #include <Protocol/Ip4.h>
+#include <Protocol/Ip4Config2.h>
 #include <Protocol/Ip6.h>
 #include <Protocol/Ip6Config.h>
 #include <Protocol/Udp4.h>
@@ -37,6 +38,7 @@
 #include <Protocol/PxeBaseCodeCallBack.h>
 #include <Protocol/ServiceBinding.h>
 #include <Protocol/DriverBinding.h>
+#include <Protocol/AdapterInformation.h>
 
 #include <Library/DebugLib.h>
 #include <Library/BaseMemoryLib.h>
@@ -115,6 +117,7 @@ struct _PXEBC_PRIVATE_DATA {
 
   EFI_ARP_PROTOCOL                          *Arp;
   EFI_IP4_PROTOCOL                          *Ip4;
+  EFI_IP4_CONFIG2_PROTOCOL                  *Ip4Config2;
   EFI_DHCP4_PROTOCOL                        *Dhcp4;
   EFI_MTFTP4_PROTOCOL                       *Mtftp4;
   EFI_UDP4_PROTOCOL                         *Udp4Read;

@@ -1,7 +1,7 @@
 /** @file
   This driver will register two callbacks to call fsp's notifies.
 
-  Copyright (c) 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2014 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -23,6 +23,22 @@
 #include <Library/UefiLib.h>
 #include <Library/FspApiLib.h>
 
+/**
+  Relocate this image under 4G memory.
+
+  @param  ImageHandle  Handle of driver image.
+  @param  SystemTable  Pointer to system table.
+
+  @retval EFI_SUCCESS  Image successfully relocated.
+  @retval EFI_ABORTED  Failed to relocate image.
+
+**/
+EFI_STATUS
+RelocateImageUnder4GIfNeeded (
+  IN EFI_HANDLE           ImageHandle,
+  IN EFI_SYSTEM_TABLE     *SystemTable
+  );
+
 FSP_INFO_HEADER *mFspHeader = NULL;
 
 /**
@@ -40,7 +56,6 @@ OnPciEnumerationComplete (
 {
   NOTIFY_PHASE_PARAMS NotifyPhaseParams;
   EFI_STATUS          Status;
-  FSP_STATUS          FspStatus;
   VOID                *Interface;
 
   //
@@ -57,9 +72,9 @@ OnPciEnumerationComplete (
   }
 
   NotifyPhaseParams.Phase = EnumInitPhaseAfterPciEnumeration;
-  FspStatus = CallFspNotifyPhase (mFspHeader, &NotifyPhaseParams);
-  if (FspStatus != FSP_SUCCESS) {
-    DEBUG((DEBUG_ERROR, "FSP NotifyPhase AfterPciEnumeration failed, status: 0x%x\n", FspStatus));
+  Status = CallFspNotifyPhase (mFspHeader, &NotifyPhaseParams);
+  if (Status != EFI_SUCCESS) {
+    DEBUG((DEBUG_ERROR, "FSP NotifyPhase AfterPciEnumeration failed, status: 0x%x\n", Status));
   } else {
     DEBUG((DEBUG_INFO, "FSP NotifyPhase AfterPciEnumeration Success.\n"));
   }
@@ -84,14 +99,14 @@ OnReadyToBoot (
   )
 {
   NOTIFY_PHASE_PARAMS NotifyPhaseParams;
-  FSP_STATUS          FspStatus;
+  EFI_STATUS          Status;
 
   gBS->CloseEvent (Event);
 
   NotifyPhaseParams.Phase = EnumInitPhaseReadyToBoot;
-  FspStatus = CallFspNotifyPhase (mFspHeader, &NotifyPhaseParams);
-  if (FspStatus != FSP_SUCCESS) {
-    DEBUG((DEBUG_ERROR, "FSP NotifyPhase ReadyToBoot failed, status: 0x%x\n", FspStatus));
+  Status = CallFspNotifyPhase (mFspHeader, &NotifyPhaseParams);
+  if (Status != EFI_SUCCESS) {
+    DEBUG((DEBUG_ERROR, "FSP NotifyPhase ReadyToBoot failed, status: 0x%x\n", Status));
   } else {
     DEBUG((DEBUG_INFO, "FSP NotifyPhase ReadyToBoot Success.\n"));
   }
@@ -121,7 +136,19 @@ FspDxeEntryPoint (
   VOID       *Registration;
   EFI_EVENT  ProtocolNotifyEvent;
 
-  mFspHeader = FspFindFspHeader (PcdGet32 (PcdFlashFvFspBase));
+  //
+  // Load this driver's image to memory
+  //
+  Status = RelocateImageUnder4GIfNeeded (ImageHandle, SystemTable);
+  if (EFI_ERROR (Status)) {
+    return EFI_SUCCESS;
+  }
+
+  if (PcdGet32 (PcdFlashFvSecondFspBase) == 0) {
+    mFspHeader = FspFindFspHeader (PcdGet32 (PcdFlashFvFspBase));
+  } else {
+    mFspHeader = FspFindFspHeader (PcdGet32 (PcdFlashFvSecondFspBase));
+  }
   DEBUG ((DEBUG_INFO, "FspHeader - 0x%x\n", mFspHeader));
   if (mFspHeader == NULL) {
     return EFI_DEVICE_ERROR;

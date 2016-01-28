@@ -1,7 +1,7 @@
 ## @file
 #  Base Library implementation.
 #
-#  Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
 #  Portions copyright (c) 2008 - 2009, Apple Inc. All rights reserved.<BR>
 #  Portions copyright (c) 2011 - 2013, ARM Ltd. All rights reserved.<BR>
 #
@@ -21,7 +21,7 @@
   MODULE_UNI_FILE                = BaseLib.uni
   FILE_GUID                      = 27d67720-ea68-48ae-93da-a3a074c90e30
   MODULE_TYPE                    = BASE
-  VERSION_STRING                 = 1.0
+  VERSION_STRING                 = 1.1
   LIBRARY_CLASS                  = BaseLib 
 
 #
@@ -63,6 +63,7 @@
   LinkedList.c
   SafeString.c
   String.c
+  FilePaths.c
   BaseLibInternals.h
 
 [Sources.Ia32]
@@ -158,6 +159,7 @@
   Ia32/EnablePaging64.asm | MSFT
   Ia32/EnableCache.c | MSFT
   Ia32/DisableCache.c | MSFT
+  Ia32/RdRand.asm | MSFT
 
   Ia32/Wbinvd.asm | INTEL 
   Ia32/WriteMm7.asm | INTEL 
@@ -251,9 +253,11 @@
   Ia32/EnablePaging64.asm | INTEL
   Ia32/EnableCache.asm | INTEL
   Ia32/DisableCache.asm | INTEL
+  Ia32/RdRand.asm | INTEL
 
   Ia32/GccInline.c | GCC
   Ia32/Thunk16.nasm | GCC 
+  Ia32/Thunk16.S | XCODE 
   Ia32/EnableDisableInterrupts.S | GCC 
   Ia32/EnablePaging64.S | GCC 
   Ia32/DisablePaging32.S | GCC 
@@ -278,6 +282,7 @@
   Ia32/LShiftU64.S | GCC 
   Ia32/EnableCache.S | GCC
   Ia32/DisableCache.S | GCC
+  Ia32/RdRand.S | GCC
 
   Ia32/DivS64x64Remainder.c
   Ia32/InternalSwitchStack.c | MSFT
@@ -382,10 +387,12 @@
   X64/CpuBreakpoint.c | MSFT 
   X64/WriteMsr64.c | MSFT 
   X64/ReadMsr64.c | MSFT 
+  X64/RdRand.asm | MSFT
 
   X64/CpuBreakpoint.asm | INTEL 
   X64/WriteMsr64.asm | INTEL 
   X64/ReadMsr64.asm | INTEL 
+  X64/RdRand.asm | INTEL
 
   X64/Non-existing.c
   Math64.c
@@ -407,6 +414,7 @@
   X86DisablePaging32.c
   X64/GccInline.c | GCC
   X64/Thunk16.nasm | GCC 
+  X64/Thunk16.S | XCODE 
   X64/SwitchStack.S | GCC 
   X64/SetJump.S | GCC 
   X64/LongJump.S | GCC 
@@ -416,6 +424,7 @@
   X64/CpuIdEx.S | GCC 
   X64/EnableCache.S | GCC
   X64/DisableCache.S | GCC
+  X64/RdRand.S | GCC
   ChkStkGcc.c  | GCC 
 
 [Sources.IPF]

@@ -1,7 +1,7 @@
 /** @file
   This implementation of EFI_PXE_BASE_CODE_PROTOCOL and EFI_LOAD_FILE_PROTOCOL.
 
-  Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -204,6 +204,18 @@ EfiPxeBcStart (
     if (EFI_ERROR (Status)) {
       goto ON_ERROR;
     }
+
+    //
+    //DHCP4 service allows only one of its children to be configured in  
+    //the active state, If the DHCP4 D.O.R.A started by IP4 auto  
+    //configuration and has not been completed, the Dhcp4 state machine 
+    //will not be in the right state for the PXE to start a new round D.O.R.A. 
+    //so we need to switch it's policy to static.
+    //
+    Status = PxeBcSetIp4Policy (Private);
+    if (EFI_ERROR (Status)) {
+      goto ON_ERROR;
+    }
   }
 
   //
@@ -346,6 +358,7 @@ EfiPxeBcStop (
       gBS->CloseEvent (Private->IcmpToken.Event);
       Private->IcmpToken.Event = NULL;
     }
+    Private->BootFileName = NULL;
   }
 
   gBS->CloseEvent (Private->UdpTimeOutEvent);
@@ -1264,7 +1277,7 @@ EfiPxeBcUdpRead (
   UINTN                       FragmentIndex;
   UINT8                       *FragmentBuffer;
 
-  if (This == NULL || DestIp == NULL || DestPort == NULL) {
+  if (This == NULL) {
     return EFI_INVALID_PARAMETER;
   }
 
@@ -1275,9 +1288,9 @@ EfiPxeBcUdpRead (
   Udp4Rx    = NULL;
   Udp6Rx    = NULL;
 
-  if (((OpFlags & EFI_PXE_BASE_CODE_UDP_OPFLAGS_ANY_DEST_PORT) != 0 && DestPort == NULL) ||
-      ((OpFlags & EFI_PXE_BASE_CODE_UDP_OPFLAGS_ANY_SRC_IP) != 0 && SrcIp == NULL) ||
-      ((OpFlags & EFI_PXE_BASE_CODE_UDP_OPFLAGS_ANY_SRC_PORT) != 0 && SrcPort == NULL)) {
+  if (((OpFlags & EFI_PXE_BASE_CODE_UDP_OPFLAGS_ANY_DEST_PORT) == 0 && DestPort == NULL) ||
+      ((OpFlags & EFI_PXE_BASE_CODE_UDP_OPFLAGS_ANY_SRC_IP) == 0 && SrcIp == NULL) ||
+      ((OpFlags & EFI_PXE_BASE_CODE_UDP_OPFLAGS_ANY_SRC_PORT) == 0 && SrcPort == NULL)) {
     return EFI_INVALID_PARAMETER;
   }
 
@@ -2315,6 +2328,10 @@ EfiPxeLoadFile (
   EFI_STATUS                  Status;
   BOOLEAN                     MediaPresent;
 
+  if (FilePath == NULL || !IsDevicePathEnd (FilePath)) {
+    return EFI_INVALID_PARAMETER;
+  }
+  
   VirtualNic = PXEBC_VIRTUAL_NIC_FROM_LOADFILE (This);
   Private    = VirtualNic->Private;
   PxeBc      = &Private->PxeBc;
@@ -2375,6 +2392,16 @@ EfiPxeLoadFile (
     //   3. unsupported.
     //
     PxeBc->Stop (PxeBc);
+  } else {
+    //
+    // The DHCP4 can have only one configured child instance so we need to stop
+    // reset the DHCP4 child before we return. Otherwise these programs which 
+    // also need to use DHCP4 will be impacted.
+    //
+    if (!PxeBc->Mode->UsingIpv6) {
+      Private->Dhcp4->Stop (Private->Dhcp4);
+      Private->Dhcp4->Configure (Private->Dhcp4, NULL);
+    }
   }
 
   return Status;

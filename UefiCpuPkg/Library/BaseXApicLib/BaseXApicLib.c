@@ -3,7 +3,7 @@
 
   This local APIC library instance supports xAPIC mode only.
 
-  Copyright (c) 2010 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2010 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -14,6 +14,7 @@
 
 **/
 
+#include <Register/Cpuid.h>
 #include <Register/LocalApic.h>
 
 #include <Library/BaseLib.h>
@@ -21,10 +22,38 @@
 #include <Library/LocalApicLib.h>
 #include <Library/IoLib.h>
 #include <Library/TimerLib.h>
+#include <Library/PcdLib.h>
 
 //
 // Library internal functions
 //
+
+/**
+  Determine if the CPU supports the Local APIC Base Address MSR.
+
+  @retval TRUE  The CPU supports the Local APIC Base Address MSR.
+  @retval FALSE The CPU does not support the Local APIC Base Address MSR.
+
+**/
+BOOLEAN
+LocalApicBaseAddressMsrSupported (
+  VOID
+  )
+{
+  UINT32  RegEax;
+  UINTN   FamilyId;
+  
+  AsmCpuid (1, &RegEax, NULL, NULL, NULL);
+  FamilyId = BitFieldRead32 (RegEax, 8, 11);
+  if (FamilyId == 0x04 || FamilyId == 0x05) {
+    //
+    // CPUs with a FamilyId of 0x04 or 0x05 do not support the 
+    // Local APIC Base Address MSR
+    //
+    return FALSE;
+  }
+  return TRUE;
+}
 
 /**
   Retrieve the base address of local APIC.
@@ -38,8 +67,16 @@ GetLocalApicBaseAddress (
   VOID
   )
 {
-  MSR_IA32_APIC_BASE ApicBaseMsr;
-  
+  MSR_IA32_APIC_BASE  ApicBaseMsr;
+
+  if (!LocalApicBaseAddressMsrSupported ()) {
+    //
+    // If CPU does not support Local APIC Base Address MSR, then retrieve
+    // Local APIC Base Address from PCD
+    //
+    return PcdGet32 (PcdCpuLocalApicBaseAddress);
+  }
+
   ApicBaseMsr.Uint64 = AsmReadMsr64 (MSR_IA32_APIC_BASE_ADDRESS);
   
   return (UINTN)(LShiftU64 ((UINT64) ApicBaseMsr.Bits.ApicBaseHigh, 32)) +
@@ -60,9 +97,16 @@ SetLocalApicBaseAddress (
   IN UINTN                BaseAddress
   )
 {
-  MSR_IA32_APIC_BASE ApicBaseMsr;
+  MSR_IA32_APIC_BASE  ApicBaseMsr;
 
   ASSERT ((BaseAddress & (SIZE_4KB - 1)) == 0);
+
+  if (!LocalApicBaseAddressMsrSupported ()) {
+    //
+    // Ignore set request if the CPU does not support APIC Base Address MSR
+    //
+    return;
+  }
 
   ApicBaseMsr.Uint64 = AsmReadMsr64 (MSR_IA32_APIC_BASE_ADDRESS);
 
@@ -202,14 +246,19 @@ GetApicMode (
 {
   DEBUG_CODE (
     {
-      MSR_IA32_APIC_BASE ApicBaseMsr;
+      MSR_IA32_APIC_BASE  ApicBaseMsr;
 
-      ApicBaseMsr.Uint64 = AsmReadMsr64 (MSR_IA32_APIC_BASE_ADDRESS);
       //
-      // Local APIC should have been enabled
+      // Check to see if the CPU supports the APIC Base Address MSR 
       //
-      ASSERT (ApicBaseMsr.Bits.En != 0);
-      ASSERT (ApicBaseMsr.Bits.Extd == 0);
+      if (LocalApicBaseAddressMsrSupported ()) {
+        ApicBaseMsr.Uint64 = AsmReadMsr64 (MSR_IA32_APIC_BASE_ADDRESS);
+        //
+        // Local APIC should have been enabled
+        //
+        ASSERT (ApicBaseMsr.Bits.En != 0);
+        ASSERT (ApicBaseMsr.Bits.Extd == 0);
+      }
     }
   );
   return LOCAL_APIC_MODE_XAPIC;
@@ -515,6 +564,39 @@ SendInitSipiSipiAllExcludingSelf (
 }
 
 /**
+  Initialize the state of the SoftwareEnable bit in the Local APIC
+  Spurious Interrupt Vector register.
+
+  @param  Enable  If TRUE, then set SoftwareEnable to 1
+                  If FALSE, then set SoftwareEnable to 0.
+
+**/
+VOID
+EFIAPI
+InitializeLocalApicSoftwareEnable (
+  IN BOOLEAN  Enable
+  )
+{
+  LOCAL_APIC_SVR  Svr;
+
+  //
+  // Set local APIC software-enabled bit.
+  //
+  Svr.Uint32 = ReadLocalApicReg (XAPIC_SPURIOUS_VECTOR_OFFSET);
+  if (Enable) {
+    if (Svr.Bits.SoftwareEnable == 0) {
+      Svr.Bits.SoftwareEnable = 1;
+      WriteLocalApicReg (XAPIC_SPURIOUS_VECTOR_OFFSET, Svr.Uint32);
+    }
+  } else {
+    if (Svr.Bits.SoftwareEnable == 1) {
+      Svr.Bits.SoftwareEnable = 0;
+      WriteLocalApicReg (XAPIC_SPURIOUS_VECTOR_OFFSET, Svr.Uint32);
+    }
+  }
+}
+
+/**
   Programming Virtual Wire Mode.
 
   This function programs the local APIC for virtual wire mode following
@@ -630,7 +712,6 @@ InitializeApicTimer (
   IN UINT8   Vector
   )
 {
-  LOCAL_APIC_SVR       Svr;
   LOCAL_APIC_DCR       Dcr;
   LOCAL_APIC_LVT_TIMER LvtTimer;
   UINT32               Divisor;
@@ -638,9 +719,7 @@ InitializeApicTimer (
   //
   // Ensure local APIC is in software-enabled state.
   //
-  Svr.Uint32 = ReadLocalApicReg (XAPIC_SPURIOUS_VECTOR_OFFSET);
-  Svr.Bits.SoftwareEnable = 1;
-  WriteLocalApicReg (XAPIC_SPURIOUS_VECTOR_OFFSET, Svr.Uint32);
+  InitializeLocalApicSoftwareEnable (TRUE);
 
   //
   // Program init-count register.
@@ -675,6 +754,8 @@ InitializeApicTimer (
 /**
   Get the state of the local APIC timer.
 
+  This function will ASSERT if the local APIC is not software enabled.
+
   @param DivideValue   Return the divide value for the DCR. It is one of 1,2,4,8,16,32,64,128.
   @param PeriodicMode  Return the timer mode. If TRUE, timer mode is peridoic. Othewise, timer mode is one-shot.
   @param Vector        Return the timer interrupt vector number.
@@ -690,6 +771,13 @@ GetApicTimerState (
   UINT32 Divisor;
   LOCAL_APIC_DCR Dcr;
   LOCAL_APIC_LVT_TIMER LvtTimer;
+
+  //
+  // Check the APIC Software Enable/Disable bit (bit 8) in Spurious-Interrupt
+  // Vector Register.
+  // This bit will be 1, if local APIC is software enabled.
+  //
+  ASSERT ((ReadLocalApicReg(XAPIC_SPURIOUS_VECTOR_OFFSET) & BIT8) != 0);
 
   if (DivideValue != NULL) {
     Dcr.Uint32 = ReadLocalApicReg (XAPIC_TIMER_DIVIDE_CONFIGURATION_OFFSET);

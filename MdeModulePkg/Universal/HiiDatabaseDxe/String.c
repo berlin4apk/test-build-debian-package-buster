@@ -2,7 +2,7 @@
 Implementation for EFI_HII_STRING_PROTOCOL.
 
 
-Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -1333,7 +1333,7 @@ HiiNewString (
     StringPackage->StringPkgHdr->StringInfoOffset = HeaderSize;
     CopyMem (StringPackage->StringPkgHdr->LanguageWindow, mLanguageWindow, 16 * sizeof (CHAR16));
     StringPackage->StringPkgHdr->LanguageName     = 1;
-    AsciiStrCpy (StringPackage->StringPkgHdr->Language, (CHAR8 *) Language);
+    AsciiStrCpyS (StringPackage->StringPkgHdr->Language, (HeaderSize - OFFSET_OF(EFI_HII_STRING_PACKAGE_HDR,Language)) / sizeof (CHAR8), (CHAR8 *) Language);
 
     //
     // Calculate the length of the string blocks, including string block to record
@@ -1836,7 +1836,7 @@ HiiGetLanguages (
     StringPackage = CR (Link, HII_STRING_PACKAGE_INSTANCE, StringEntry, HII_STRING_PACKAGE_SIGNATURE);
     ResultSize += AsciiStrSize (StringPackage->StringPkgHdr->Language);
     if (ResultSize <= *LanguagesSize) {
-      AsciiStrCpy (Languages, StringPackage->StringPkgHdr->Language);
+      AsciiStrCpyS (Languages, *LanguagesSize / sizeof (CHAR8), StringPackage->StringPkgHdr->Language);
       Languages += AsciiStrSize (StringPackage->StringPkgHdr->Language);
       *(Languages - 1) = L';';
     }
@@ -1953,7 +1953,7 @@ HiiGetSecondaryLanguages (
 
       ResultSize = AsciiStrSize (Languages);
       if (ResultSize <= *SecondaryLanguagesSize) {
-        AsciiStrCpy (SecondaryLanguages, Languages);
+        AsciiStrCpyS (SecondaryLanguages, *SecondaryLanguagesSize / sizeof (CHAR8), Languages);
       } else {
         *SecondaryLanguagesSize = ResultSize;
         return EFI_BUFFER_TOO_SMALL;
@@ -2018,13 +2018,13 @@ HiiCompareLanguage (
   StrLen = AsciiStrSize (Language1);
   Lan1   = AllocateZeroPool (StrLen);
   ASSERT (Lan1 != NULL);
-  AsciiStrCpy(Lan1, Language1);
+  AsciiStrCpyS(Lan1, StrLen / sizeof (CHAR8), Language1);
   AsciiHiiToLower (Lan1);
 
   StrLen = AsciiStrSize (Language2);
   Lan2   = AllocateZeroPool (StrLen);
   ASSERT (Lan2 != NULL);
-  AsciiStrCpy(Lan2, Language2);
+  AsciiStrCpyS(Lan2, StrLen / sizeof (CHAR8), Language2);
   AsciiHiiToLower (Lan2);
 
   //

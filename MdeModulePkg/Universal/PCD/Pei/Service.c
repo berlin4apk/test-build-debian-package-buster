@@ -2,7 +2,7 @@
   The driver internal functions are implmented here.
   They build Pei PCD database, and provide access service to PCD database.
 
-Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -107,10 +107,18 @@ GetPcdName (
   )
 {
   UINT8             *StringTable;
+  UINTN             NameSize;
   PCD_NAME_INDEX    *PcdNameIndex;
   CHAR8             *TokenSpaceName;
   CHAR8             *PcdName;
   CHAR8             *Name;
+
+  //
+  // Return NULL when PCD name table is absent. 
+  //
+  if (Database->PcdNameTableOffset == 0) {
+    return NULL;
+  }
 
   //
   // TokenNumber Zero is reserved as PCD_INVALID_TOKEN_NUMBER.
@@ -137,14 +145,15 @@ GetPcdName (
     //
     // Need to get the full PCD name.
     //
-    Name = AllocateZeroPool (AsciiStrSize (TokenSpaceName) + AsciiStrSize (PcdName));
+    NameSize = AsciiStrSize (TokenSpaceName) + AsciiStrSize (PcdName);
+    Name = AllocateZeroPool (NameSize);
     ASSERT (Name != NULL);
     //
     // Catenate TokenSpaceCName and PcdCName with a '.' to form the full PCD name.
     //
-    AsciiStrCat (Name, TokenSpaceName);
+    AsciiStrCatS (Name, NameSize, TokenSpaceName);
     Name[AsciiStrSize (TokenSpaceName) - sizeof (CHAR8)] = '.';
-    AsciiStrCat (Name, PcdName);  
+    AsciiStrCatS (Name, NameSize, PcdName);  
   }
 
   return Name;

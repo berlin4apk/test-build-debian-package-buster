@@ -1,7 +1,7 @@
 /** @file
   ACPI Table Protocol Implementation
 
-  Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -134,8 +134,7 @@ PublishTables (
     CurrentRsdtEntry  = (UINT32 *) ((UINT8 *) AcpiTableInstance->Rsdt1 + sizeof (EFI_ACPI_DESCRIPTION_HEADER));
     *CurrentRsdtEntry = (UINT32) (UINTN) AcpiTableInstance->Fadt1;
   }
-  if ((Version & EFI_ACPI_TABLE_VERSION_2_0) != 0 ||
-      (Version & EFI_ACPI_TABLE_VERSION_3_0) != 0) {
+  if ((Version & ACPI_TABLE_VERSION_GTE_2_0) != 0) {
     CurrentRsdtEntry  = (UINT32 *) ((UINT8 *) AcpiTableInstance->Rsdt3 + sizeof (EFI_ACPI_DESCRIPTION_HEADER));
     *CurrentRsdtEntry = (UINT32) (UINTN) AcpiTableInstance->Fadt3;
     CurrentXsdtEntry  = (VOID *) ((UINT8 *) AcpiTableInstance->Xsdt + sizeof (EFI_ACPI_DESCRIPTION_HEADER));
@@ -160,25 +159,18 @@ PublishTables (
   // Add the RSD_PTR to the system table and store that we have installed the
   // tables.
   //
-  if (((Version & EFI_ACPI_TABLE_VERSION_1_0B) != 0) &&
-      !AcpiTableInstance->TablesInstalled1) {
+  if ((Version & EFI_ACPI_TABLE_VERSION_1_0B) != 0) {
     Status = gBS->InstallConfigurationTable (&gEfiAcpi10TableGuid, AcpiTableInstance->Rsdp1);
     if (EFI_ERROR (Status)) {
       return EFI_ABORTED;
     }
-
-    AcpiTableInstance->TablesInstalled1 = TRUE;
   }
 
-  if (((Version & EFI_ACPI_TABLE_VERSION_2_0) != 0 ||
-       (Version & EFI_ACPI_TABLE_VERSION_3_0) != 0) &&
-      !AcpiTableInstance->TablesInstalled3) {
+  if ((Version & ACPI_TABLE_VERSION_GTE_2_0) != 0) {
     Status = gBS->InstallConfigurationTable (&gEfiAcpiTableGuid, AcpiTableInstance->Rsdp3);
     if (EFI_ERROR (Status)) {
       return EFI_ABORTED;
     }
-
-    AcpiTableInstance->TablesInstalled3= TRUE;
   }
 
   return EFI_SUCCESS;
@@ -240,13 +232,13 @@ InstallAcpiTable (
              AcpiTableInstance,
              AcpiTableBufferConst,
              TRUE,
-             EFI_ACPI_TABLE_VERSION_1_0B | EFI_ACPI_TABLE_VERSION_2_0 | EFI_ACPI_TABLE_VERSION_3_0,
+             EFI_ACPI_TABLE_VERSION_1_0B | ACPI_TABLE_VERSION_GTE_2_0,
              TableKey
              );
   if (!EFI_ERROR (Status)) {
     Status = PublishTables (
                AcpiTableInstance,
-               EFI_ACPI_TABLE_VERSION_1_0B | EFI_ACPI_TABLE_VERSION_2_0 | EFI_ACPI_TABLE_VERSION_3_0
+               EFI_ACPI_TABLE_VERSION_1_0B | ACPI_TABLE_VERSION_GTE_2_0
                );
   }
   FreePool (AcpiTableBufferConst);
@@ -258,7 +250,7 @@ InstallAcpiTable (
     if (!EFI_ERROR (Status)) {
       SdtNotifyAcpiList (
         AcpiTableInstance,
-        EFI_ACPI_TABLE_VERSION_1_0B | EFI_ACPI_TABLE_VERSION_2_0 | EFI_ACPI_TABLE_VERSION_3_0,
+        EFI_ACPI_TABLE_VERSION_1_0B | ACPI_TABLE_VERSION_GTE_2_0,
         *TableKey
         );
     }
@@ -298,13 +290,13 @@ UninstallAcpiTable (
   //
   Status = RemoveTableFromList (
              AcpiTableInstance,
-             EFI_ACPI_TABLE_VERSION_1_0B | EFI_ACPI_TABLE_VERSION_2_0 | EFI_ACPI_TABLE_VERSION_3_0,
+             EFI_ACPI_TABLE_VERSION_1_0B | ACPI_TABLE_VERSION_GTE_2_0,
              TableKey
              );
   if (!EFI_ERROR (Status)) {
     Status = PublishTables (
                AcpiTableInstance,
-               EFI_ACPI_TABLE_VERSION_1_0B | EFI_ACPI_TABLE_VERSION_2_0 | EFI_ACPI_TABLE_VERSION_3_0
+               EFI_ACPI_TABLE_VERSION_1_0B | ACPI_TABLE_VERSION_GTE_2_0
                );
   }
 
@@ -559,8 +551,7 @@ AddTableToList (
     // Check that the table has not been previously added.
     //
     if (((Version & EFI_ACPI_TABLE_VERSION_1_0B) != 0 && AcpiTableInstance->Fadt1 != NULL) ||
-        ((Version & EFI_ACPI_TABLE_VERSION_2_0)  != 0 && AcpiTableInstance->Fadt3 != NULL) ||
-        ((Version & EFI_ACPI_TABLE_VERSION_3_0)  != 0 && AcpiTableInstance->Fadt3 != NULL)
+        ((Version & ACPI_TABLE_VERSION_GTE_2_0)  != 0 && AcpiTableInstance->Fadt3 != NULL)
         ) {
       gBS->FreePages (CurrentTableList->PageAddress, CurrentTableList->NumberOfPages);
       gBS->FreePool (CurrentTableList);
@@ -607,8 +598,7 @@ AddTableToList (
       AcpiTableInstance->Rsdt1->OemRevision = AcpiTableInstance->Fadt1->Header.OemRevision;
     }
 
-    if ((Version & EFI_ACPI_TABLE_VERSION_2_0) != 0 ||
-        (Version & EFI_ACPI_TABLE_VERSION_3_0) != 0) {
+    if ((Version & ACPI_TABLE_VERSION_GTE_2_0) != 0) {
       //
       // Save a pointer to the table
       //
@@ -621,6 +611,7 @@ AddTableToList (
       //
       if ((UINT64)(UINTN)AcpiTableInstance->Facs3 < BASE_4GB) {
         AcpiTableInstance->Fadt3->FirmwareCtrl  = (UINT32) (UINTN) AcpiTableInstance->Facs3;
+        ZeroMem (&AcpiTableInstance->Fadt3->XFirmwareCtrl, sizeof (UINT64));
       } else {
         Buffer64 = (UINT64) (UINTN) AcpiTableInstance->Facs3;
         CopyMem (
@@ -628,6 +619,7 @@ AddTableToList (
           &Buffer64,
           sizeof (UINT64)
           );
+        AcpiTableInstance->Fadt3->FirmwareCtrl = 0;
       }
       AcpiTableInstance->Fadt3->Dsdt  = (UINT32) (UINTN) AcpiTableInstance->Dsdt3;
       Buffer64                          = (UINT64) (UINTN) AcpiTableInstance->Dsdt3;
@@ -694,8 +686,7 @@ AddTableToList (
     // Check that the table has not been previously added.
     //
     if (((Version & EFI_ACPI_TABLE_VERSION_1_0B) != 0 && AcpiTableInstance->Facs1 != NULL) ||
-        ((Version & EFI_ACPI_TABLE_VERSION_2_0)  != 0 && AcpiTableInstance->Facs3 != NULL) ||
-        ((Version & EFI_ACPI_TABLE_VERSION_3_0)  != 0 && AcpiTableInstance->Facs3 != NULL)
+        ((Version & ACPI_TABLE_VERSION_GTE_2_0)  != 0 && AcpiTableInstance->Facs3 != NULL)
         ) {
       gBS->FreePages (CurrentTableList->PageAddress, CurrentTableList->NumberOfPages);
       gBS->FreePool (CurrentTableList);
@@ -733,8 +724,7 @@ AddTableToList (
       }
     }
 
-    if ((Version & EFI_ACPI_TABLE_VERSION_2_0) != 0 ||
-        (Version & EFI_ACPI_TABLE_VERSION_3_0) != 0) {
+    if ((Version & ACPI_TABLE_VERSION_GTE_2_0) != 0) {
       //
       // Save a pointer to the table
       //
@@ -750,6 +740,7 @@ AddTableToList (
         //
         if ((UINT64)(UINTN)AcpiTableInstance->Facs3 < BASE_4GB) {
           AcpiTableInstance->Fadt3->FirmwareCtrl  = (UINT32) (UINTN) AcpiTableInstance->Facs3;
+          ZeroMem (&AcpiTableInstance->Fadt3->XFirmwareCtrl, sizeof (UINT64));
         } else {
           Buffer64 = (UINT64) (UINTN) AcpiTableInstance->Facs3;
           CopyMem (
@@ -757,6 +748,7 @@ AddTableToList (
             &Buffer64,
             sizeof (UINT64)
             );
+          AcpiTableInstance->Fadt3->FirmwareCtrl = 0;
         }
 
         //
@@ -778,8 +770,7 @@ AddTableToList (
     // Check that the table has not been previously added.
     //
     if (((Version & EFI_ACPI_TABLE_VERSION_1_0B) != 0 && AcpiTableInstance->Dsdt1 != NULL) ||
-        ((Version & EFI_ACPI_TABLE_VERSION_2_0)  != 0 && AcpiTableInstance->Dsdt3 != NULL) ||
-        ((Version & EFI_ACPI_TABLE_VERSION_3_0)  != 0 && AcpiTableInstance->Dsdt3 != NULL)
+        ((Version & ACPI_TABLE_VERSION_GTE_2_0)  != 0 && AcpiTableInstance->Dsdt3 != NULL)
         ) {
       gBS->FreePages (CurrentTableList->PageAddress, CurrentTableList->NumberOfPages);
       gBS->FreePool (CurrentTableList);
@@ -817,8 +808,7 @@ AddTableToList (
       }
     }
     
-    if ((Version & EFI_ACPI_TABLE_VERSION_2_0) != 0 ||
-        (Version & EFI_ACPI_TABLE_VERSION_3_0) != 0) {
+    if ((Version & ACPI_TABLE_VERSION_GTE_2_0) != 0) {
       //
       // Save a pointer to the table
       //
@@ -918,8 +908,7 @@ AddTableToList (
   //
   // Add to ACPI 2.0/3.0  table tree
   //
-  if ((Version & EFI_ACPI_TABLE_VERSION_2_0) != 0 ||
-      (Version & EFI_ACPI_TABLE_VERSION_3_0) != 0) {
+  if ((Version & ACPI_TABLE_VERSION_GTE_2_0) != 0) {
      if (AddToRsdt) {
        //
        // If the table number exceed the gEfiAcpiMaxNumTables, enlarge the table buffer
@@ -1251,17 +1240,11 @@ DeleteTable (
       }
     }
 
-    if ((Version & EFI_ACPI_TABLE_VERSION_2_0 & Table->Version) ||
-        (Version & EFI_ACPI_TABLE_VERSION_3_0 & Table->Version)) {
+    if (Version & ACPI_TABLE_VERSION_GTE_2_0 & Table->Version) {
       //
       // Remove this version from the table
       //
-      if (Version & EFI_ACPI_TABLE_VERSION_2_0 & Table->Version) {
-        Table->Version = Table->Version &~EFI_ACPI_TABLE_VERSION_2_0;
-      }      
-      if (Version & EFI_ACPI_TABLE_VERSION_3_0 & Table->Version) {
-        Table->Version = Table->Version &~EFI_ACPI_TABLE_VERSION_3_0;
-      }
+      Table->Version = Table->Version &~(Version & ACPI_TABLE_VERSION_GTE_2_0);
       
       //
       // Remove from Rsdt and Xsdt.  We don't care about the return value
@@ -1287,8 +1270,7 @@ DeleteTable (
         AcpiTableInstance->Fadt1 = NULL;
       }
 
-      if ((Version & EFI_ACPI_TABLE_VERSION_2_0) != 0 ||
-          (Version & EFI_ACPI_TABLE_VERSION_3_0) != 0) {
+      if ((Version & ACPI_TABLE_VERSION_GTE_2_0) != 0) {
         AcpiTableInstance->Fadt3 = NULL;
       }
       break;
@@ -1315,8 +1297,7 @@ DeleteTable (
         }
       }
 
-      if ((Version & EFI_ACPI_TABLE_VERSION_2_0) != 0 ||
-          (Version & EFI_ACPI_TABLE_VERSION_3_0) != 0) {
+      if ((Version & ACPI_TABLE_VERSION_GTE_2_0) != 0) {
         AcpiTableInstance->Facs3 = NULL;
 
         //
@@ -1362,8 +1343,7 @@ DeleteTable (
       }
 
       
-      if ((Version & EFI_ACPI_TABLE_VERSION_2_0) != 0 ||
-          (Version & EFI_ACPI_TABLE_VERSION_3_0) != 0) {
+      if ((Version & ACPI_TABLE_VERSION_GTE_2_0) != 0) {
         AcpiTableInstance->Dsdt3 = NULL;
 
         //

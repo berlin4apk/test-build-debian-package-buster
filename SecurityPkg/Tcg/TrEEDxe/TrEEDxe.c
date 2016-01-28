@@ -1,7 +1,7 @@
 /** @file
   This module implements TrEE Protocol.
   
-Copyright (c) 2013 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2013 - 2015, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials 
 are licensed and made available under the terms and conditions of the BSD License 
 which accompanies this distribution.  The full text of the license may be found at 
@@ -15,11 +15,9 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <PiDxe.h>
 #include <IndustryStandard/Acpi.h>
 #include <IndustryStandard/PeImage.h>
-#include <IndustryStandard/SmBios.h>
 #include <IndustryStandard/TcpaAcpi.h>
 
 #include <Guid/GlobalVariable.h>
-#include <Guid/SmBios.h>
 #include <Guid/HobList.h>
 #include <Guid/TcgEventHob.h>
 #include <Guid/EventGroup.h>
@@ -48,6 +46,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Library/Tpm2DeviceLib.h>
 #include <Library/HashLib.h>
 #include <Library/PerformanceLib.h>
+#include <Library/ReportStatusCodeLib.h>
 
 #define PERF_ID_TREE_DXE  0x3120
 
@@ -64,16 +63,13 @@ typedef struct {
 typedef struct {
   EFI_GUID               *EventGuid;
   TREE_EVENT_LOG_FORMAT  LogFormat;
-  UINT32                 BootHashAlg;
-  UINT16                 DigestAlgID;
-  TPMI_ALG_HASH          TpmHashAlgo;
 } TREE_EVENT_INFO_STRUCT;
 
 TREE_EVENT_INFO_STRUCT mTreeEventInfo[] = {
-  {&gTcgEventEntryHobGuid,             TREE_EVENT_LOG_FORMAT_TCG_1_2,      TREE_BOOT_HASH_ALG_SHA1,     0,                       TPM_ALG_SHA1},
+  {&gTcgEventEntryHobGuid,             TREE_EVENT_LOG_FORMAT_TCG_1_2},
 };
 
-#define TCG_EVENT_LOG_AREA_COUNT_MAX   5
+#define TCG_EVENT_LOG_AREA_COUNT_MAX   2
 
 typedef struct {
   TREE_EVENT_LOG_FORMAT             EventLogFormat;
@@ -629,72 +625,6 @@ TcgDxeLogEvent (
 }
 
 /**
-  This function return hash algorithm from event log format.
-
-  @param[in]     EventLogFormat    Event log format.
-
-  @return hash algorithm.
-**/
-TPMI_ALG_HASH
-TrEEGetHashAlgoFromLogFormat (
-  IN      TREE_EVENT_LOG_FORMAT     EventLogFormat
-  )
-{
-  UINTN  Index;
-
-  for (Index = 0; Index < sizeof(mTreeEventInfo)/sizeof(mTreeEventInfo[0]); Index++) {
-    if (mTreeEventInfo[Index].LogFormat == EventLogFormat) {
-      return mTreeEventInfo[Index].TpmHashAlgo;
-    }
-  }
-  return TPM_ALG_SHA1;
-}
-
-/**
-  This function return hash algorithm ID from event log format.
-
-  @param[in]     EventLogFormat    Event log format.
-
-  @return hash algorithm ID.
-**/
-UINT16
-TrEEGetAlgIDFromLogFormat (
-  IN      TREE_EVENT_LOG_FORMAT     EventLogFormat
-  )
-{
-  UINTN  Index;
-
-  for (Index = 0; Index < sizeof(mTreeEventInfo)/sizeof(mTreeEventInfo[0]); Index++) {
-    if (mTreeEventInfo[Index].LogFormat == EventLogFormat) {
-      return mTreeEventInfo[Index].DigestAlgID;
-    }
-  }
-  return 0;
-}
-
-/**
-  This function return boot hash algorithm from event log format.
-
-  @param[in]     EventLogFormat    Event log format.
-
-  @return boot hash algorithm.
-**/
-UINT32
-TrEEGetBootHashAlgFromLogFormat (
-  IN      TREE_EVENT_LOG_FORMAT     EventLogFormat
-  )
-{
-  UINTN  Index;
-
-  for (Index = 0; Index < sizeof(mTreeEventInfo)/sizeof(mTreeEventInfo[0]); Index++) {
-    if (mTreeEventInfo[Index].LogFormat == EventLogFormat) {
-      return mTreeEventInfo[Index].BootHashAlg;
-    }
-  }
-  return TREE_BOOT_HASH_ALG_SHA1;
-}
-
-/**
   This function get digest from digest list.
 
   @param HashAlg    digest algorithm
@@ -811,6 +741,10 @@ TcgDxeHashLogExtendEvent (
 {
   EFI_STATUS                        Status;
   TPML_DIGEST_VALUES                DigestList;
+  
+  if (!mTcgDxeData.BsCap.TrEEPresentFlag) {
+    return EFI_DEVICE_ERROR;
+  }
 
   Status = HashAndExtend (
              NewEventHdr->PCRIndex,
@@ -822,6 +756,15 @@ TcgDxeHashLogExtendEvent (
     if ((Flags & TREE_EXTEND_ONLY) == 0) {
       Status = TcgDxeLogHashEvent (&DigestList, NewEventHdr, NewEventData);
     }
+  }
+
+  if (Status == EFI_DEVICE_ERROR) {
+    DEBUG ((EFI_D_ERROR, "TcgDxeHashLogExtendEvent - %r. Disable TPM.\n", Status));
+    mTcgDxeData.BsCap.TrEEPresentFlag = FALSE;
+    REPORT_STATUS_CODE (
+      EFI_ERROR_CODE | EFI_ERROR_MINOR,
+      (PcdGet32 (PcdStatusCodeSubClassTpmDevice) | EFI_P_EC_INTERFACE_ERROR)
+      );
   }
 
   return Status;
@@ -892,6 +835,14 @@ TreeHashLogExtendEvent (
       if ((Flags & TREE_EXTEND_ONLY) == 0) {
         Status = TcgDxeLogHashEvent (&DigestList, &NewEventHdr, Event->Event);
       }
+    }
+    if (Status == EFI_DEVICE_ERROR) {
+      DEBUG ((EFI_D_ERROR, "MeasurePeImageAndExtend - %r. Disable TPM.\n", Status));
+      mTcgDxeData.BsCap.TrEEPresentFlag = FALSE;
+      REPORT_STATUS_CODE (
+        EFI_ERROR_CODE | EFI_ERROR_MINOR,
+        (PcdGet32 (PcdStatusCodeSubClassTpmDevice) | EFI_P_EC_INTERFACE_ERROR)
+        );
     }
   } else {
     Status = TcgDxeHashLogExtendEvent (
@@ -1093,42 +1044,13 @@ MeasureHandoffTables (
   )
 {
   EFI_STATUS                        Status;
-  SMBIOS_TABLE_ENTRY_POINT          *SmbiosTable;
   TCG_PCR_EVENT_HDR                 TcgEvent;
   EFI_HANDOFF_TABLE_POINTERS        HandoffTables;
   UINTN                             ProcessorNum;
   EFI_CPU_PHYSICAL_LOCATION         *ProcessorLocBuf;
 
   ProcessorLocBuf = NULL;
-
-  //
-  // Measure SMBIOS with EV_EFI_HANDOFF_TABLES to PCR[1]
-  //
-  Status = EfiGetSystemConfigurationTable (
-             &gEfiSmbiosTableGuid,
-             (VOID **) &SmbiosTable
-             );
-
-  if (!EFI_ERROR (Status) && SmbiosTable != NULL) {
-    TcgEvent.PCRIndex  = 1;
-    TcgEvent.EventType = EV_EFI_HANDOFF_TABLES;
-    TcgEvent.EventSize = sizeof (HandoffTables);
-
-    HandoffTables.NumberOfTables = 1;
-    HandoffTables.TableEntry[0].VendorGuid  = gEfiSmbiosTableGuid;
-    HandoffTables.TableEntry[0].VendorTable = SmbiosTable;
-
-    DEBUG ((DEBUG_INFO, "The Smbios Table starts at: 0x%x\n", SmbiosTable->TableAddress));
-    DEBUG ((DEBUG_INFO, "The Smbios Table size: 0x%x\n", SmbiosTable->TableLength));
-
-    Status = TcgDxeHashLogExtendEvent (
-               0,
-               (UINT8*)(UINTN)SmbiosTable->TableAddress,
-               SmbiosTable->TableLength,
-               &TcgEvent,
-               (UINT8*)&HandoffTables
-               );
-  }
+  Status = EFI_SUCCESS;
 
   if (PcdGet8 (PcdTpmPlatformClass) == TCG_PLATFORM_TYPE_SERVER) {
     //
@@ -1253,26 +1175,14 @@ MeasureVariable (
        );
   }
 
-  if (EventType == EV_EFI_VARIABLE_DRIVER_CONFIG) {
-    //
-    // Digest is the event data (EFI_VARIABLE_DATA_TREE)
-    //
-    Status = TcgDxeHashLogExtendEvent (
-               0,
-               (UINT8*)VarLog,
-               TcgEvent.EventSize,
-               &TcgEvent,
-               (UINT8*)VarLog
-               );
-  } else {
-    Status = TcgDxeHashLogExtendEvent (
-               0,
-               (UINT8*)VarData,
-               VarSize,
-               &TcgEvent,
-               (UINT8*)VarLog
-               );
-  }
+  Status = TcgDxeHashLogExtendEvent (
+             0,
+             (UINT8*)VarLog,
+             TcgEvent.EventSize,
+             &TcgEvent,
+             (UINT8*)VarLog
+             );
+
   FreePool (VarLog);
   return Status;
 }
@@ -1614,6 +1524,9 @@ OnReadyToBoot (
     Status = TcgMeasureAction (
                EFI_CALLING_EFI_APPLICATION
                );
+    if (EFI_ERROR (Status)) {
+      DEBUG ((EFI_D_ERROR, "%s not Measured. Error!\n", EFI_CALLING_EFI_APPLICATION));
+    }
 
     //
     // 2. Draw a line between pre-boot env and entering post-boot env.
@@ -1621,6 +1534,9 @@ OnReadyToBoot (
     //
     for (PcrIndex = 0; PcrIndex < 7; PcrIndex++) {
       Status = MeasureSeparatorEvent (PcrIndex);
+      if (EFI_ERROR (Status)) {
+        DEBUG ((EFI_D_ERROR, "Seperator Event not Measured. Error!\n"));
+      }
     }
 
     //
@@ -1641,6 +1557,9 @@ OnReadyToBoot (
     Status = TcgMeasureAction (
                EFI_RETURNING_FROM_EFI_APPLICATOIN
                );
+    if (EFI_ERROR (Status)) {
+      DEBUG ((EFI_D_ERROR, "%s not Measured. Error!\n", EFI_RETURNING_FROM_EFI_APPLICATOIN));
+    }
   }
 
   DEBUG ((EFI_D_INFO, "TPM2 TrEEDxe Measure Data when ReadyToBoot\n"));
@@ -1853,12 +1772,17 @@ DriverEntry (
     return EFI_UNSUPPORTED;
   }
 
+  if (GetFirstGuidHob (&gTpmErrorHobGuid) != NULL) {
+    DEBUG ((EFI_D_ERROR, "TPM2 error!\n"));
+    return EFI_DEVICE_ERROR;
+  }
+  
   Status = Tpm2RequestUseTpm ();
   if (EFI_ERROR (Status)) {
-    DEBUG ((EFI_D_ERROR, "TPM not detected!\n"));
+    DEBUG ((EFI_D_ERROR, "TPM2 not detected!\n"));
     return Status;
   }
-
+  
   //
   // Fill information
   //

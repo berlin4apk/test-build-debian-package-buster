@@ -1,6 +1,6 @@
 /** @file
 *
-*  Copyright (c) 2013, ARM Limited. All rights reserved.
+*  Copyright (c) 2013-2015, ARM Limited. All rights reserved.
 *
 *  This program and the accompanying materials
 *  are licensed and made available under the terms and conditions of the BSD License
@@ -15,14 +15,12 @@
 #ifndef __BDS_ENTRY_H__
 #define __BDS_ENTRY_H__
 
-typedef UINT8* EFI_LOAD_OPTION;
-
 /**
   This is defined by the UEFI specs, don't change it
 **/
 typedef struct {
   UINT16                      LoadOptionIndex;
-  EFI_LOAD_OPTION             LoadOption;
+  EFI_LOAD_OPTION             *LoadOption;
   UINTN                       LoadOptionSize;
 
   UINT32                      Attributes;
@@ -140,44 +138,6 @@ BootOptionAllocateBootIndex (
   );
 
 /**
-  Start a Linux kernel from a Device Path
-
-  @param  LinuxKernel           Device Path to the Linux Kernel
-  @param  Parameters            Linux kernel arguments
-
-  @retval EFI_SUCCESS           All drivers have been connected
-  @retval EFI_NOT_FOUND         The Linux kernel Device Path has not been found
-  @retval EFI_OUT_OF_RESOURCES  There is not enough resource memory to store the matching results.
-
-**/
-EFI_STATUS
-BdsBootLinuxAtag (
-  IN  EFI_DEVICE_PATH_PROTOCOL* LinuxKernelDevicePath,
-  IN  EFI_DEVICE_PATH_PROTOCOL* InitrdDevicePath,
-  IN  CONST CHAR8*              Arguments
-  );
-
-/**
-  Start a Linux kernel from a Device Path
-
-  @param  LinuxKernel           Device Path to the Linux Kernel
-  @param  Parameters            Linux kernel arguments
-  @param  Fdt                   Device Path to the Flat Device Tree
-
-  @retval EFI_SUCCESS           All drivers have been connected
-  @retval EFI_NOT_FOUND         The Linux kernel Device Path has not been found
-  @retval EFI_OUT_OF_RESOURCES  There is not enough resource memory to store the matching results.
-
-**/
-EFI_STATUS
-BdsBootLinuxFdt (
-  IN  EFI_DEVICE_PATH_PROTOCOL* LinuxKernelDevicePath,
-  IN  EFI_DEVICE_PATH_PROTOCOL* InitrdDevicePath,
-  IN  CONST CHAR8*              Arguments,
-  IN  EFI_DEVICE_PATH_PROTOCOL* FdtDevicePath
-  );
-
-/**
   Start an EFI Application from a Device Path
 
   @param  ParentImageHandle     Handle of the calling image
@@ -196,30 +156,54 @@ BdsStartEfiApplication (
   IN VOID*                       LoadOptions
   );
 
-/**
-  Start an EFI Application from any Firmware Volume
-
-  @param  EfiApp                EFI Application Name
-
-  @retval EFI_SUCCESS           All drivers have been connected
-  @retval EFI_NOT_FOUND         The Linux kernel Device Path has not been found
-  @retval EFI_OUT_OF_RESOURCES  There is not enough resource memory to store the matching results.
-
-**/
-EFI_STATUS
-BdsLoadApplication (
-  IN EFI_HANDLE                  ParentImageHandle,
-  IN CHAR16*                     EfiApp,
-  IN UINTN                       LoadOptionsSize,
-  IN VOID*                       LoadOptions
-  );
-
 EFI_STATUS
 BdsLoadImage (
   IN     EFI_DEVICE_PATH       *DevicePath,
   IN     EFI_ALLOCATE_TYPE     Type,
   IN OUT EFI_PHYSICAL_ADDRESS* Image,
   OUT    UINTN                 *FileSize
+  );
+
+/**
+ * Call BS.ExitBootServices with the appropriate Memory Map information
+ */
+EFI_STATUS
+ShutdownUefiBootServices (
+  VOID
+  );
+
+/**
+  Locate an EFI application in a the Firmware Volumes by its name
+
+  @param  EfiAppGuid            Guid of the EFI Application into the Firmware Volume
+  @param  DevicePath            EFI Device Path of the EFI application
+
+  @return EFI_SUCCESS           The function completed successfully.
+  @return EFI_NOT_FOUND         The protocol could not be located.
+  @return EFI_OUT_OF_RESOURCES  There are not enough resources to find the protocol.
+
+**/
+EFI_STATUS
+LocateEfiApplicationInFvByName (
+  IN  CONST CHAR16*             EfiAppName,
+  OUT EFI_DEVICE_PATH           **DevicePath
+  );
+
+/**
+  Locate an EFI application in a the Firmware Volumes by its GUID
+
+  @param  EfiAppGuid            Guid of the EFI Application into the Firmware Volume
+  @param  DevicePath            EFI Device Path of the EFI application
+
+  @return EFI_SUCCESS           The function completed successfully.
+  @return EFI_NOT_FOUND         The protocol could not be located.
+  @return EFI_OUT_OF_RESOURCES  There are not enough resources to find the protocol.
+
+**/
+EFI_STATUS
+LocateEfiApplicationInFvByGuid (
+  IN  CONST EFI_GUID            *EfiAppGuid,
+  OUT EFI_DEVICE_PATH           **DevicePath
   );
 
 #endif

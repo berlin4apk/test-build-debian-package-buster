@@ -40,6 +40,14 @@
 #define ARM_JUNO_PERIPHERALS_BASE             0x20000000
 #define ARM_JUNO_PERIPHERALS_SZ               0x0E000000
 
+// PCIe MSI address window
+#define ARM_JUNO_GIV2M_MSI_BASE               0x2c1c0000
+#define ARM_JUNO_GIV2M_MSI_SZ                 SIZE_256KB
+
+// PCIe MSI to SPI mapping range
+#define ARM_JUNO_GIV2M_MSI_SPI_BASE           224
+#define ARM_JUNO_GIV2M_MSI_SPI_COUNT          127 //TRM says last SPI is 351, 351-224=127
+
 // On-Chip non-secure SRAM
 #define ARM_JUNO_NON_SECURE_SRAM_BASE         0x2E000000
 #define ARM_JUNO_NON_SECURE_SRAM_SZ           SIZE_16MB
@@ -51,5 +59,41 @@
 // 6GB of DRAM from the 64bit address space
 #define ARM_JUNO_EXTRA_SYSTEM_MEMORY_BASE     0x0880000000
 #define ARM_JUNO_EXTRA_SYSTEM_MEMORY_SZ       (SIZE_2GB + SIZE_4GB)
+
+//
+// ACPI table information used to initialize tables.
+//
+#define EFI_ACPI_ARM_OEM_ID           'A','R','M','L','T','D'   // OEMID 6 bytes long
+#define EFI_ACPI_ARM_OEM_TABLE_ID     SIGNATURE_64('A','R','M','-','J','U','N','O') // OEM table id 8 bytes long
+#define EFI_ACPI_ARM_OEM_REVISION     0x20140727
+#define EFI_ACPI_ARM_CREATOR_ID       SIGNATURE_32('A','R','M',' ')
+#define EFI_ACPI_ARM_CREATOR_REVISION 0x00000099
+
+// A macro to initialise the common header part of EFI ACPI tables as defined by
+// EFI_ACPI_DESCRIPTION_HEADER structure.
+#define ARM_ACPI_HEADER(Signature, Type, Revision) {              \
+    Signature,                      /* UINT32  Signature */       \
+    sizeof (Type),                  /* UINT32  Length */          \
+    Revision,                       /* UINT8   Revision */        \
+    0,                              /* UINT8   Checksum */        \
+    { EFI_ACPI_ARM_OEM_ID },        /* UINT8   OemId[6] */        \
+    EFI_ACPI_ARM_OEM_TABLE_ID,      /* UINT64  OemTableId */      \
+    EFI_ACPI_ARM_OEM_REVISION,      /* UINT32  OemRevision */     \
+    EFI_ACPI_ARM_CREATOR_ID,        /* UINT32  CreatorId */       \
+    EFI_ACPI_ARM_CREATOR_REVISION   /* UINT32  CreatorRevision */ \
+  }
+
+#define JUNO_WATCHDOG_COUNT  2
+
+// Define if the exported ACPI Tables are based on ACPI 5.0 spec or latest
+//#define ARM_JUNO_ACPI_5_0
+
+//
+// Address of the system registers that contain the MAC address
+// assigned to the PCI Gigabyte Ethernet device.
+//
+
+#define ARM_JUNO_SYS_PCIGBE_L  (ARM_VE_BOARD_PERIPH_BASE + 0x74)
+#define ARM_JUNO_SYS_PCIGBE_H  (ARM_VE_BOARD_PERIPH_BASE + 0x78)
 
 #endif

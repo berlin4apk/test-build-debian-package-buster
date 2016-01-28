@@ -1,8 +1,9 @@
 /** @file
   Module for clarifying the content of the smbios structure element information.
 
-  Copyright (c) 2005 - 2012, Intel Corporation. All rights reserved.<BR>
-  Copyright (c) 2014, Hewlett-Packard Development Company, L.P.<BR>
+  Copyright (c) 2005 - 2015, Intel Corporation. All rights reserved.<BR>
+  (C) Copyright 2014 Hewlett-Packard Development Company, L.P.<BR>  
+  (C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -200,6 +201,75 @@ SmbiosPrintEPSInfo (
 }
 
 /**
+  Print the info of 64-bit EPS(Entry Point Structure).
+
+  @param[in] SmbiosTable    Pointer to the SMBIOS table entry point.
+  @param[in] Option         Display option.
+**/
+VOID
+Smbios64BitPrintEPSInfo (
+  IN  SMBIOS_TABLE_3_0_ENTRY_POINT  *SmbiosTable,
+  IN  UINT8                         Option
+  )
+{
+  UINT8 Anchor[5];
+
+  if (SmbiosTable == NULL) {
+    ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_SMBIOSTABLE_NULL), gShellDebug1HiiHandle);
+    return ;
+  }
+
+  if (Option == SHOW_NONE) {
+    return ;
+  }
+
+  if (Option >= SHOW_NORMAL) {
+    ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_64_BIT_ENTRY_POINT_SIGN), gShellDebug1HiiHandle);
+
+    MemToString (Anchor, SmbiosTable->AnchorString, 5);
+    ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_ANCHOR_STR), gShellDebug1HiiHandle, Anchor);
+
+    ShellPrintHiiEx(-1,-1,NULL,
+      STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_EPS_CHECKSUM),
+      gShellDebug1HiiHandle,
+      SmbiosTable->EntryPointStructureChecksum
+     );
+
+    ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_ENTRY_POINT_LEN), gShellDebug1HiiHandle, SmbiosTable->EntryPointLength);
+
+    ShellPrintHiiEx(-1,-1,NULL,
+      STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_VERSION),
+      gShellDebug1HiiHandle,
+      SmbiosTable->MajorVersion,
+      SmbiosTable->MinorVersion
+     );
+
+    ShellPrintHiiEx(-1,-1,NULL,
+      STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_DOCREV),
+      gShellDebug1HiiHandle,
+      SmbiosTable->DocRev
+     );
+
+    ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_TABLE_MAX_SIZE), gShellDebug1HiiHandle, SmbiosTable->TableMaximumSize);
+
+    ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_TABLE_ADDR), gShellDebug1HiiHandle, SmbiosTable->TableAddress);
+
+  }
+  //
+  // If SHOW_ALL, also print followings.
+  //
+  if (Option >= SHOW_DETAIL) {
+    ShellPrintHiiEx(-1,-1,NULL,
+      STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_ENTRY_POINT_REVISION),
+      gShellDebug1HiiHandle,
+      SmbiosTable->EntryPointRevision
+     );
+  }
+
+  Print (L"\n");
+}
+
+/**
   This function print the content of the structure pointed by Struct.
 
   @param[in] Struct       Point to the structure to be printed.
@@ -362,6 +432,11 @@ SmbiosPrintStructure (
       PRINT_STRUCT_VALUE (Struct, Type4, EnabledCoreCount);
       PRINT_STRUCT_VALUE (Struct, Type4, ThreadCount);
       DisplayProcessorCharacteristics (Struct->Type4->ProcessorCharacteristics, Option);
+    }
+    if ((SmbiosMajorVersion >= 0x3) && (Struct->Hdr->Length > 0x2A)) {
+      PRINT_STRUCT_VALUE (Struct, Type4, CoreCount2);
+      PRINT_STRUCT_VALUE (Struct, Type4, EnabledCoreCount2);
+      PRINT_STRUCT_VALUE (Struct, Type4, ThreadCount2);
     }
     break;
 
@@ -646,6 +721,11 @@ SmbiosPrintStructure (
     if (AE_SMBIOS_VERSION (0x2, 0x7) && (Struct->Hdr->Length > 0x1C)) {
       PRINT_STRUCT_VALUE (Struct, Type17, ExtendedSize);
       PRINT_STRUCT_VALUE (Struct, Type17, ConfiguredMemoryClockSpeed);
+    }
+    if (AE_SMBIOS_VERSION (0x2, 0x8) && (Struct->Hdr->Length > 0x22)) {
+      PRINT_STRUCT_VALUE (Struct, Type17, MinimumVoltage);
+      PRINT_STRUCT_VALUE (Struct, Type17, MaximumVoltage);
+      PRINT_STRUCT_VALUE (Struct, Type17, ConfiguredVoltage);
     }
     break;
 
@@ -3020,7 +3100,7 @@ DisplaySPSCharacteristics (
   // Bits 13:10 - DMTF Power Supply Type
   //
   ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_TYPE), gShellDebug1HiiHandle);
-  Temp = (Characteristics & 0x1C00) << 10;
+  Temp = (Characteristics & 0x1C00) >> 10;
   switch (Temp) {
   case 1:
     ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_OTHER_SPACE), gShellDebug1HiiHandle);
@@ -3061,7 +3141,7 @@ DisplaySPSCharacteristics (
   // Bits 9:7 - Status
   //
   ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_STATUS_DASH), gShellDebug1HiiHandle);
-  Temp = (Characteristics & 0x380) << 7;
+  Temp = (Characteristics & 0x380) >> 7;
   switch (Temp) {
   case 1:
     ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_OTHER_SPACE), gShellDebug1HiiHandle);
@@ -3090,7 +3170,7 @@ DisplaySPSCharacteristics (
   // Bits 6:3 - DMTF Input Voltage Range Switching
   //
   ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_INPUT_VOLTAGE_RANGE), gShellDebug1HiiHandle);
-  Temp = (Characteristics & 0x78) << 3;
+  Temp = (Characteristics & 0x78) >> 3;
   switch (Temp) {
   case 1:
     ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_PRINTINFO_OTHER_SPACE), gShellDebug1HiiHandle);

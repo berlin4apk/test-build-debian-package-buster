@@ -1,7 +1,7 @@
 ## @file
 # This file is used to define checkpoints used by ECC tool
 #
-# Copyright (c) 2008 - 2014, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2008 - 2015, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -19,6 +19,7 @@ from MetaDataParser import ParseHeaderCommentSection
 import EccGlobalData
 import c
 from Common.LongFilePathSupport import OpenLongFilePath as open
+from Common.MultipleWorkspace import MultipleWorkspace as mws
 
 ## Check
 #
@@ -100,6 +101,9 @@ class Check(object):
                         Dirnames.append(Dirname)
             if IgnoredPattern.match(Dirpath.upper()):
                 continue
+            for f in Filenames[:]:
+                if f.lower() in EccGlobalData.gConfig.SkipFileList:
+                    Filenames.remove(f)
             yield (Dirpath, Dirnames, Filenames)
 
     # Check whether return type exists and in the first line
@@ -377,9 +381,7 @@ class Check(object):
             for Key in RecordDict:
                 if len(RecordDict[Key]) > 1:
                     for Item in RecordDict[Key]:
-                        Path = Item[1].replace(EccGlobalData.gWorkspace, '')
-                        if Path.startswith('\\') or Path.startswith('/'):
-                            Path = Path[1:]
+                        Path = mws.relpath(Item[1], EccGlobalData.gWorkspace)
                         if not EccGlobalData.gException.IsException(ERROR_INCLUDE_FILE_CHECK_NAME, Path):
                             EccGlobalData.gDb.TblReport.Insert(ERROR_INCLUDE_FILE_CHECK_NAME, OtherMsg="The file name for [%s] is duplicate" % Path, BelongsToTable='File', BelongsToItem=Item[0])
 
@@ -561,6 +563,7 @@ class Check(object):
         self.MetaDataFileCheckLibraryInstanceDependent()
         self.MetaDataFileCheckLibraryInstanceOrder()
         self.MetaDataFileCheckLibraryNoUse()
+        self.MetaDataFileCheckLibraryDefinedInDec()
         self.MetaDataFileCheckBinaryInfInFdf()
         self.MetaDataFileCheckPcdDuplicate()
         self.MetaDataFileCheckPcdFlash()
@@ -649,7 +652,11 @@ class Check(object):
                 if LibraryClass[1].upper() == 'NULL' or LibraryClass[1].startswith('!ifdef') or LibraryClass[1].startswith('!ifndef') or LibraryClass[1].endswith('!endif'):
                     continue
                 else:
-                    LibraryIns = os.path.normpath(os.path.join(EccGlobalData.gWorkspace, LibraryClass[2]))
+                    LibraryIns = os.path.normpath(mws.join(EccGlobalData.gWorkspace, LibraryClass[2]))
+                    SkipDirString = '|'.join(EccGlobalData.gConfig.SkipDirList)
+                    p = re.compile(r'.*[\\/](?:%s^\S)[\\/]?.*' % SkipDirString)
+                    if p.match(os.path.split(LibraryIns)[0].upper()):
+                        continue
                     SqlCommand = """select Value3 from Inf where BelongsToFile =
                                     (select ID from File where lower(FullPath) = lower('%s'))
                                     and Value2 = '%s'""" % (LibraryIns, 'LIBRARY_CLASS')
@@ -692,7 +699,24 @@ class Check(object):
                     for FilePath in FilePathList:
                         if not EccGlobalData.gException.IsException(ERROR_META_DATA_FILE_CHECK_LIBRARY_NAME_DUPLICATE, Record[1]):
                             EccGlobalData.gDb.TblReport.Insert(ERROR_META_DATA_FILE_CHECK_LIBRARY_NAME_DUPLICATE, OtherMsg="The Library Class [%s] is duplicated in '%s' line %s and line %s." % (Record[1], FilePath, Record[3], Record[4]), BelongsToTable='Dsc', BelongsToItem=Record[0])
-                                                
+    
+    # Check the header file in Include\Library directory whether be defined in the package DEC file.
+    def MetaDataFileCheckLibraryDefinedInDec(self):
+        if EccGlobalData.gConfig.MetaDataFileCheckLibraryDefinedInDec == '1' or EccGlobalData.gConfig.MetaDataFileCheckAll == '1' or EccGlobalData.gConfig.CheckAll == '1':
+            EdkLogger.quiet("Checking for library instance whether be defined in the package dec file ...")
+            SqlCommand = """
+                    select A.Value1, A.StartLine, A.ID, B.Value1 from Inf as A left join Dec as B
+                    on A.Model = B.Model and A.Value1 = B.Value1 where A.Model=%s
+                    """ % MODEL_EFI_LIBRARY_CLASS
+            RecordSet = EccGlobalData.gDb.TblDsc.Exec(SqlCommand)
+            for Record in RecordSet:
+                LibraryInInf, Line, ID, LibraryDec = Record
+                if not LibraryDec:
+                    if not EccGlobalData.gException.IsException(ERROR_META_DATA_FILE_CHECK_LIBRARY_NOT_DEFINED, LibraryInInf):
+                        EccGlobalData.gDb.TblReport.Insert(ERROR_META_DATA_FILE_CHECK_LIBRARY_NOT_DEFINED, \
+                                            OtherMsg="The Library Class [%s] in %s line is not defined in the associated package file." % (LibraryInInf, Line), 
+                                            BelongsToTable='Inf', BelongsToItem=ID)
+    
     # Check whether an Inf file is specified in the FDF file, but not in the Dsc file, then the Inf file must be for a Binary module only
     def MetaDataFileCheckBinaryInfInFdf(self):
         if EccGlobalData.gConfig.MetaDataFileCheckBinaryInfInFdf == '1' or EccGlobalData.gConfig.MetaDataFileCheckAll == '1' or EccGlobalData.gConfig.CheckAll == '1':
@@ -708,7 +732,7 @@ class Check(object):
             for Record in RecordSet:
                 FdfID = Record[0]
                 FilePath = Record[1]
-                FilePath = os.path.normpath(os.path.join(EccGlobalData.gWorkspace, FilePath))
+                FilePath = os.path.normpath(mws.join(EccGlobalData.gWorkspace, FilePath))
                 SqlCommand = """select ID from Inf where Model = %s and BelongsToFile = (select ID from File where FullPath like '%s')
                                 """ % (MODEL_EFI_SOURCE_FILE, FilePath)
                 NewRecordSet = EccGlobalData.gDb.TblFile.Exec(SqlCommand)
@@ -892,9 +916,7 @@ class Check(object):
         RecordSet = Table.Exec(SqlCommand)
         Path = ""
         for Record in RecordSet:
-            Path = Record[0].replace(EccGlobalData.gWorkspace, '')
-            if Path.startswith('\\') or Path.startswith('/'):
-                Path = Path[1:]
+            Path = mws.relpath(Record[0], EccGlobalData.gWorkspace)
         return Path
 
     # Check whether two module INFs under one workspace has the same FILE_GUID value
@@ -1095,7 +1117,7 @@ class Check(object):
                      """ % (Table.Table, Table.Table, Model, Model)
         RecordSet = Table.Exec(SqlCommand)
         for Record in RecordSet:     
-            if not EccGlobalData.gException.IsException(ErrorID, Record[1] + ':' + Record[2]):
+            if not EccGlobalData.gException.IsException(ErrorID, Record[2]):
                 EccGlobalData.gDb.TblReport.Insert(ErrorID, OtherMsg="The %s value [%s] is used more than one time" % (Name.upper(), Record[2]), BelongsToTable=Table.Table, BelongsToItem=Record[0])
 
     # Naming Convention Check
@@ -1202,7 +1224,10 @@ class Check(object):
             SqlCommand = """select ID, Name from %s where Model = %s""" % (FileTable, MODEL_IDENTIFIER_VARIABLE)
             RecordSet = EccGlobalData.gDb.TblFile.Exec(SqlCommand)
             for Record in RecordSet:
-                if not Pattern.match(Record[1]):
+                Var = Record[1]
+                if Var.startswith('CONST'):
+                    Var = Var[5:].lstrip()
+                if not Pattern.match(Var):
                     if not EccGlobalData.gException.IsException(ERROR_NAMING_CONVENTION_CHECK_VARIABLE_NAME, Record[1]):
                         EccGlobalData.gDb.TblReport.Insert(ERROR_NAMING_CONVENTION_CHECK_VARIABLE_NAME, OtherMsg="The variable name [%s] does not follow the rules" % (Record[1]), BelongsToTable=FileTable, BelongsToItem=Record[0])
 

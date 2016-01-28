@@ -2,7 +2,7 @@
 
 Copyright (c) 2009, Hewlett-Packard Company. All rights reserved.<BR>
 Portions copyright (c) 2010, Apple Inc. All rights reserved.<BR>
-Portions copyright (c) 2011-2014, ARM Ltd. All rights reserved.<BR>
+Portions copyright (c) 2011-2015, ARM Ltd. All rights reserved.<BR>
 
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
@@ -22,8 +22,9 @@ Abstract:
 
 --*/
 
+#include <Library/ArmGicLib.h>
+
 #include "ArmGicDxe.h"
-#include "GicV2/ArmGicV2Lib.h"
 
 #define ARM_GIC_DEFAULT_PRIORITY  0x80
 
@@ -54,7 +55,7 @@ GicV2EnableInterruptSource (
     return EFI_UNSUPPORTED;
   }
 
-  ArmGicEnableInterrupt (mGicDistributorBase, Source);
+  ArmGicEnableInterrupt (mGicDistributorBase, 0, Source);
 
   return EFI_SUCCESS;
 }
@@ -81,7 +82,7 @@ GicV2DisableInterruptSource (
     return EFI_UNSUPPORTED;
   }
 
-  ArmGicDisableInterrupt (mGicDistributorBase, Source);
+  ArmGicDisableInterrupt (mGicDistributorBase, 0, Source);
 
   return EFI_SUCCESS;
 }
@@ -110,7 +111,7 @@ GicV2GetInterruptSourceState (
     return EFI_UNSUPPORTED;
   }
 
-  *InterruptState = ArmGicIsInterruptEnabled (mGicDistributorBase, Source);
+  *InterruptState = ArmGicIsInterruptEnabled (mGicDistributorBase, 0, Source);
 
   return EFI_SUCCESS;
 }

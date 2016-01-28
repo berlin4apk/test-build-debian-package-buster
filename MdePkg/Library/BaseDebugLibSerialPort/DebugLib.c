@@ -133,7 +133,7 @@ DebugAssert (
   //
   // Generate the ASSERT() message in Ascii format
   //
-  AsciiSPrint (Buffer, sizeof (Buffer), "ASSERT %a(%d): %a\n", FileName, LineNumber, Description);
+  AsciiSPrint (Buffer, sizeof (Buffer), "ASSERT [%a] %a(%d): %a\n", gEfiCallerBaseName, FileName, LineNumber, Description);
 
   //
   // Send the print string to the Console Output device
@@ -263,3 +263,22 @@ DebugClearMemoryEnabled (
 {
   return (BOOLEAN) ((PcdGet8(PcdDebugPropertyMask) & DEBUG_PROPERTY_CLEAR_MEMORY_ENABLED) != 0);
 }
+
+/**
+  Returns TRUE if any one of the bit is set both in ErrorLevel and PcdFixedDebugPrintErrorLevel.
+
+  This function compares the bit mask of ErrorLevel and PcdFixedDebugPrintErrorLevel.
+
+  @retval  TRUE    Current ErrorLevel is supported.
+  @retval  FALSE   Current ErrorLevel is not supported.
+
+**/
+BOOLEAN
+EFIAPI
+DebugPrintLevelEnabled (
+  IN  CONST UINTN        ErrorLevel
+  )
+{
+  return (BOOLEAN) ((ErrorLevel & PcdGet32(PcdFixedDebugPrintErrorLevel)) != 0);
+}
+

@@ -2,7 +2,7 @@
   NvmExpressDxe driver is used to manage non-volatile memory subsystem which follows
   NVM Express specification.
 
-  Copyright (c) 2013, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2013 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -35,6 +35,15 @@ EFI_DRIVER_SUPPORTED_EFI_VERSION_PROTOCOL gNvmExpressDriverSupportedEfiVersion =
   0                                                   // Version number to be filled at start up.
 };
 
+//
+// Template for NVM Express Pass Thru Mode data structure.
+//
+GLOBAL_REMOVE_IF_UNREFERENCED EFI_NVM_EXPRESS_PASS_THRU_MODE gEfiNvmExpressPassThruMode = {
+  EFI_NVM_EXPRESS_PASS_THRU_ATTRIBUTES_PHYSICAL | EFI_NVM_EXPRESS_PASS_THRU_ATTRIBUTES_LOGICAL | EFI_NVM_EXPRESS_PASS_THRU_ATTRIBUTES_CMD_SET_NVM,
+  sizeof (UINTN),
+  0x10100
+};
+
 /**
   Check if the specified Nvm Express device namespace is active, and create child handles
   for them with BlockIo and DiskInfo protocol instances.
@@ -43,8 +52,6 @@ EFI_DRIVER_SUPPORTED_EFI_VERSION_PROTOCOL gNvmExpressDriverSupportedEfiVersion =
   @param[in] NamespaceId     The NVM Express namespace ID  for which a device path node is to be
                              allocated and built. Caller must set the NamespaceId to zero if the
                              device path node will contain a valid UUID.
-  @param[in] NamespaceUuid   The NVM Express namespace UUID for which a device path node is to be
-                             allocated and built. UUID will only be valid of the Namespace ID is zero.
 
   @retval EFI_SUCCESS        All the namespaces in the device are successfully enumerated.
   @return Others             Some error occurs when enumerating the namespaces.
@@ -53,8 +60,7 @@ EFI_DRIVER_SUPPORTED_EFI_VERSION_PROTOCOL gNvmExpressDriverSupportedEfiVersion =
 EFI_STATUS
 EnumerateNvmeDevNamespace (
   IN NVME_CONTROLLER_PRIVATE_DATA       *Private,
-  UINT32                                NamespaceId,
-  UINT64                                NamespaceUuid
+  UINT32                                NamespaceId
   )
 {
   NVME_ADMIN_NAMESPACE_DATA             *NamespaceData;
@@ -104,6 +110,7 @@ EnumerateNvmeDevNamespace (
     //
     Device = AllocateZeroPool(sizeof(NVME_DEVICE_PRIVATE_DATA));
     if (Device == NULL) {
+      Status = EFI_OUT_OF_RESOURCES;
       goto Exit;
     }
 
@@ -148,6 +155,12 @@ EnumerateNvmeDevNamespace (
     Device->BlockIo.FlushBlocks  = NvmeBlockIoFlushBlocks;
 
     //
+    // Create StorageSecurityProtocol Instance
+    //
+    Device->StorageSecurity.ReceiveData = NvmeStorageSecurityReceiveData;
+    Device->StorageSecurity.SendData    = NvmeStorageSecuritySendData;
+
+    //
     // Create DiskInfo Protocol instance
     //
     InitializeDiskInfo (Device);
@@ -158,7 +171,6 @@ EnumerateNvmeDevNamespace (
     Status = Private->Passthru.BuildDevicePath (
                                  &Private->Passthru,
                                  Device->NamespaceId,
-                                 Device->NamespaceUuid,
                                  &NewDevicePathNode
                                  );
 
@@ -205,10 +217,36 @@ EnumerateNvmeDevNamespace (
     if(EFI_ERROR(Status)) {
       goto Exit;
     }
+
+    //
+    // Check if the NVMe controller supports the Security Send and Security Receive commands
+    //
+    if ((Private->ControllerData->Oacs & SECURITY_SEND_RECEIVE_SUPPORTED) != 0) {
+      Status = gBS->InstallProtocolInterface (
+                      &Device->DeviceHandle,
+                      &gEfiStorageSecurityCommandProtocolGuid,
+                      EFI_NATIVE_INTERFACE,
+                      &Device->StorageSecurity
+                      );
+      if(EFI_ERROR(Status)) {
+        gBS->UninstallMultipleProtocolInterfaces (
+               &Device->DeviceHandle,
+               &gEfiDevicePathProtocolGuid,
+               Device->DevicePath,
+               &gEfiBlockIoProtocolGuid,
+               &Device->BlockIo,
+               &gEfiDiskInfoProtocolGuid,
+               &Device->DiskInfo,
+               NULL
+               );
+        goto Exit;
+      }
+    }
+
     gBS->OpenProtocol (
            Private->ControllerHandle,
-           &gEfiPciIoProtocolGuid,
-           (VOID **) &Private->PciIo,
+           &gEfiNvmExpressPassThruProtocolGuid,
+           (VOID **) &Private->Passthru,
            Private->DriverBindingHandle,
            Device->DeviceHandle,
            EFI_OPEN_PROTOCOL_BY_CHILD_CONTROLLER
@@ -250,6 +288,10 @@ Exit:
     FreePool (NamespaceData);
   }
 
+  if (NewDevicePathNode != NULL) {
+    FreePool (NewDevicePathNode);
+  }
+
   if(EFI_ERROR(Status) && (Device != NULL) && (Device->DevicePath != NULL)) {
     FreePool (Device->DevicePath);
   }
@@ -276,18 +318,15 @@ DiscoverAllNamespaces (
 {
   EFI_STATUS                            Status;
   UINT32                                NamespaceId;
-  UINT64                                NamespaceUuid;
-  NVM_EXPRESS_PASS_THRU_PROTOCOL        *Passthru;
+  EFI_NVM_EXPRESS_PASS_THRU_PROTOCOL    *Passthru;
 
   NamespaceId   = 0xFFFFFFFF;
-  NamespaceUuid = 0;
   Passthru      = &Private->Passthru;
 
   while (TRUE) {
     Status = Passthru->GetNextNamespace (
                          Passthru,
-                         (UINT32 *)&NamespaceId,
-                         (UINT64 *)&NamespaceUuid
+                         (UINT32 *)&NamespaceId
                          );
 
     if (EFI_ERROR (Status)) {
@@ -296,8 +335,7 @@ DiscoverAllNamespaces (
 
     Status = EnumerateNvmeDevNamespace (
                Private,
-               NamespaceId,
-               NamespaceUuid
+               NamespaceId
                );
 
     if (EFI_ERROR(Status)) {
@@ -330,9 +368,10 @@ UnregisterNvmeNamespace (
   )
 {
   EFI_STATUS                               Status;
-  EFI_PCI_IO_PROTOCOL                      *PciIo;
   EFI_BLOCK_IO_PROTOCOL                    *BlockIo;
   NVME_DEVICE_PRIVATE_DATA                 *Device;
+  NVME_CONTROLLER_PRIVATE_DATA             *Private;
+  EFI_STORAGE_SECURITY_COMMAND_PROTOCOL    *StorageSecurity;
 
   BlockIo = NULL;
 
@@ -348,14 +387,15 @@ UnregisterNvmeNamespace (
     return Status;
   }
 
-  Device = NVME_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO (BlockIo);
+  Device  = NVME_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO (BlockIo);
+  Private = Device->Controller;
 
   //
   // Close the child handle
   //
   gBS->CloseProtocol (
          Controller,
-         &gEfiPciIoProtocolGuid,
+         &gEfiNvmExpressPassThruProtocolGuid,
          This->DriverBindingHandle,
          Handle
          );
@@ -378,13 +418,44 @@ UnregisterNvmeNamespace (
   if (EFI_ERROR (Status)) {
     gBS->OpenProtocol (
            Controller,
-           &gEfiPciIoProtocolGuid,
-           (VOID **) &PciIo,
+           &gEfiNvmExpressPassThruProtocolGuid,
+           (VOID **) &Private->Passthru,
            This->DriverBindingHandle,
            Handle,
            EFI_OPEN_PROTOCOL_BY_CHILD_CONTROLLER
            );
     return Status;
+  }
+
+  //
+  // If Storage Security Command Protocol is installed, then uninstall this protocol.
+  //
+  Status = gBS->OpenProtocol (
+                  Handle,
+                  &gEfiStorageSecurityCommandProtocolGuid,
+                  (VOID **) &StorageSecurity,
+                  This->DriverBindingHandle,
+                  Controller,
+                  EFI_OPEN_PROTOCOL_GET_PROTOCOL
+                  );
+
+  if (!EFI_ERROR (Status)) {
+    Status = gBS->UninstallProtocolInterface (
+                    Handle,
+                    &gEfiStorageSecurityCommandProtocolGuid,
+                    &Device->StorageSecurity
+                    );
+    if (EFI_ERROR (Status)) {
+      gBS->OpenProtocol (
+        Controller,
+        &gEfiNvmExpressPassThruProtocolGuid,
+        (VOID **) &Private->Passthru,
+        This->DriverBindingHandle,
+        Handle,
+        EFI_OPEN_PROTOCOL_BY_CHILD_CONTROLLER
+        );
+      return Status;
+    }
   }
 
   if(Device->DevicePath != NULL) {
@@ -394,6 +465,8 @@ UnregisterNvmeNamespace (
   if (Device->ControllerNameTable != NULL) {
     FreeUnicodeStringTable (Device->ControllerNameTable);
   }
+
+  FreePool (Device);
 
   return EFI_SUCCESS;
 }
@@ -471,8 +544,8 @@ NvmExpressDriverBindingSupported (
 
       if ((DevicePathNode.DevPath->Type    != MESSAGING_DEVICE_PATH) ||
           (DevicePathNode.DevPath->SubType != MSG_NVME_NAMESPACE_DP) ||
-           DevicePathNodeLength(DevicePathNode.DevPath) != sizeof(NVME_NAMESPACE_DEVICE_PATH)) {
-        return EFI_UNSUPPORTED;
+          (DevicePathNodeLength(DevicePathNode.DevPath) != sizeof(NVME_NAMESPACE_DEVICE_PATH))) {
+         return EFI_UNSUPPORTED;
       }
     }
   }
@@ -602,18 +675,19 @@ NvmExpressDriverBindingStart (
   IN EFI_DEVICE_PATH_PROTOCOL     *RemainingDevicePath
   )
 {
-  EFI_STATUS                        Status;
-  EFI_PCI_IO_PROTOCOL               *PciIo;
-  NVME_CONTROLLER_PRIVATE_DATA      *Private;
-  EFI_DEVICE_PATH_PROTOCOL          *ParentDevicePath;
-  UINT32                            NamespaceId;
-  UINT64                            NamespaceUuid;
-  EFI_PHYSICAL_ADDRESS              MappedAddr;
-  UINTN                             Bytes;
+  EFI_STATUS                          Status;
+  EFI_PCI_IO_PROTOCOL                 *PciIo;
+  NVME_CONTROLLER_PRIVATE_DATA        *Private;
+  EFI_DEVICE_PATH_PROTOCOL            *ParentDevicePath;
+  UINT32                              NamespaceId;
+  EFI_PHYSICAL_ADDRESS                MappedAddr;
+  UINTN                               Bytes;
+  EFI_NVM_EXPRESS_PASS_THRU_PROTOCOL  *Passthru;
 
   DEBUG ((EFI_D_INFO, "NvmExpressDriverBindingStart: start\n"));
 
-  Private = NULL;
+  Private          = NULL;
+  Passthru         = NULL;
   ParentDevicePath = NULL;
 
   Status = gBS->OpenProtocol (
@@ -650,7 +724,7 @@ NvmExpressDriverBindingStart (
     if (Private == NULL) {
       DEBUG ((EFI_D_ERROR, "NvmExpressDriverBindingStart: allocating pool for Nvme Private Data failed!\n"));
       Status = EFI_OUT_OF_RESOURCES;
-      goto Exit2;
+      goto Exit;
     }
 
     //
@@ -671,7 +745,7 @@ NvmExpressDriverBindingStart (
                       0
                       );
     if (EFI_ERROR (Status)) {
-      goto Exit2;
+      goto Exit;
     }
 
     Bytes = EFI_PAGES_TO_SIZE (4);
@@ -685,7 +759,7 @@ NvmExpressDriverBindingStart (
                       );
 
     if (EFI_ERROR (Status) || (Bytes != EFI_PAGES_TO_SIZE (4))) {
-      goto Exit2;
+      goto Exit;
     }
 
     Private->BufferPciAddr = (UINT8 *)(UINTN)MappedAddr;
@@ -702,36 +776,36 @@ NvmExpressDriverBindingStart (
     Private->Passthru.GetNextNamespace = NvmExpressGetNextNamespace;
     Private->Passthru.BuildDevicePath  = NvmExpressBuildDevicePath;
     Private->Passthru.GetNamespace     = NvmExpressGetNamespace;
-    Private->PassThruMode.Attributes   = NVM_EXPRESS_PASS_THRU_ATTRIBUTES_PHYSICAL;
+    CopyMem (&Private->PassThruMode, &gEfiNvmExpressPassThruMode, sizeof (EFI_NVM_EXPRESS_PASS_THRU_MODE));
 
     Status = NvmeControllerInit (Private);
-
     if (EFI_ERROR(Status)) {
-      goto Exit2;
+      goto Exit;
     }
 
     Status = gBS->InstallMultipleProtocolInterfaces (
                     &Controller,
-                    &gEfiCallerIdGuid,
-                    Private,
+                    &gEfiNvmExpressPassThruProtocolGuid,
+                    &Private->Passthru,
                     NULL
                     );
     if (EFI_ERROR (Status)) {
-      goto Exit2;
+      goto Exit;
     }
   } else {
     Status = gBS->OpenProtocol (
                     Controller,
-                    &gEfiCallerIdGuid,
-                    (VOID **) &Private,
+                    &gEfiNvmExpressPassThruProtocolGuid,
+                    (VOID **) &Passthru,
                     This->DriverBindingHandle,
                     Controller,
                     EFI_OPEN_PROTOCOL_GET_PROTOCOL
                     );
     if (EFI_ERROR (Status)) {
-      Private = NULL;
-      goto Exit1;
+      goto Exit;
     }
+
+    Private = NVME_CONTROLLER_PRIVATE_DATA_FROM_PASS_THRU (Passthru);
   }
 
   if (RemainingDevicePath == NULL) {
@@ -749,30 +823,21 @@ NvmExpressDriverBindingStart (
     Status = Private->Passthru.GetNamespace (
                                  &Private->Passthru,
                                  RemainingDevicePath,
-                                 &NamespaceId,
-                                 &NamespaceUuid
+                                 &NamespaceId
                                  );
 
     if (!EFI_ERROR (Status)) {
-        Status = EnumerateNvmeDevNamespace (
-                   Private,
-                   NamespaceId,
-                   NamespaceUuid
-                   );
+      Status = EnumerateNvmeDevNamespace (
+                 Private,
+                 NamespaceId
+                 );
     }
   }
 
   DEBUG ((EFI_D_INFO, "NvmExpressDriverBindingStart: end successfully\n"));
   return EFI_SUCCESS;
 
-Exit1:
-  gBS->UninstallMultipleProtocolInterfaces (
-         Controller,
-         &gEfiCallerIdGuid,
-         Private,
-         NULL
-         );
-Exit2:
+Exit:
   if ((Private != NULL) && (Private->Mapping != NULL)) {
     PciIo->Unmap (PciIo, Private->Mapping);
   }
@@ -844,22 +909,24 @@ NvmExpressDriverBindingStop (
   BOOLEAN                             AllChildrenStopped;
   UINTN                               Index;
   NVME_CONTROLLER_PRIVATE_DATA        *Private;
+  EFI_NVM_EXPRESS_PASS_THRU_PROTOCOL  *PassThru;
 
   if (NumberOfChildren == 0) {
     Status = gBS->OpenProtocol (
                     Controller,
-                    &gEfiCallerIdGuid,
-                    (VOID **) &Private,
+                    &gEfiNvmExpressPassThruProtocolGuid,
+                    (VOID **) &PassThru,
                     This->DriverBindingHandle,
                     Controller,
                     EFI_OPEN_PROTOCOL_GET_PROTOCOL
                     );
 
     if (!EFI_ERROR (Status)) {
+      Private = NVME_CONTROLLER_PRIVATE_DATA_FROM_PASS_THRU (PassThru);
       gBS->UninstallMultipleProtocolInterfaces (
             Controller,
-            &gEfiCallerIdGuid,
-            Private,
+            &gEfiNvmExpressPassThruProtocolGuid,
+            PassThru,
             NULL
             );
 
@@ -940,7 +1007,7 @@ NvmExpressUnload (
   DeviceHandleBuffer = NULL;
   Status = gBS->LocateHandleBuffer (
                   ByProtocol,
-                  &gEfiCallerIdGuid,
+                  &gEfiNvmExpressPassThruProtocolGuid,
                   NULL,
                   &DeviceHandleCount,
                   &DeviceHandleBuffer

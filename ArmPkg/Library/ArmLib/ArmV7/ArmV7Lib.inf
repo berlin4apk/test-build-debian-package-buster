@@ -49,5 +49,5 @@
 [Protocols]
   gEfiCpuArchProtocolGuid
 
-[FixedPcd]
-  gArmTokenSpaceGuid.PcdArmCacheOperationThreshold
+[FeaturePcd.ARM]
+  gArmTokenSpaceGuid.PcdNormalMemoryNonshareableOverride

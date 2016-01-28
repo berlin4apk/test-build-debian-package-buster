@@ -25,7 +25,6 @@
   ../Common/ArmLib.c
 
   NullArmLib.c
-  NullArmCacheInformation.c
 
 [Sources.ARM]
   ../Common/Arm/ArmLibSupport.S    | GCC
@@ -40,6 +39,3 @@
 
 [Protocols]
   gEfiCpuArchProtocolGuid
-
-[FixedPcd]
-  gArmTokenSpaceGuid.PcdArmCacheOperationThreshold

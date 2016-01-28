@@ -4,7 +4,8 @@
 # The Emulation Platform can be used to debug individual modules, prior to creating
 #    a real platform. This also provides an example for how an DSC is created.
 #
-# Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2015, Hewlett-Packard Development Company, L.P.<BR>
+# Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
 #
 #    This program and the accompanying materials
 #    are licensed and made available under the terms and conditions of the BSD License
@@ -81,6 +82,7 @@
   CacheMaintenanceLib|MdePkg/Library/BaseCacheMaintenanceLib/BaseCacheMaintenanceLib.inf
   PeCoffLib|MdePkg/Library/BasePeCoffLib/BasePeCoffLib.inf
   PeCoffGetEntryPointLib|MdePkg/Library/BasePeCoffGetEntryPointLib/BasePeCoffGetEntryPointLib.inf
+  SortLib|MdeModulePkg/Library/BaseSortLib/BaseSortLib.inf
   #
   # UEFI & PI
   #
@@ -96,6 +98,8 @@
   PeiServicesLib|MdePkg/Library/PeiServicesLib/PeiServicesLib.inf
   DxeServicesLib|MdePkg/Library/DxeServicesLib/DxeServicesLib.inf
   DxeServicesTableLib|MdePkg/Library/DxeServicesTableLib/DxeServicesTableLib.inf
+  UefiBootManagerLib|MdeModulePkg/Library/UefiBootManagerLib/UefiBootManagerLib.inf
+  FileExplorerLib|MdeModulePkg/Library/FileExplorerLib/FileExplorerLib.inf
   
   #
   # Generic Modules
@@ -105,6 +109,7 @@
   NetLib|MdeModulePkg/Library/DxeNetLib/DxeNetLib.inf
   IpIoLib|MdeModulePkg/Library/DxeIpIoLib/DxeIpIoLib.inf
   UdpIoLib|MdeModulePkg/Library/DxeUdpIoLib/DxeUdpIoLib.inf
+  HttpLib|MdeModulePkg/Library/DxeHttpLib/DxeHttpLib.inf
   DpcLib|MdeModulePkg/Library/DxeDpcLib/DxeDpcLib.inf
   OemHookStatusCodeLib|MdeModulePkg/Library/OemHookStatusCodeLibNull/OemHookStatusCodeLibNull.inf
   GenericBdsLib|IntelFrameworkModulePkg/Library/GenericBdsLib/GenericBdsLib.inf
@@ -113,10 +118,12 @@
   TimerLib|MdePkg/Library/BaseTimerLibNullTemplate/BaseTimerLibNullTemplate.inf
   SerialPortLib|MdePkg/Library/BaseSerialPortLibNull/BaseSerialPortLibNull.inf
   CapsuleLib|MdeModulePkg/Library/DxeCapsuleLibNull/DxeCapsuleLibNull.inf
+  ImageDecoderLib|MdeModulePkg/Library/ImageDecoderLib/ImageDecoderLib.inf
+  BootLogoLib|MdeModulePkg/Library/BootLogoLib/BootLogoLib.inf
   #
   # Platform
   #
-  PlatformBdsLib|Nt32Pkg/Library/Nt32BdsLib/Nt32BdsLib.inf
+  PlatformBootManagerLib|Nt32Pkg/Library/PlatformBootManagerLib/PlatformBootManagerLib.inf
   #
   # Misc
   #
@@ -132,7 +139,12 @@
   IntrinsicLib|CryptoPkg/Library/IntrinsicLib/IntrinsicLib.inf
   OpensslLib|CryptoPkg/Library/OpensslLib/OpensslLib.inf
   TpmMeasurementLib|SecurityPkg/Library/DxeTpmMeasurementLib/DxeTpmMeasurementLib.inf
+  AuthVariableLib|SecurityPkg/Library/AuthVariableLib/AuthVariableLib.inf
+!else
+  TpmMeasurementLib|MdeModulePkg/Library/TpmMeasurementLibNull/TpmMeasurementLibNull.inf
+  AuthVariableLib|MdeModulePkg/Library/AuthVariableLibNull/AuthVariableLibNull.inf
 !endif
+  VarCheckLib|MdeModulePkg/Library/VarCheckLib/VarCheckLib.inf
 
 [LibraryClasses.common.USER_DEFINED]
   DebugLib|MdePkg/Library/BaseDebugLibNull/BaseDebugLibNull.inf
@@ -196,7 +208,7 @@
   PcdLib|MdePkg/Library/BasePcdLibNull/BasePcdLibNull.inf
 
 [LibraryClasses.common.UEFI_APPLICATION]
-  PcdLib|MdePkg/Library/BasePcdLibNull/BasePcdLibNull.inf
+  PcdLib|MdePkg/Library/DxePcdLib/DxePcdLib.inf
   PrintLib|MdeModulePkg/Library/DxePrintLibPrint2Protocol/DxePrintLibPrint2Protocol.inf
   
 [LibraryClasses.common.DXE_RUNTIME_DRIVER]
@@ -243,6 +255,9 @@
   gEfiSecurityPkgTokenSpaceGuid.PcdFixedMediaImageVerificationPolicy|0x04
   gEfiSecurityPkgTokenSpaceGuid.PcdRemovableMediaImageVerificationPolicy|0x04
 !endif
+                        
+  gEfiMdeModulePkgTokenSpaceGuid.PcdBootManagerMenuFile|{ 0x21, 0xaa, 0x2c, 0x46, 0x14, 0x76, 0x03, 0x45, 0x83, 0x6e, 0x8a, 0xb6, 0xf4, 0x66, 0x23, 0x31 }
+
 
 ################################################################################
 #
@@ -269,10 +284,10 @@
   gEfiNt32PkgTokenSpaceGuid.PcdWinNtFileSystem|L".!..\..\..\..\EdkShellBinPkg\Bin\X64\Apps"|VOID*|106
 
 [PcdsDynamicHii.common.DEFAULT]
-  gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdSetupConOutColumn|L"SetupConsoleConfig"|gEfiNt32PkgTokenSpaceGuid|0x0|80
-  gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdSetupConOutRow|L"SetupConsoleConfig"|gEfiNt32PkgTokenSpaceGuid|0x4|25
-  gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdPlatformBootTimeOut|L"Timeout"|gEfiGlobalVariableGuid|0x0|10
-  gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdHardwareErrorRecordLevel|L"HwErrRecSupport"|gEfiGlobalVariableGuid|0x0|1
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSetupConOutColumn|L"SetupConsoleConfig"|gEfiNt32PkgTokenSpaceGuid|0x0|80
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSetupConOutRow|L"SetupConsoleConfig"|gEfiNt32PkgTokenSpaceGuid|0x4|25
+  gEfiMdePkgTokenSpaceGuid.PcdPlatformBootTimeOut|L"Timeout"|gEfiGlobalVariableGuid|0x0|10
+  gEfiMdePkgTokenSpaceGuid.PcdHardwareErrorRecordLevel|L"HwErrRecSupport"|gEfiGlobalVariableGuid|0x0|1
 
 ###################################################################################################
 #
@@ -318,11 +333,7 @@
   Nt32Pkg/WinNtFlashMapPei/WinNtFlashMapPei.inf
   
   MdeModulePkg/Universal/FaultTolerantWritePei/FaultTolerantWritePei.inf
-!if $(SECURE_BOOT_ENABLE) == TRUE
-  SecurityPkg/VariableAuthenticated/Pei/VariablePei.inf
-!else
   MdeModulePkg/Universal/Variable/Pei/VariablePei.inf
-!endif
 
   Nt32Pkg/WinNtAutoScanPei/WinNtAutoScanPei.inf
   Nt32Pkg/WinNtFirmwareVolumePei/WinNtFirmwareVolumePei.inf
@@ -365,11 +376,12 @@
   MdeModulePkg/Universal/ReportStatusCodeRouter/RuntimeDxe/ReportStatusCodeRouterRuntimeDxe.inf
   MdeModulePkg/Universal/StatusCodeHandler/RuntimeDxe/StatusCodeHandlerRuntimeDxe.inf
   Nt32Pkg/WinNtOemHookStatusCodeHandlerDxe/WinNtOemHookStatusCodeHandlerDxe.inf
+  MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf {
+    <LibraryClasses>
+      NULL|MdeModulePkg/Library/VarCheckUefiLib/VarCheckUefiLib.inf
+  }
 !if $(SECURE_BOOT_ENABLE) == TRUE
-  SecurityPkg/VariableAuthenticated/RuntimeDxe/VariableRuntimeDxe.inf 
   SecurityPkg/VariableAuthenticated/SecureBootConfigDxe/SecureBootConfigDxe.inf
-!else
-  MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf
 !endif
   MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
   MdeModulePkg/Universal/MonotonicCounterRuntimeDxe/MonotonicCounterRuntimeDxe.inf
@@ -415,7 +427,6 @@
   MdeModulePkg/Universal/Network/DpcDxe/DpcDxe.inf
   MdeModulePkg/Universal/Network/ArpDxe/ArpDxe.inf
   MdeModulePkg/Universal/Network/Dhcp4Dxe/Dhcp4Dxe.inf
-  MdeModulePkg/Universal/Network/Ip4ConfigDxe/Ip4ConfigDxe.inf
   MdeModulePkg/Universal/Network/Ip4Dxe/Ip4Dxe.inf
   MdeModulePkg/Universal/Network/MnpDxe/MnpDxe.inf
   MdeModulePkg/Universal/Network/VlanConfigDxe/VlanConfigDxe.inf
@@ -427,7 +438,22 @@
 
   MdeModulePkg/Universal/Network/IScsiDxe/IScsiDxe.inf
 
-  IntelFrameworkModulePkg/Universal/BdsDxe/BdsDxe.inf
+  NetworkPkg/HttpBootDxe/HttpBootDxe.inf
+  NetworkPkg/DnsDxe/DnsDxe.inf
+  NetworkPkg/HttpDxe/HttpDxe.inf
+  NetworkPkg/HttpUtilitiesDxe/HttpUtilitiesDxe.inf
+
+  MdeModulePkg/Universal/BdsDxe/BdsDxe.inf {
+    <LibraryClasses>
+      NULL|MdeModulePkg/Library/BmpImageDecoderLib/BmpImageDecoderLib.inf
+  }
+  MdeModulePkg/Application/UiApp/UiApp.inf{
+    <LibraryClasses>
+      NULL|MdeModulePkg/Library/DeviceManagerLib/DeviceManagerLib.inf
+      NULL|MdeModulePkg/Library/BootManagerLib/BootManagerLib.inf
+      NULL|MdeModulePkg/Library/BootMaintenanceManagerLib/BootMaintenanceManagerLib.inf
+  }
+  MdeModulePkg/Universal/DriverHealthManagerDxe/DriverHealthManagerDxe.inf
   MdeModulePkg/Universal/HiiDatabaseDxe/HiiDatabaseDxe.inf
   MdeModulePkg/Universal/DisplayEngineDxe/DisplayEngineDxe.inf
   MdeModulePkg/Universal/SetupBrowserDxe/SetupBrowserDxe.inf
@@ -452,11 +478,6 @@
 [BuildOptions]
   DEBUG_*_*_DLINK_FLAGS = /EXPORT:InitializeDriver=$(IMAGE_ENTRY_POINT) /BASE:0x10000 /ALIGN:4096 /FILEALIGN:4096 /SUBSYSTEM:CONSOLE
   RELEASE_*_*_DLINK_FLAGS = /ALIGN:4096 /FILEALIGN:4096
-
-# Add override here, because default X64_CC_FLAGS add /X
-  DEBUG_*_X64_CC_FLAGS     == /nologo /c /WX /GS- /W4 /Gs32768 /D UNICODE /O1ib2s /GL /Gy /FIAutoGen.h /EHs-c- /GR- /GF /Zi /Gm 
-  RELEASE_*_X64_CC_FLAGS     == /nologo /c /WX /GS- /W4 /Gs32768 /D UNICODE /O1ib2s /GL /Gy /FIAutoGen.h /EHs-c- /GR- /GF 
-  NOOPT_*_X64_CC_FLAGS       == /nologo /c /WX /GS- /W4 /Gs32768 /D UNICODE /Gy /FIAutoGen.h /EHs-c- /GR- /GF /Zi /Gm /Od 
 
 #############################################################################################################
 # NOTE:

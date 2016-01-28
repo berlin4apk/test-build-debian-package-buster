@@ -11,7 +11,7 @@
 
   SmmHandlerEntry() will receive untrusted input and do validation.
 
-  Copyright (c) 2009 - 2013, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -34,7 +34,7 @@
 #include <Library/MemoryAllocationLib.h>
 #include <Library/SynchronizationLib.h>
 #include <Library/CpuLib.h>
-#include <Library/PcdLib.h>
+#include <Library/SmmMemLib.h>
 #include <Guid/SmmBaseThunkCommunication.h>
 #include <Protocol/SmmBaseHelperReady.h>
 #include <Protocol/SmmCpu.h>
@@ -43,7 +43,6 @@
 #include <Protocol/MpService.h>
 #include <Protocol/LoadPe32Image.h>
 #include <Protocol/SmmReadyToLock.h>
-#include <Protocol/SmmAccess2.h>
 
 /**
   Register SMM image to SMRAM profile.
@@ -123,8 +122,6 @@ SPIN_LOCK                          mPFLock;
 UINT64                             mPhyMask;
 VOID                               *mOriginalHandler;
 EFI_SMM_CPU_SAVE_STATE             *mShadowSaveState;
-EFI_SMRAM_DESCRIPTOR               *mSmramRanges;
-UINTN                              mSmramRangeCount;
 
 LIST_ENTRY mCallbackInfoListHead = INITIALIZE_LIST_HEAD_VARIABLE (mCallbackInfoListHead);
 
@@ -734,68 +731,14 @@ LoadImage (
     RegisterSmramProfileImage (FilePath, DstBuffer, PageCount);
     Status = gBS->StartImage (*ImageHandle, NULL, NULL);
     if (EFI_ERROR (Status)) {
+      UnregisterSmramProfileImage (FilePath, DstBuffer, PageCount);
       mLoadPe32Image->UnLoadPeImage (mLoadPe32Image, *ImageHandle);
       *ImageHandle = NULL;
       FreePages ((VOID *)(UINTN)DstBuffer, PageCount);
-      UnregisterSmramProfileImage (FilePath, DstBuffer, PageCount);
     }
   }
 
   return Status;
-}
-
-/**
-  This function check if the address is in SMRAM.
-
-  @param Buffer  the buffer address to be checked.
-  @param Length  the buffer length to be checked.
-
-  @retval TRUE  this address is in SMRAM.
-  @retval FALSE this address is NOT in SMRAM.
-**/
-BOOLEAN
-IsAddressInSmram (
-  IN EFI_PHYSICAL_ADDRESS  Buffer,
-  IN UINT64                Length
-  )
-{
-  UINTN  Index;
-
-  for (Index = 0; Index < mSmramRangeCount; Index ++) {
-    if (((Buffer >= mSmramRanges[Index].CpuStart) && (Buffer < mSmramRanges[Index].CpuStart + mSmramRanges[Index].PhysicalSize)) ||
-        ((mSmramRanges[Index].CpuStart >= Buffer) && (mSmramRanges[Index].CpuStart < Buffer + Length))) {
-      return TRUE;
-    }
-  }
-
-  return FALSE;
-}
-
-/**
-  This function check if the address refered by Buffer and Length is valid.
-
-  @param Buffer  the buffer address to be checked.
-  @param Length  the buffer length to be checked.
-
-  @retval TRUE  this address is valid.
-  @retval FALSE this address is NOT valid.
-**/
-BOOLEAN
-IsAddressValid (
-  IN UINTN                 Buffer,
-  IN UINTN                 Length
-  )
-{
-  if (Buffer > (MAX_ADDRESS - Length)) {
-    //
-    // Overflow happen
-    //
-    return FALSE;
-  }
-  if (IsAddressInSmram ((EFI_PHYSICAL_ADDRESS)Buffer, (UINT64)Length)) {
-    return FALSE;
-  }
-  return TRUE;
 }
 
 /** 
@@ -1134,7 +1077,7 @@ SmmHandlerEntry (
   ASSERT (CommBufferSize != NULL);
 
   if (*CommBufferSize == sizeof (SMMBASE_FUNCTION_DATA) &&
-      IsAddressValid ((UINTN)CommBuffer, *CommBufferSize)) {
+      SmmIsBufferOutsideSmmValid ((EFI_PHYSICAL_ADDRESS)(UINTN)CommBuffer, (UINT64)*CommBufferSize)) {
     FunctionData = (SMMBASE_FUNCTION_DATA *)CommBuffer;
 
     switch (FunctionData->Function) {
@@ -1208,8 +1151,6 @@ SmmBaseHelperMain (
   EFI_HANDLE                 Handle;
   UINTN                      NumberOfEnabledProcessors;
   VOID                       *Registration;
-  EFI_SMM_ACCESS2_PROTOCOL   *SmmAccess;
-  UINTN                      Size;
   
   Handle = NULL;
   ///
@@ -1253,28 +1194,6 @@ SmmBaseHelperMain (
   mFrameworkSmst = ConstructFrameworkSmst ();
   mSmmBaseHelperReady->FrameworkSmst = mFrameworkSmst;
   mSmmBaseHelperReady->ServiceEntry = SmmHandlerEntry;
-
-  //
-  // Get SMRAM information
-  //
-  Status = gBS->LocateProtocol (&gEfiSmmAccess2ProtocolGuid, NULL, (VOID **)&SmmAccess);
-  ASSERT_EFI_ERROR (Status);
-
-  Size = 0;
-  Status = SmmAccess->GetCapabilities (SmmAccess, &Size, NULL);
-  ASSERT (Status == EFI_BUFFER_TOO_SMALL);
-
-  Status = gSmst->SmmAllocatePool (
-                    EfiRuntimeServicesData,
-                    Size,
-                    (VOID **)&mSmramRanges
-                    );
-  ASSERT_EFI_ERROR (Status);
-
-  Status = SmmAccess->GetCapabilities (SmmAccess, &Size, mSmramRanges);
-  ASSERT_EFI_ERROR (Status);
-
-  mSmramRangeCount = Size / sizeof (EFI_SMRAM_DESCRIPTOR);
 
   //
   // Register SMM Ready To Lock Protocol notification

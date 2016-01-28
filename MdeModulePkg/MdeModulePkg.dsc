@@ -2,7 +2,7 @@
 # EFI/PI Reference Module Package for All Architectures
 #
 # (C) Copyright 2014 Hewlett-Packard Development Company, L.P.<BR>
-# Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
 #
 #    This program and the accompanying materials
 #    are licensed and made available under the terms and conditions of the BSD License
@@ -17,7 +17,7 @@
 [Defines]
   PLATFORM_NAME                  = MdeModule
   PLATFORM_GUID                  = 587CE499-6CBE-43cd-94E2-186218569478
-  PLATFORM_VERSION               = 0.94
+  PLATFORM_VERSION               = 0.96
   DSC_SPECIFICATION              = 0x00010005
   OUTPUT_DIRECTORY               = Build/MdeModule
   SUPPORTED_ARCHITECTURES        = IA32|IPF|X64|EBC|ARM|AARCH64
@@ -46,6 +46,8 @@
   CacheMaintenanceLib|MdePkg/Library/BaseCacheMaintenanceLib/BaseCacheMaintenanceLib.inf
   PeCoffLib|MdePkg/Library/BasePeCoffLib/BasePeCoffLib.inf
   PeCoffGetEntryPointLib|MdePkg/Library/BasePeCoffGetEntryPointLib/BasePeCoffGetEntryPointLib.inf
+  SortLib|MdeModulePkg/Library/BaseSortLib/BaseSortLib.inf
+  ImageDecoderLib|MdeModulePkg/Library/ImageDecoderLib/ImageDecoderLib.inf
   #
   # UEFI & PI
   #
@@ -61,6 +63,7 @@
   PeiServicesLib|MdePkg/Library/PeiServicesLib/PeiServicesLib.inf
   DxeServicesLib|MdePkg/Library/DxeServicesLib/DxeServicesLib.inf
   DxeServicesTableLib|MdePkg/Library/DxeServicesTableLib/DxeServicesTableLib.inf
+  UefiBootManagerLib|MdeModulePkg/Library/UefiBootManagerLib/UefiBootManagerLib.inf
   #
   # Generic Modules
   #
@@ -92,6 +95,11 @@
   SmbusLib|MdePkg/Library/DxeSmbusLib/DxeSmbusLib.inf
   S3BootScriptLib|MdeModulePkg/Library/PiDxeS3BootScriptLib/DxeS3BootScriptLib.inf
   CpuExceptionHandlerLib|MdeModulePkg/Library/CpuExceptionHandlerLibNull/CpuExceptionHandlerLibNull.inf
+  PlatformBootManagerLib|MdeModulePkg/Library/PlatformBootManagerLibNull/PlatformBootManagerLibNull.inf
+  TpmMeasurementLib|MdeModulePkg/Library/TpmMeasurementLibNull/TpmMeasurementLibNull.inf
+  AuthVariableLib|MdeModulePkg/Library/AuthVariableLibNull/AuthVariableLibNull.inf
+  VarCheckLib|MdeModulePkg/Library/VarCheckLib/VarCheckLib.inf
+  FileExplorerLib|MdeModulePkg/Library/FileExplorerLib/FileExplorerLib.inf
 
 [LibraryClasses.EBC.PEIM]
   IoLib|MdePkg/Library/PeiIoLibCpuIo/PeiIoLibCpuIo.inf
@@ -128,6 +136,7 @@
   MemoryAllocationLib|MdeModulePkg/Library/PiSmmCoreMemoryAllocationLib/PiSmmCoreMemoryAllocationLib.inf
   SmmServicesTableLib|MdeModulePkg/Library/PiSmmCoreSmmServicesTableLib/PiSmmCoreSmmServicesTableLib.inf
   SmmCorePlatformHookLib|MdeModulePkg/Library/SmmCorePlatformHookLibNull/SmmCorePlatformHookLibNull.inf  
+  SmmMemLib|MdePkg/Library/SmmMemLib/SmmMemLib.inf
 
 [LibraryClasses.common.DXE_SMM_DRIVER]
   HobLib|MdePkg/Library/DxeHobLib/DxeHobLib.inf
@@ -135,6 +144,7 @@
   MemoryAllocationLib|MdePkg/Library/SmmMemoryAllocationLib/SmmMemoryAllocationLib.inf
   SmmServicesTableLib|MdePkg/Library/SmmServicesTableLib/SmmServicesTableLib.inf
   LockBoxLib|MdeModulePkg/Library/SmmLockBoxLib/SmmLockBoxSmmLib.inf
+  SmmMemLib|MdePkg/Library/SmmMemLib/SmmMemLib.inf
 
 [LibraryClasses.common.UEFI_DRIVER]
   HobLib|MdePkg/Library/DxeHobLib/DxeHobLib.inf
@@ -198,9 +208,14 @@
   MdeModulePkg/Application/HelloWorld/HelloWorld.inf
   MdeModulePkg/Application/MemoryProfileInfo/MemoryProfileInfo.inf
 
+  MdeModulePkg/Bus/Pci/PciSioSerialDxe/PciSioSerialDxe.inf
   MdeModulePkg/Bus/Pci/PciBusDxe/PciBusDxe.inf
   MdeModulePkg/Bus/Pci/IncompatiblePciDeviceSupportDxe/IncompatiblePciDeviceSupportDxe.inf
   MdeModulePkg/Bus/Pci/NvmExpressDxe/NvmExpressDxe.inf
+  MdeModulePkg/Bus/Pci/UfsPciHcDxe/UfsPciHcDxe.inf
+  MdeModulePkg/Bus/Ufs/UfsPassThruDxe/UfsPassThruDxe.inf
+  MdeModulePkg/Bus/Pci/UfsPciHcPei/UfsPciHcPei.inf
+  MdeModulePkg/Bus/Ufs/UfsBlockIoPei/UfsBlockIoPei.inf
   MdeModulePkg/Bus/Pci/XhciDxe/XhciDxe.inf
   MdeModulePkg/Bus/Pci/EhciDxe/EhciDxe.inf
   MdeModulePkg/Bus/Pci/UhciDxe/UhciDxe.inf
@@ -222,6 +237,7 @@
   MdeModulePkg/Bus/I2c/I2cDxe/I2cBusDxe.inf
   MdeModulePkg/Bus/I2c/I2cDxe/I2cHostDxe.inf
   MdeModulePkg/Bus/I2c/I2cDxe/I2cDxe.inf
+  MdeModulePkg/Bus/Isa/IsaBusDxe/IsaBusDxe.inf
 
   MdeModulePkg/Core/Dxe/DxeMain.inf {
     <LibraryClasses>
@@ -259,7 +275,37 @@
   MdeModulePkg/Library/PeiDebugPrintHobLib/PeiDebugPrintHobLib.inf
   MdeModulePkg/Library/CpuExceptionHandlerLibNull/CpuExceptionHandlerLibNull.inf
   MdeModulePkg/Library/PlatformHookLibSerialPortPpi/PlatformHookLibSerialPortPpi.inf
+  MdeModulePkg/Library/LzmaCustomDecompressLib/LzmaCustomDecompressLib.inf
+  MdeModulePkg/Library/PeiDxeDebugLibReportStatusCode/PeiDxeDebugLibReportStatusCode.inf
+  MdeModulePkg/Library/UefiBootManagerLib/UefiBootManagerLib.inf
+  MdeModulePkg/Library/PlatformBootManagerLibNull/PlatformBootManagerLibNull.inf
+  MdeModulePkg/Library/ImageDecoderLib/ImageDecoderLib.inf
+  MdeModulePkg/Library/BootLogoLib/BootLogoLib.inf
+  MdeModulePkg/Library/BmpImageDecoderLib/BmpImageDecoderLib.inf
+  MdeModulePkg/Library/TpmMeasurementLibNull/TpmMeasurementLibNull.inf
+  MdeModulePkg/Library/AuthVariableLibNull/AuthVariableLibNull.inf
+  MdeModulePkg/Library/VarCheckLib/VarCheckLib.inf
+  MdeModulePkg/Library/VarCheckUefiLib/VarCheckUefiLib.inf
+  MdeModulePkg/Library/VarCheckHiiLib/VarCheckHiiLib.inf
+  MdeModulePkg/Library/VarCheckPcdLib/VarCheckPcdLib.inf
+  MdeModulePkg/Library/PlatformVarCleanupLib/PlatformVarCleanupLib.inf
+  MdeModulePkg/Library/FileExplorerLib/FileExplorerLib.inf
+  MdeModulePkg/Library/DxeFileExplorerProtocol/DxeFileExplorerProtocol.inf
+  MdeModulePkg/Library/BaseIpmiLibNull/BaseIpmiLibNull.inf
+  MdeModulePkg/Library/DxeIpmiLibIpmiProtocol/DxeIpmiLibIpmiProtocol.inf
+  MdeModulePkg/Library/PeiIpmiLibIpmiPpi/PeiIpmiLibIpmiPpi.inf
+  MdeModulePkg/Library/SmmIpmiLibSmmIpmiProtocol/SmmIpmiLibSmmIpmiProtocol.inf
 
+  MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
+  MdeModulePkg/Application/BootManagerMenuApp/BootManagerMenuApp.inf
+  MdeModulePkg/Application/UiApp/UiApp.inf{
+    <LibraryClasses>
+      NULL|MdeModulePkg/Library/DeviceManagerLib/DeviceManagerLib.inf
+      NULL|MdeModulePkg/Library/BootManagerLib/BootManagerLib.inf
+      NULL|MdeModulePkg/Library/BootMaintenanceManagerLib/BootMaintenanceManagerLib.inf
+  }
+  MdeModulePkg/Universal/DriverHealthManagerDxe/DriverHealthManagerDxe.inf
+  MdeModulePkg/Universal/BootManagerPolicyDxe/BootManagerPolicyDxe.inf
   MdeModulePkg/Universal/CapsulePei/CapsulePei.inf
   MdeModulePkg/Universal/CapsuleRuntimeDxe/CapsuleRuntimeDxe.inf
   MdeModulePkg/Universal/Console/ConPlatformDxe/ConPlatformDxe.inf
@@ -281,11 +327,11 @@
   MdeModulePkg/Universal/MonotonicCounterRuntimeDxe/MonotonicCounterRuntimeDxe.inf
   MdeModulePkg/Universal/ResetSystemRuntimeDxe/ResetSystemRuntimeDxe.inf
   MdeModulePkg/Universal/SmbiosDxe/SmbiosDxe.inf
+  MdeModulePkg/Universal/SmbiosMeasurementDxe/SmbiosMeasurementDxe.inf
 
   MdeModulePkg/Universal/Network/ArpDxe/ArpDxe.inf
   MdeModulePkg/Universal/Network/Dhcp4Dxe/Dhcp4Dxe.inf
   MdeModulePkg/Universal/Network/DpcDxe/DpcDxe.inf
-  MdeModulePkg/Universal/Network/Ip4ConfigDxe/Ip4ConfigDxe.inf
   MdeModulePkg/Universal/Network/Ip4Dxe/Ip4Dxe.inf
   MdeModulePkg/Universal/Network/IScsiDxe/IScsiDxe.inf
   MdeModulePkg/Universal/Network/MnpDxe/MnpDxe.inf
@@ -312,7 +358,6 @@
   MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
   MdeModulePkg/Universal/TimestampDxe/TimestampDxe.inf
   MdeModulePkg/Universal/FaultTolerantWriteDxe/FaultTolerantWriteDxe.inf
-  MdeModulePkg/Universal/FaultTolerantWriteDxe/FaultTolerantWriteSmm.inf
 
   MdeModulePkg/Universal/Acpi/AcpiPlatformDxe/AcpiPlatformDxe.inf
   MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableDxe.inf
@@ -338,6 +383,15 @@
   }
 
   MdeModulePkg/Universal/FvSimpleFileSystemDxe/FvSimpleFileSystemDxe.inf
+  MdeModulePkg/Universal/EsrtDxe/EsrtDxe.inf
+  
+  MdeModulePkg/Universal/PropertiesTableAttributesDxe/PropertiesTableAttributesDxe.inf
+  MdeModulePkg/Universal/FileExplorerDxe/FileExplorerDxe.inf  {
+    <LibraryClasses>
+      FileExplorerLib|MdeModulePkg/Library/FileExplorerLib/FileExplorerLib.inf
+  }
+
+  MdeModulePkg/Universal/SerialDxe/SerialDxe.inf
 
 [Components.IA32, Components.X64, Components.IPF]  
   MdeModulePkg/Universal/Network/UefiPxeBcDxe/UefiPxeBcDxe.inf
@@ -345,13 +399,23 @@
   MdeModulePkg/Universal/EbcDxe/EbcDxe.inf
 
 [Components.IA32, Components.X64, Components.Ebc]
-  MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf
+  MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf {
+    <LibraryClasses>
+      NULL|MdeModulePkg/Library/VarCheckUefiLib/VarCheckUefiLib.inf
+      NULL|MdeModulePkg/Library/VarCheckHiiLib/VarCheckHiiLib.inf
+      NULL|MdeModulePkg/Library/VarCheckPcdLib/VarCheckPcdLib.inf
+  }
   MdeModulePkg/Universal/Variable/EmuRuntimeDxe/EmuVariableRuntimeDxe.inf
   
 [Components.IA32, Components.X64]
   MdeModulePkg/Core/PiSmmCore/PiSmmIpl.inf
   MdeModulePkg/Core/PiSmmCore/PiSmmCore.inf
-  MdeModulePkg/Universal/Variable/RuntimeDxe/VariableSmm.inf
+  MdeModulePkg/Universal/Variable/RuntimeDxe/VariableSmm.inf {
+    <LibraryClasses>
+      NULL|MdeModulePkg/Library/VarCheckUefiLib/VarCheckUefiLib.inf
+      NULL|MdeModulePkg/Library/VarCheckHiiLib/VarCheckHiiLib.inf
+      NULL|MdeModulePkg/Library/VarCheckPcdLib/VarCheckPcdLib.inf
+  }
   MdeModulePkg/Universal/Variable/RuntimeDxe/VariableSmmRuntimeDxe.inf
   MdeModulePkg/Library/SmmReportStatusCodeLib/SmmReportStatusCodeLib.inf
   MdeModulePkg/Universal/StatusCodeHandler/Smm/StatusCodeHandlerSmm.inf
@@ -364,8 +428,15 @@
   MdeModulePkg/Library/SmmLockBoxLib/SmmLockBoxDxeLib.inf
   MdeModulePkg/Library/SmmLockBoxLib/SmmLockBoxSmmLib.inf
   MdeModulePkg/Library/SmmCorePlatformHookLibNull/SmmCorePlatformHookLibNull.inf
+  MdeModulePkg/Library/LzmaCustomDecompressLib/LzmaArchCustomDecompressLib.inf
   MdeModulePkg/Universal/Acpi/BootScriptExecutorDxe/BootScriptExecutorDxe.inf
   MdeModulePkg/Universal/Acpi/S3SaveStateDxe/S3SaveStateDxe.inf
   MdeModulePkg/Universal/Acpi/SmmS3SaveState/SmmS3SaveState.inf
   MdeModulePkg/Universal/Acpi/FirmwarePerformanceDataTableSmm/FirmwarePerformanceSmm.inf
+  MdeModulePkg/Universal/FaultTolerantWriteDxe/FaultTolerantWriteSmm.inf
+  MdeModulePkg/Universal/FaultTolerantWriteDxe/FaultTolerantWriteSmmDxe.inf
+  MdeModulePkg/Universal/RegularExpressionDxe/RegularExpressionDxe.inf
+
+[Components.X64]
+  MdeModulePkg/Universal/CapsulePei/CapsuleX64.inf
 

@@ -1,40 +1,39 @@
 /** @file
-
   Implement all four UEFI Runtime Variable services for the nonvolatile
   and volatile storage space and install variable architecture protocol.
-  
+
 Copyright (C) 2013, Red Hat, Inc.
 Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
-This program and the accompanying materials                          
-are licensed and made available under the terms and conditions of the BSD License         
-which accompanies this distribution.  The full text of the license may be found at        
-http://opensource.org/licenses/bsd-license.php                                            
+(C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
+This program and the accompanying materials
+are licensed and made available under the terms and conditions of the BSD License
+which accompanies this distribution.  The full text of the license may be found at
+http://opensource.org/licenses/bsd-license.php
 
-THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,                     
-WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.             
+THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 **/
 
 #include "Variable.h"
 
-extern VARIABLE_STORE_HEADER   *mNvVariableCache;
-extern VARIABLE_INFO_ENTRY     *gVariableInfo;
-EFI_HANDLE                     mHandle                    = NULL;
-EFI_EVENT                      mVirtualAddressChangeEvent = NULL;
-EFI_EVENT                      mFtwRegistration           = NULL;
-extern LIST_ENTRY              mLockedVariableList;
-extern LIST_ENTRY              mVarCheckVariableList;
-extern UINT32                  mNumberOfHandler;
-extern VAR_CHECK_SET_VARIABLE_CHECK_HANDLER *mHandlerTable;
-extern BOOLEAN                 mEndOfDxe;
-EDKII_VARIABLE_LOCK_PROTOCOL   mVariableLock              = { VariableLockRequestToLock };
-EDKII_VAR_CHECK_PROTOCOL       mVarCheck                  = { VarCheckRegisterSetVariableCheckHandler,
-                                                              VarCheckVariablePropertySet,
-                                                              VarCheckVariablePropertyGet };
+extern VARIABLE_STORE_HEADER        *mNvVariableCache;
+extern EFI_FIRMWARE_VOLUME_HEADER   *mNvFvHeaderCache;
+extern VARIABLE_INFO_ENTRY          *gVariableInfo;
+EFI_HANDLE                          mHandle                    = NULL;
+EFI_EVENT                           mVirtualAddressChangeEvent = NULL;
+EFI_EVENT                           mFtwRegistration           = NULL;
+extern BOOLEAN                      mEndOfDxe;
+VOID                                ***mVarCheckAddressPointer = NULL;
+UINTN                               mVarCheckAddressPointerCount = 0;
+EDKII_VARIABLE_LOCK_PROTOCOL        mVariableLock              = { VariableLockRequestToLock };
+EDKII_VAR_CHECK_PROTOCOL            mVarCheck                  = { VarCheckRegisterSetVariableCheckHandler,
+                                                                    VarCheckVariablePropertySet,
+                                                                    VarCheckVariablePropertyGet };
 
 /**
   Return TRUE if ExitBootServices () has been called.
-  
+
   @retval TRUE If ExitBootServices () has been called.
 **/
 BOOLEAN
@@ -49,8 +48,8 @@ AtRuntime (
 /**
   Initializes a basic mutual exclusion lock.
 
-  This function initializes a basic mutual exclusion lock to the released state 
-  and returns the lock.  Each lock provides mutual exclusion access at its task 
+  This function initializes a basic mutual exclusion lock to the released state
+  and returns the lock.  Each lock provides mutual exclusion access at its task
   priority level.  Since there is no preemption or multiprocessor support in EFI,
   acquiring the lock only consists of raising to the locks TPL.
   If Lock is NULL, then ASSERT().
@@ -141,7 +140,7 @@ GetFtwProtocol (
                   &gEfiFaultTolerantWriteProtocolGuid,
                   NULL,
                   FtwProtocol
-                  );                    
+                  );
   return Status;
 }
 
@@ -155,7 +154,7 @@ GetFtwProtocol (
   @retval EFI_SUCCESS           The interface information for the specified protocol was returned.
   @retval EFI_UNSUPPORTED       The device does not support the FVB protocol.
   @retval EFI_INVALID_PARAMETER FvBlockHandle is not a valid EFI_HANDLE or FvBlock is NULL.
-  
+
 **/
 EFI_STATUS
 GetFvbByHandle (
@@ -176,7 +175,7 @@ GetFvbByHandle (
 
 /**
   Function returns an array of handles that support the FVB protocol
-  in a buffer allocated from pool. 
+  in a buffer allocated from pool.
 
   @param[out]  NumberHandles    The number of handles returned in Buffer.
   @param[out]  Buffer           A pointer to the buffer to return the requested
@@ -187,7 +186,7 @@ GetFvbByHandle (
   @retval EFI_NOT_FOUND         No FVB handle was found.
   @retval EFI_OUT_OF_RESOURCES  There is not enough pool memory to store the matching results.
   @retval EFI_INVALID_PARAMETER NumberHandles is NULL or Buffer is NULL.
-  
+
 **/
 EFI_STATUS
 GetFvbCountAndBuffer (
@@ -228,7 +227,6 @@ VariableClassAddressChangeEvent (
   IN VOID                                 *Context
   )
 {
-  EFI_STATUS     Status;
   UINTN          Index;
 
   EfiConvertPointer (0x0, (VOID **) &mVariableModuleGlobal->FvbInstance->GetBlockSize);
@@ -246,17 +244,20 @@ VariableClassAddressChangeEvent (
   EfiConvertPointer (0x0, (VOID **) &mVariableModuleGlobal->VariableGlobal.VolatileVariableBase);
   EfiConvertPointer (0x0, (VOID **) &mVariableModuleGlobal->VariableGlobal.HobVariableBase);
   EfiConvertPointer (0x0, (VOID **) &mVariableModuleGlobal);
-  EfiConvertPointer (0x0, (VOID **) &mNvVariableCache);  
-  EfiConvertPointer (0x0, (VOID **) &mHandlerTable);
-  for (Index = 0; Index < mNumberOfHandler; Index++) {
-    EfiConvertPointer (0x0, (VOID **) &mHandlerTable[Index]);
+  EfiConvertPointer (0x0, (VOID **) &mNvVariableCache);
+  EfiConvertPointer (0x0, (VOID **) &mNvFvHeaderCache);
+
+  if (mAuthContextOut.AddressPointer != NULL) {
+    for (Index = 0; Index < mAuthContextOut.AddressPointerCount; Index++) {
+      EfiConvertPointer (0x0, (VOID **) mAuthContextOut.AddressPointer[Index]);
+    }
   }
 
-  Status = EfiConvertList (0x0, &mLockedVariableList);
-  ASSERT_EFI_ERROR (Status);
-
-  Status = EfiConvertList (0x0, &mVarCheckVariableList);
-  ASSERT_EFI_ERROR (Status);
+  if (mVarCheckAddressPointer != NULL) {
+    for (Index = 0; Index < mVarCheckAddressPointerCount; Index++) {
+      EfiConvertPointer (0x0, (VOID **) mVarCheckAddressPointer[Index]);
+    }
+  }
 }
 
 
@@ -278,14 +279,27 @@ OnReadyToBoot (
   VOID                                    *Context
   )
 {
-  //
-  // Set the End Of DXE bit in case the EFI_END_OF_DXE_EVENT_GROUP_GUID event is not signaled.
-  //
-  mEndOfDxe = TRUE;
+  if (!mEndOfDxe) {
+    //
+    // Set the End Of DXE bit in case the EFI_END_OF_DXE_EVENT_GROUP_GUID event is not signaled.
+    //
+    mEndOfDxe = TRUE;
+    mVarCheckAddressPointer = VarCheckLibInitializeAtEndOfDxe (&mVarCheckAddressPointerCount);
+    //
+    // The initialization for variable quota.
+    //
+    InitializeVariableQuota ();
+  }
   ReclaimForOS ();
   if (FeaturePcdGet (PcdVariableCollectStatistics)) {
-    gBS->InstallConfigurationTable (&gEfiVariableGuid, gVariableInfo);
+    if (mVariableModuleGlobal->VariableGlobal.AuthFormat) {
+      gBS->InstallConfigurationTable (&gEfiAuthenticatedVariableGuid, gVariableInfo);
+    } else {
+      gBS->InstallConfigurationTable (&gEfiVariableGuid, gVariableInfo);
+    }
   }
+
+  gBS->CloseEvent (Event);
 }
 
 /**
@@ -304,18 +318,29 @@ OnEndOfDxe (
   VOID                                    *Context
   )
 {
+  DEBUG ((EFI_D_INFO, "[Variable]END_OF_DXE is signaled\n"));
   mEndOfDxe = TRUE;
+  mVarCheckAddressPointer = VarCheckLibInitializeAtEndOfDxe (&mVarCheckAddressPointerCount);
+  //
+  // The initialization for variable quota.
+  //
+  InitializeVariableQuota ();
+  if (PcdGetBool (PcdReclaimVariableSpaceAtEndOfDxe)) {
+    ReclaimForOS ();
+  }
+
+  gBS->CloseEvent (Event);
 }
 
 /**
   Fault Tolerant Write protocol notification event handler.
 
-  Non-Volatile variable write may needs FTW protocol to reclaim when 
+  Non-Volatile variable write may needs FTW protocol to reclaim when
   writting variable.
 
   @param[in] Event    Event whose notification function is being invoked.
   @param[in] Context  Pointer to the notification function's context.
-  
+
 **/
 VOID
 EFIAPI
@@ -383,21 +408,23 @@ FtwNotificationEvent (
       DEBUG ((DEBUG_WARN, "Variable driver failed to add EFI_MEMORY_RUNTIME attribute to Flash.\n"));
     }
   }
-  
+
   Status = VariableWriteServiceInitialize ();
-  ASSERT_EFI_ERROR (Status);
- 
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "Variable write service initialization failed. Status = %r\n", Status));
+  }
+
   //
   // Install the Variable Write Architectural protocol.
   //
   Status = gBS->InstallProtocolInterface (
                   &mHandle,
-                  &gEfiVariableWriteArchProtocolGuid, 
+                  &gEfiVariableWriteArchProtocolGuid,
                   EFI_NATIVE_INTERFACE,
                   NULL
                   );
   ASSERT_EFI_ERROR (Status);
-  
+
   //
   // Close the notify event to avoid install gEfiVariableWriteArchProtocolGuid again.
   //
@@ -408,13 +435,13 @@ FtwNotificationEvent (
 
 /**
   Variable Driver main entry point. The Variable driver places the 4 EFI
-  runtime services in the EFI System Table and installs arch protocols 
-  for variable read and write services being availible. It also registers
+  runtime services in the EFI System Table and installs arch protocols
+  for variable read and write services being available. It also registers
   a notification function for an EVT_SIGNAL_VIRTUAL_ADDRESS_CHANGE event.
 
-  @param[in] ImageHandle    The firmware allocated handle for the EFI image.  
+  @param[in] ImageHandle    The firmware allocated handle for the EFI image.
   @param[in] SystemTable    A pointer to the EFI System Table.
-  
+
   @retval EFI_SUCCESS       Variable service successfully initialized.
 
 **/
@@ -452,13 +479,13 @@ VariableServiceInitialize (
   SystemTable->RuntimeServices->GetNextVariableName = VariableServiceGetNextVariableName;
   SystemTable->RuntimeServices->SetVariable         = VariableServiceSetVariable;
   SystemTable->RuntimeServices->QueryVariableInfo   = VariableServiceQueryVariableInfo;
-    
+
   //
   // Now install the Variable Runtime Architectural protocol on a new handle.
   //
   Status = gBS->InstallProtocolInterface (
                   &mHandle,
-                  &gEfiVariableArchProtocolGuid, 
+                  &gEfiVariableArchProtocolGuid,
                   EFI_NATIVE_INTERFACE,
                   NULL
                   );
@@ -466,7 +493,7 @@ VariableServiceInitialize (
 
   //
   // Register FtwNotificationEvent () notify function.
-  // 
+  //
   EfiCreateProtocolNotifyEvent (
     &gEfiFaultTolerantWriteProtocolGuid,
     TPL_CALLBACK,
@@ -489,9 +516,9 @@ VariableServiceInitialize (
   // Register the event handling function to reclaim variable for OS usage.
   //
   Status = EfiCreateEventReadyToBootEx (
-             TPL_NOTIFY, 
-             OnReadyToBoot, 
-             NULL, 
+             TPL_NOTIFY,
+             OnReadyToBoot,
+             NULL,
              &ReadyToBootEvent
              );
   ASSERT_EFI_ERROR (Status);

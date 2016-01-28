@@ -1,7 +1,7 @@
 /** @file
   X.509 Certificate Handler Wrapper Implementation over OpenSSL.
 
-Copyright (c) 2010 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2010 - 2015, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -14,7 +14,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 #include "InternalCryptLib.h"
 #include <openssl/x509.h>
-
+#include <openssl/rsa.h>
 
 /**
   Construct a X509 object from DER-encoded certificate data.
@@ -38,7 +38,8 @@ X509ConstructCertificate (
   OUT  UINT8        **SingleX509Cert
   )
 {
-  X509     *X509Cert;
+  X509         *X509Cert;
+  CONST UINT8  *Temp;
 
   //
   // Check input parameters.
@@ -50,7 +51,8 @@ X509ConstructCertificate (
   //
   // Read DER-encoded X509 Certificate and Construct X509 object.
   //
-  X509Cert = d2i_X509 (NULL, &Cert, (long) CertSize);
+  Temp     = Cert;
+  X509Cert = d2i_X509 (NULL, &Temp, (long) CertSize);
   if (X509Cert == NULL) {
     return FALSE;
   }
@@ -65,7 +67,7 @@ X509ConstructCertificate (
 
   If X509Stack is NULL, then return FALSE.
 
-  @param[in, out]  X509Stack  On input, pointer to an existing X509 stack object.
+  @param[in, out]  X509Stack  On input, pointer to an existing or NULL X509 stack object.
                               On output, pointer to the X509 stack object with new
                               inserted X509 certificate.
   @param           ...        A list of DER-encoded single certificate data followed
@@ -123,17 +125,23 @@ X509ConstructCertificateStack (
     }
 
     CertSize = VA_ARG (Args, UINTN);
+    if (CertSize == 0) {
+      break;
+    }
 
     //
     // Construct X509 Object from the given DER-encoded certificate data.
     //
+    X509Cert = NULL;
     Status = X509ConstructCertificate (
                (CONST UINT8 *) Cert,
                CertSize,
                (UINT8 **) &X509Cert
                );
     if (!Status) {
-      X509_free (X509Cert);
+      if (X509Cert != NULL) {
+        X509_free (X509Cert);
+      }
       break;
     }
 
@@ -237,6 +245,7 @@ X509GetSubjectName (
   BOOLEAN    Status;
   X509       *X509Cert;
   X509_NAME  *X509Name;
+  UINTN      X509NameSize;
 
   //
   // Check input parameters.
@@ -266,13 +275,14 @@ X509GetSubjectName (
     goto _Exit;
   }
 
-  if (*SubjectSize < (UINTN) X509Name->bytes->length) {
-    *SubjectSize = (UINTN) X509Name->bytes->length;
+  X509NameSize = i2d_X509_NAME(X509Name, NULL);
+  if (*SubjectSize < X509NameSize) {
+    *SubjectSize = X509NameSize;
     goto _Exit;
   }
-  *SubjectSize = (UINTN) X509Name->bytes->length;
+  *SubjectSize = X509NameSize;
   if (CertSubject != NULL) {
-    CopyMem (CertSubject, (UINT8 *) X509Name->bytes->data, *SubjectSize);
+    i2d_X509_NAME(X509Name, &CertSubject);
     Status = TRUE;
   }
 
@@ -454,6 +464,13 @@ X509VerifyCert (
   }
 
   //
+  // Allow partial certificate chains, terminated by a non-self-signed but
+  // still trusted intermediate certificate. Also disable time checks.
+  //
+  X509_STORE_set_flags (CertStore,
+                        X509_V_FLAG_PARTIAL_CHAIN | X509_V_FLAG_NO_CHECK_TIME);
+
+  //
   // Set up X509_STORE_CTX for the subsequent verification operation.
   //
   if (!X509_STORE_CTX_init (&CertCtx, CertStore, X509Cert, NULL)) {
@@ -518,7 +535,8 @@ X509GetTBSCert (
   //
   // Check input parameters.
   //
-  if ((Cert == NULL) || (TBSCert == NULL) || (TBSCertSize == NULL)) {
+  if ((Cert == NULL) || (TBSCert == NULL) ||
+      (TBSCertSize == NULL) || (CertSize > INT_MAX)) {
     return FALSE;
   }
 

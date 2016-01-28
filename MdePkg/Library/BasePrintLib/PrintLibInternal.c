@@ -1,7 +1,7 @@
 /** @file
   Print Library internal worker functions.
 
-  Copyright (c) 2006 - 2012, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -19,7 +19,7 @@
 
 GLOBAL_REMOVE_IF_UNREFERENCED CONST CHAR8 mHexStr[] = {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
 
-GLOBAL_REMOVE_IF_UNREFERENCED CONST CHAR8 *mStatusString[] = {
+GLOBAL_REMOVE_IF_UNREFERENCED CONST CHAR8 * CONST mStatusString[] = {
   "Success",                      //  RETURN_SUCCESS                = 0
   "Warning Unknown Glyph",        //  RETURN_WARN_UNKNOWN_GLYPH     = 1
   "Warning Delete Failure",       //  RETURN_WARN_DELETE_FAILURE    = 2
@@ -547,10 +547,18 @@ BasePrintLibSPrintMarker (
         //
         // break skipped on purpose
         //
+      case 'u':
+        if ((Flags & RADIX_HEX) == 0) {
+          Flags &= ~((UINTN) (PREFIX_SIGN));
+          Flags |= UNSIGNED_TYPE;
+        }
+        //
+        // break skipped on purpose
+        //
       case 'd':
         if ((Flags & LONG_TYPE) == 0) {
           //
-          // 'd','x', and 'X' that are not preceded by 'l' or 'L' are assumed to be type "int".
+          // 'd', 'u', 'x', and 'X' that are not preceded by 'l' or 'L' are assumed to be type "int".
           // This assumption is made so the format string definition is compatible with the ANSI C
           // Specification for formatted strings.  It is recommended that the Base Types be used 
           // everywhere, but in this one case, compliance with ANSI C is more important, and 
@@ -584,17 +592,27 @@ BasePrintLibSPrintMarker (
             Flags &= ~((UINTN) PREFIX_ZERO);
             Precision = 1;
           }
-          if (Value < 0) {
+          if (Value < 0 && (Flags & UNSIGNED_TYPE) == 0) {
             Flags |= PREFIX_SIGN;
             Prefix = '-';
             Value = -Value;
+          } else if ((Flags & UNSIGNED_TYPE) != 0 && (Flags & LONG_TYPE) == 0) {
+            //
+            // 'd', 'u', 'x', and 'X' that are not preceded by 'l' or 'L' are assumed to be type "int".
+            // This assumption is made so the format string definition is compatible with the ANSI C
+            // Specification for formatted strings.  It is recommended that the Base Types be used 
+            // everywhere, but in this one case, compliance with ANSI C is more important, and 
+            // provides an implementation that is compatible with that largest possible set of CPU 
+            // architectures.  This is why the type "unsigned int" is used in this one case.
+            //
+            Value = (unsigned int)Value;
           }
         } else {
           Radix = 16;
           Comma = FALSE;
           if ((Flags & LONG_TYPE) == 0 && Value < 0) {
             //
-            // 'd','x', and 'X' that are not preceded by 'l' or 'L' are assumed to be type "int".
+            // 'd', 'u', 'x', and 'X' that are not preceded by 'l' or 'L' are assumed to be type "int".
             // This assumption is made so the format string definition is compatible with the ANSI C
             // Specification for formatted strings.  It is recommended that the Base Types be used 
             // everywhere, but in this one case, compliance with ANSI C is more important, and 

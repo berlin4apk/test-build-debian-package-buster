@@ -1,7 +1,7 @@
 /** @file
 
   Copyright (c) 2008 - 2009, Apple Inc. All rights reserved.<BR>
-  Copyright (c) 2011 - 2014, ARM Ltd. All rights reserved.<BR>
+  Copyright (c) 2011 - 2015, ARM Ltd. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -44,12 +44,14 @@
 #define SCR_AW                  (1 << 5)
 
 // MIDR - Main ID Register definitions
+#define ARM_CPU_TYPE_SHIFT      4
 #define ARM_CPU_TYPE_MASK       0xFFF
 #define ARM_CPU_TYPE_AEMv8      0xD0F
 #define ARM_CPU_TYPE_A53        0xD03
 #define ARM_CPU_TYPE_A57        0xD07
 #define ARM_CPU_TYPE_A15        0xC0F
 #define ARM_CPU_TYPE_A9         0xC09
+#define ARM_CPU_TYPE_A7         0xC07
 #define ARM_CPU_TYPE_A5         0xC05
 
 #define ARM_CPU_REV_MASK        ((0xF << 20) | (0xF) )
@@ -94,6 +96,41 @@
 #define CNTHCTL_EL2_EL1PCEN     BIT1
 
 #define ARM_VECTOR_TABLE_ALIGNMENT ((1 << 11)-1)
+
+// Vector table offset definitions
+#define ARM_VECTOR_CUR_SP0_SYNC 0x000
+#define ARM_VECTOR_CUR_SP0_IRQ  0x080
+#define ARM_VECTOR_CUR_SP0_FIQ  0x100
+#define ARM_VECTOR_CUR_SP0_SERR 0x180
+
+#define ARM_VECTOR_CUR_SPx_SYNC 0x200
+#define ARM_VECTOR_CUR_SPx_IRQ  0x280
+#define ARM_VECTOR_CUR_SPx_FIQ  0x300
+#define ARM_VECTOR_CUR_SPx_SERR 0x380
+
+#define ARM_VECTOR_LOW_A64_SYNC 0x400
+#define ARM_VECTOR_LOW_A64_IRQ  0x480
+#define ARM_VECTOR_LOW_A64_FIQ  0x500
+#define ARM_VECTOR_LOW_A64_SERR 0x580
+
+#define ARM_VECTOR_LOW_A32_SYNC 0x600
+#define ARM_VECTOR_LOW_A32_IRQ  0x680
+#define ARM_VECTOR_LOW_A32_FIQ  0x700
+#define ARM_VECTOR_LOW_A32_SERR 0x780
+
+#define VECTOR_BASE(tbl)          \
+  .section .text.##tbl##,"ax";    \
+  .align 11;                      \
+  .org 0x0;                       \
+  GCC_ASM_EXPORT(tbl);            \
+  ASM_PFX(tbl):                   \
+
+#define VECTOR_ENTRY(tbl, off)    \
+  .org off
+
+#define VECTOR_END(tbl)           \
+  .org 0x800;                     \
+  .previous
 
 VOID
 EFIAPI
@@ -174,11 +211,6 @@ ArmReadCurrentEL (
 UINT64
 PageAttributeToGcdAttribute (
   IN UINT64 PageAttributes
-  );
-
-UINT64
-GcdAttributeToPageAttribute (
-  IN UINT64 GcdAttributes
   );
 
 UINTN

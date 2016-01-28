@@ -1,7 +1,7 @@
 /** @file
   PCI command register operations supporting functions implementation for PCI Bus module.
 
-Copyright (c) 2006 - 2009, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -173,6 +173,14 @@ LocateCapabilityRegBlock (
       return EFI_SUCCESS;
     }
 
+    //
+    // Certain PCI device may incorrectly have capability pointing to itself,
+    // break to avoid dead loop.
+    //
+    if (CapabilityPtr == (UINT8) (CapabilityEntry >> 8)) {
+      break;
+    }
+
     CapabilityPtr = (UINT8) (CapabilityEntry >> 8);
   }
 
@@ -200,9 +208,10 @@ LocatePciExpressCapabilityRegBlock (
      OUT UINT32        *NextRegBlock OPTIONAL
   )
 {
-  UINT32  CapabilityPtr;
-  UINT32  CapabilityEntry;
-  UINT16  CapabilityID;
+  EFI_STATUS           Status;
+  UINT32               CapabilityPtr;
+  UINT32               CapabilityEntry;
+  UINT16               CapabilityID;
 
   //
   // To check the capability of this device supports
@@ -222,13 +231,16 @@ LocatePciExpressCapabilityRegBlock (
     // Mask it to DWORD alignment per PCI spec
     //
     CapabilityPtr &= 0xFFC;
-    PciIoDevice->PciIo.Pci.Read (
-                             &PciIoDevice->PciIo,
-                             EfiPciIoWidthUint32,
-                             CapabilityPtr,
-                             1,
-                             &CapabilityEntry
-                             );
+    Status = PciIoDevice->PciIo.Pci.Read (
+                                      &PciIoDevice->PciIo,
+                                      EfiPciIoWidthUint32,
+                                      CapabilityPtr,
+                                      1,
+                                      &CapabilityEntry
+                                      );
+    if (EFI_ERROR (Status)) {
+      break;
+    }
 
     CapabilityID = (UINT16) CapabilityEntry;
 

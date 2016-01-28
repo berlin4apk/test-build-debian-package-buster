@@ -2,7 +2,7 @@
 //
 //    Sample Setup formset.
 //
-//  Copyright (c) 2004 - 2014, Intel Corporation. All rights reserved.<BR>
+//  Copyright (c) 2004 - 2015, Intel Corporation. All rights reserved.<BR>
 //  This program and the accompanying materials
 //  are licensed and made available under the terms and conditions of the BSD License
 //  which accompanies this distribution.  The full text of the license may be found at
@@ -45,6 +45,9 @@
 
 #define EFI_USER_INFO_ACCESS_SETUP_ADMIN_GUID \
   { 0x85b75607, 0xf7ce, 0x471e, { 0xb7, 0xe4, 0x2a, 0xea, 0x5f, 0x72, 0x32, 0xee } }
+
+#define PERL_GUID \
+  { 0x63E60A51, 0x497D, 0xD427, {0xC4, 0xA5, 0xB8, 0xAB, 0xDC, 0x3A, 0xAE, 0xB6 }}
 
 //
 // Labels definition
@@ -212,7 +215,7 @@ formset
                 option text = STRING_TOKEN(STR_BOOT_OPTION3), value = 3, flags = 0;
               suppressif ideqval MyIfrNVData.BootOrderLarge == 0;
                 option text = STRING_TOKEN(STR_BOOT_OPTION4), value = 4, flags = 0;
-              endif
+              endif;
       endlist;
 
       //
@@ -231,6 +234,7 @@ formset
         option text = STRING_TOKEN(STR_ONE_OF_TEXT1), value = 3, flags = 0;
         option text = STRING_TOKEN(STR_ONE_OF_TEXT2), value = 2, flags = 0;
         option text = STRING_TOKEN(STR_ONE_OF_TEXT3), value = 1, flags = 0;
+        default     = {1,2,3},
       endlist;
     endif;
 
@@ -259,7 +263,7 @@ formset
       option text = STRING_TOKEN(STR_ONE_OF_TEXT2), value = 1, flags = DEFAULT;
       warningif prompt = STRING_TOKEN(STR_WARNING_POPUP), timeout = 5,
         ideqval MyIfrNVData.TestLateCheck == 0
-      endif
+      endif;
 
     endoneof;
 
@@ -272,12 +276,12 @@ formset
 
       inconsistentif prompt = STRING_TOKEN(STR_ERROR_POPUP),
         ideqid MyIfrNVData.TestLateCheck == MyIfrNVData.TestLateCheck2
-      endif
+      endif;
 
     endoneof;
 
     oneof varid  = MyIfrNVData.QuestionAboutTreeHugging,
-      prompt      = STRING_TOKEN(STR_ONE_OF_PROMPT),
+      prompt      = STRING_TOKEN(STR_ONE_OF_PROMPT_KEYWORD),
       help        = STRING_TOKEN(STR_ONE_OF_HELP),
       flags       = RESET_REQUIRED,
       option text = STRING_TOKEN(STR_ONE_OF_TEXT1), value = 0, flags = 0;
@@ -297,7 +301,7 @@ formset
               maxsize  = 40,
               inconsistentif prompt = STRING_TOKEN(STR_STRING_CHECK_ERROR_POPUP),
                 pushthis != stringref(STRING_TOKEN(STR_STRING_CHECK))
-              endif
+              endif;
     endstring;
 
     //
@@ -330,7 +334,7 @@ formset
               ideqid  MyIfrNVData.HowOldAreYouInYearsManual == MyEfiVar.Field8
               OR
               ideqvallist MyIfrNVData.HowOldAreYouInYearsManual == 1 3 5 7
-            endif
+            endif;
 
     endnumeric;
 
@@ -458,6 +462,7 @@ formset
               help     = STRING_TOKEN(STR_MY_STRING_HELP),
               minsize  = 6,
               maxsize  = 0x14,
+              default  = STRING_TOKEN(STR_MY_STRING_DEFAULT),
     endstring;
 
     //
@@ -534,7 +539,7 @@ formset
           ideqval Date.Day == 31
           AND
           ideqvallist Date.Month == 2 4 6 9 11
-        endif
+        endif;
 
         //
         // If the day is 30 AND month is 2
@@ -543,7 +548,7 @@ formset
           ideqval Date.Day == 30
           AND
           ideqval Date.Month == 2
-        endif
+        endif;
 
         //
         // If the day is 29 AND month is 2 AND it year is NOT a leapyear
@@ -555,7 +560,7 @@ formset
           AND
           NOT
           ideqvallist Date.Year == 2004 2008 20012 20016 2020 2024 2028 2032 2036
-        endif
+        endif;
 
       enddate;
 
@@ -649,6 +654,16 @@ formset
             default = 0,
             refresh interval = 3             // Refresh interval in seconds
     endnumeric;
+
+    grayoutif  match2 (stringref(STRING_TOKEN(STR_PATTERN)), stringref(STRING_TOKEN(STR_STRING)), PERL_GUID);
+      numeric 
+        varid   = MyIfrNVData.Match2,
+        prompt  = STRING_TOKEN(STR_MATCH2_PROMPT),
+        help    = STRING_TOKEN(STR_MATCH2_HELP),
+        minimum = 0,
+        maximum = 243,
+      endnumeric;
+    endif;
 
     label LABEL_UPDATE2;
     label LABEL_END;

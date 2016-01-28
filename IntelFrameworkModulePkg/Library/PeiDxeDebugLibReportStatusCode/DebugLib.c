@@ -4,7 +4,7 @@
   Note that if the debug message length is larger than the maximum allowable
   record length, then the debug message will be ignored directly.
 
-  Copyright (c) 2006 - 2012, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -15,7 +15,7 @@
 
 **/
 
-#include <FrameworkPei.h>
+#include <PiPei.h>
 
 #include <Guid/StatusCodeDataTypeId.h>
 #include <Guid/StatusCodeDataTypeDebug.h>
@@ -56,6 +56,7 @@ DebugPrint (
   UINT64          Buffer[(EFI_STATUS_CODE_DATA_MAX_SIZE / sizeof (UINT64)) + 1];
   EFI_DEBUG_INFO  *DebugInfo;
   UINTN           TotalSize;
+  UINTN           DestBufferSize;
   VA_LIST         VaListMarker;
   BASE_LIST       BaseListMarker;
   CHAR8           *FormatString;
@@ -115,7 +116,13 @@ DebugPrint (
   //
   // Copy the Format string into the record
   //
-  AsciiStrCpy (FormatString, Format);
+  // According to the content structure of Buffer shown above, the size of
+  // the FormatString buffer is the size of Buffer minus the Padding
+  // (4 bytes), minus the size of EFI_DEBUG_INFO, minus the size of
+  // variable arguments (12 * sizeof (UINT64)).
+  //
+  DestBufferSize = sizeof (Buffer) - 4 - sizeof (EFI_DEBUG_INFO) - 12 * sizeof (UINT64);
+  AsciiStrCpyS (FormatString, DestBufferSize / sizeof (CHAR8), Format);
 
   //
   // The first 12 * sizeof (UINT64) bytes following EFI_DEBUG_INFO are for variable arguments
@@ -182,7 +189,7 @@ DebugPrint (
     if ((*Format == 'p') && (sizeof (VOID *) > 4)) {
       Long = TRUE;
     }
-    if (*Format == 'p' || *Format == 'X' || *Format == 'x' || *Format == 'd') {
+    if (*Format == 'p' || *Format == 'X' || *Format == 'x' || *Format == 'd' || *Format == 'u') {
       if (Long) {
         BASE_ARG (BaseListMarker, INT64) = VA_ARG (VaListMarker, INT64);
       } else {
@@ -261,6 +268,7 @@ DebugAssert (
   UINTN                  HeaderSize;
   UINTN                  TotalSize;
   CHAR8                  *Temp;
+  UINTN                  ModuleNameSize;
   UINTN                  FileNameSize;
   UINTN                  DescriptionSize;
 
@@ -268,31 +276,40 @@ DebugAssert (
   // Get string size
   //
   HeaderSize       = sizeof (EFI_DEBUG_ASSERT_DATA);
+  //
+  // Compute string size of module name enclosed by []
+  //
+  ModuleNameSize   = 2 + AsciiStrSize (gEfiCallerBaseName);
   FileNameSize     = AsciiStrSize (FileName);
   DescriptionSize  = AsciiStrSize (Description);
 
   //
   // Make sure it will all fit in the passed in buffer.
   //
-  if (HeaderSize + FileNameSize + DescriptionSize > sizeof (Buffer)) {
+  if (HeaderSize + ModuleNameSize + FileNameSize + DescriptionSize > sizeof (Buffer)) {
     //
-    // FileName + Description is too long to be filled into buffer. 
+    // remove module name if it's too long to be filled into buffer
     //
-    if (HeaderSize + FileNameSize < sizeof (Buffer)) {
+    ModuleNameSize = 0;
+    if (HeaderSize + FileNameSize + DescriptionSize > sizeof (Buffer)) {
       //
-      // Description has enough buffer to be truncated. 
+      // FileName + Description is too long to be filled into buffer.
       //
-      DescriptionSize = sizeof (Buffer) - HeaderSize - FileNameSize;
-    } else {
-      //
-      // FileName is too long to be filled into buffer.
-      // FileName will be truncated. Reserved one byte for Description NULL terminator.
-      //
-      DescriptionSize = 1;
-      FileNameSize    = sizeof (Buffer) - HeaderSize - DescriptionSize;
+      if (HeaderSize + FileNameSize < sizeof (Buffer)) {
+        //
+        // Description has enough buffer to be truncated.
+        //
+        DescriptionSize = sizeof (Buffer) - HeaderSize - FileNameSize;
+      } else {
+        //
+        // FileName is too long to be filled into buffer.
+        // FileName will be truncated. Reserved one byte for Description NULL terminator.
+        //
+        DescriptionSize = 1;
+        FileNameSize    = sizeof (Buffer) - HeaderSize - DescriptionSize;
+      }
     }
   }
- 
   //
   // Fill in EFI_DEBUG_ASSERT_DATA
   //
@@ -300,12 +317,23 @@ DebugAssert (
   AssertData->LineNumber = (UINT32)LineNumber;
   TotalSize  = sizeof (EFI_DEBUG_ASSERT_DATA);
 
+  Temp = (CHAR8 *)(AssertData + 1);
+
+  //
+  // Copy Ascii [ModuleName].
+  //
+  if (ModuleNameSize != 0) {
+    CopyMem(Temp, "[", 1);
+    CopyMem(Temp + 1, gEfiCallerBaseName, ModuleNameSize - 3);
+    CopyMem(Temp + ModuleNameSize - 2, "] ", 2);
+  }
+
   //
   // Copy Ascii FileName including NULL terminator.
   //
-  Temp = CopyMem (AssertData + 1, FileName, FileNameSize);
+  Temp = CopyMem (Temp + ModuleNameSize, FileName, FileNameSize);
   Temp[FileNameSize - 1] = 0;
-  TotalSize += FileNameSize;
+  TotalSize += (ModuleNameSize + FileNameSize);
 
   //
   // Copy Ascii Description include NULL terminator.
@@ -440,4 +468,22 @@ DebugClearMemoryEnabled (
   )
 {
   return (BOOLEAN) ((PcdGet8 (PcdDebugPropertyMask) & DEBUG_PROPERTY_CLEAR_MEMORY_ENABLED) != 0);
+}
+
+/**
+  Returns TRUE if any one of the bit is set both in ErrorLevel and PcdFixedDebugPrintErrorLevel.
+
+  This function compares the bit mask of ErrorLevel and PcdFixedDebugPrintErrorLevel.
+
+  @retval  TRUE    Current ErrorLevel is supported.
+  @retval  FALSE   Current ErrorLevel is not supported.
+
+**/
+BOOLEAN
+EFIAPI
+DebugPrintLevelEnabled (
+  IN  CONST UINTN        ErrorLevel
+  )
+{
+  return (BOOLEAN) ((ErrorLevel & PcdGet32(PcdFixedDebugPrintErrorLevel)) != 0);
 }

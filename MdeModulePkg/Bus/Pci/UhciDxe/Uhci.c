@@ -2,7 +2,7 @@
 
   The UHCI driver model and HC protocol routines.
 
-Copyright (c) 2004 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2015, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -1157,10 +1157,6 @@ Uhci2SyncInterruptTransfer (
     return EFI_INVALID_PARAMETER;
   }
 
-  if ((EndPointAddress & 0x80) == 0) {
-    return EFI_INVALID_PARAMETER;
-  }
-
   if ((*DataToggle != 1) && (*DataToggle != 0)) {
     return EFI_INVALID_PARAMETER;
   }
@@ -1486,7 +1482,7 @@ UhciAllocateDev (
 
   Status = gBS->CreateEvent (
                   EVT_TIMER | EVT_NOTIFY_SIGNAL,
-                  TPL_CALLBACK,
+                  TPL_NOTIFY,
                   UhciMonitorAsyncReqList,
                   Uhc,
                   &Uhc->AsyncIntMonitor

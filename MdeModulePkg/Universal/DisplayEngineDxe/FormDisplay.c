@@ -1,7 +1,7 @@
 /** @file
 Entry and initialization module for the browser.
 
-Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
 Copyright (c) 2014, Hewlett-Packard Development Company, L.P.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
@@ -113,9 +113,13 @@ FORM_ENTRY_INFO               gOldFormEntry = {0};
 //
 // Browser Global Strings
 //
+CHAR16            *gReconnectConfirmChanges;
+CHAR16            *gReconnectFail;
+CHAR16            *gReconnectRequired;
+CHAR16            *gChangesOpt;
 CHAR16            *gFormNotFound;
 CHAR16            *gNoSubmitIf;
-CHAR16            *gBrwoserError;
+CHAR16            *gBrowserError;
 CHAR16            *gSaveFailed;
 CHAR16            *gNoSubmitIfFailed;
 CHAR16            *gSaveProcess;
@@ -135,7 +139,20 @@ CHAR16            *gMiniString;
 CHAR16            *gOptionMismatch;
 CHAR16            *gFormSuppress;
 CHAR16            *gProtocolNotFound;
-
+CHAR16            *gConfirmDefaultMsg;
+CHAR16            *gConfirmSubmitMsg;
+CHAR16            *gConfirmDiscardMsg;
+CHAR16            *gConfirmResetMsg;
+CHAR16            *gConfirmExitMsg;
+CHAR16            *gConfirmSubmitMsg2nd;
+CHAR16            *gConfirmDefaultMsg2nd;
+CHAR16            *gConfirmResetMsg2nd;
+CHAR16            *gConfirmExitMsg2nd;
+CHAR16            *gConfirmOpt;
+CHAR16            *gConfirmOptYes;
+CHAR16            *gConfirmOptNo;
+CHAR16            *gConfirmMsgConnect;
+CHAR16            *gConfirmMsgEnd;
 CHAR16            gModalSkipColumn;
 CHAR16            gPromptBlockWidth;
 CHAR16            gOptionBlockWidth;
@@ -190,9 +207,13 @@ InitializeDisplayStrings (
   VOID
   )
 {
+  gReconnectConfirmChanges = GetToken (STRING_TOKEN (RECONNECT_CONFIRM_CHANGES), gHiiHandle);
   mUnknownString        = GetToken (STRING_TOKEN (UNKNOWN_STRING), gHiiHandle);
   gSaveFailed           = GetToken (STRING_TOKEN (SAVE_FAILED), gHiiHandle);
   gNoSubmitIfFailed     = GetToken (STRING_TOKEN (NO_SUBMIT_IF_CHECK_FAILED), gHiiHandle);
+  gReconnectFail        = GetToken (STRING_TOKEN (RECONNECT_FAILED), gHiiHandle);
+  gReconnectRequired    = GetToken (STRING_TOKEN (RECONNECT_REQUIRED), gHiiHandle);
+  gChangesOpt           = GetToken (STRING_TOKEN (RECONNECT_CHANGES_OPTIONS), gHiiHandle);
   gSaveProcess          = GetToken (STRING_TOKEN (DISCARD_OR_JUMP), gHiiHandle);
   gSaveNoSubmitProcess  = GetToken (STRING_TOKEN (DISCARD_OR_CHECK), gHiiHandle);
   gDiscardChange        = GetToken (STRING_TOKEN (DISCARD_OR_JUMP_DISCARD), gHiiHandle);
@@ -212,7 +233,21 @@ InitializeDisplayStrings (
   gProtocolNotFound     = GetToken (STRING_TOKEN (PROTOCOL_NOT_FOUND), gHiiHandle);
   gFormNotFound         = GetToken (STRING_TOKEN (STATUS_BROWSER_FORM_NOT_FOUND), gHiiHandle);
   gNoSubmitIf           = GetToken (STRING_TOKEN (STATUS_BROWSER_NO_SUBMIT_IF), gHiiHandle);
-  gBrwoserError         = GetToken (STRING_TOKEN (STATUS_BROWSER_ERROR), gHiiHandle);
+  gBrowserError         = GetToken (STRING_TOKEN (STATUS_BROWSER_ERROR), gHiiHandle);
+  gConfirmDefaultMsg    = GetToken (STRING_TOKEN (CONFIRM_DEFAULT_MESSAGE), gHiiHandle);
+  gConfirmDiscardMsg    = GetToken (STRING_TOKEN (CONFIRM_DISCARD_MESSAGE), gHiiHandle);
+  gConfirmSubmitMsg     = GetToken (STRING_TOKEN (CONFIRM_SUBMIT_MESSAGE), gHiiHandle);
+  gConfirmResetMsg      = GetToken (STRING_TOKEN (CONFIRM_RESET_MESSAGE), gHiiHandle);
+  gConfirmExitMsg       = GetToken (STRING_TOKEN (CONFIRM_EXIT_MESSAGE), gHiiHandle);
+  gConfirmDefaultMsg2nd = GetToken (STRING_TOKEN (CONFIRM_DEFAULT_MESSAGE_2ND), gHiiHandle);
+  gConfirmSubmitMsg2nd  = GetToken (STRING_TOKEN (CONFIRM_SUBMIT_MESSAGE_2ND), gHiiHandle);
+  gConfirmResetMsg2nd   = GetToken (STRING_TOKEN (CONFIRM_RESET_MESSAGE_2ND), gHiiHandle);
+  gConfirmExitMsg2nd    = GetToken (STRING_TOKEN (CONFIRM_EXIT_MESSAGE_2ND), gHiiHandle);
+  gConfirmOpt           = GetToken (STRING_TOKEN (CONFIRM_OPTION), gHiiHandle);
+  gConfirmOptYes        = GetToken (STRING_TOKEN (CONFIRM_OPTION_YES), gHiiHandle);
+  gConfirmOptNo         = GetToken (STRING_TOKEN (CONFIRM_OPTION_NO), gHiiHandle);
+  gConfirmMsgConnect    = GetToken (STRING_TOKEN (CONFIRM_OPTION_CONNECT), gHiiHandle);
+  gConfirmMsgEnd        = GetToken (STRING_TOKEN (CONFIRM_OPTION_END), gHiiHandle);
 }
 
 /**
@@ -229,6 +264,10 @@ FreeDisplayStrings (
   FreePool (gEmptyString);
   FreePool (gSaveFailed);
   FreePool (gNoSubmitIfFailed);
+  FreePool (gReconnectFail);
+  FreePool (gReconnectRequired);
+  FreePool (gChangesOpt);
+  FreePool (gReconnectConfirmChanges);
   FreePool (gSaveProcess);
   FreePool (gSaveNoSubmitProcess);
   FreePool (gDiscardChange);
@@ -245,9 +284,23 @@ FreeDisplayStrings (
   FreePool (gOptionMismatch);
   FreePool (gFormSuppress);
   FreePool (gProtocolNotFound);
-  FreePool (gBrwoserError);
+  FreePool (gBrowserError);
   FreePool (gNoSubmitIf);
   FreePool (gFormNotFound);
+  FreePool (gConfirmDefaultMsg);
+  FreePool (gConfirmSubmitMsg);
+  FreePool (gConfirmDiscardMsg);
+  FreePool (gConfirmResetMsg);
+  FreePool (gConfirmExitMsg);
+  FreePool (gConfirmDefaultMsg2nd);
+  FreePool (gConfirmSubmitMsg2nd);
+  FreePool (gConfirmResetMsg2nd);
+  FreePool (gConfirmExitMsg2nd);
+  FreePool (gConfirmOpt);
+  FreePool (gConfirmOptYes);
+  FreePool (gConfirmOptNo);
+  FreePool (gConfirmMsgConnect);
+  FreePool (gConfirmMsgEnd);
 }
 
 /**
@@ -1729,14 +1782,15 @@ FindTopMenu (
 
   TopRow    = gStatementDimensions.TopRow    + SCROLL_ARROW_HEIGHT;
   BottomRow = gStatementDimensions.BottomRow - SCROLL_ARROW_HEIGHT;
-
-  if (gMisMatch) {
+  //
+  // When option mismatch happens,there exist two cases,one is reenter the form, just like the if case below,
+  // and the other is exit current form and enter last form, it can be covered by the else case.
+  //
+  if (gMisMatch && gFormData->HiiHandle == gHighligthMenuInfo.HiiHandle && gFormData->FormId == gHighligthMenuInfo.FormId) {
     //
     // Reenter caused by option mismatch or auto exit caused by refresh form(refresh interval/guid), 
     // base on the record highlight info to find the highlight menu.
     //
-    ASSERT (gFormData->HiiHandle == gHighligthMenuInfo.HiiHandle &&
-            gFormData->FormId == gHighligthMenuInfo.FormId);
 
     *HighlightMenu = FindHighLightMenuOption(NULL);
     if (*HighlightMenu != NULL) {
@@ -1787,7 +1841,6 @@ FindTopMenu (
       *SkipValue = 0;
     }
 
-    gMisMatch = FALSE;
   } else if (FormData->HighLightedStatement != NULL) {
     if (IsSavedHighlightStatement (FormData->HighLightedStatement)) {
       //
@@ -1860,6 +1913,13 @@ FindTopMenu (
     }
     *SkipValue     = 0;
   }
+
+  gMisMatch = FALSE;
+
+  //
+  // First enter to show the menu, update highlight info.
+  //
+  UpdateHighlightMenuInfo (*HighlightMenu, *TopOfScreen, *SkipValue);
 }
 
 /**
@@ -2071,6 +2131,149 @@ HasOptionString (
   return TRUE;
 }
 
+/**
+  Double confirm with user about the action.
+
+  @param  Action               The user input action.
+
+  @retval TRUE                 User confirm with the input or not need user confirm.
+  @retval FALSE                User want ignore this input.
+
+**/
+BOOLEAN
+FxConfirmPopup (
+  IN UINT32   Action
+  )
+{
+  EFI_INPUT_KEY                   Key;
+  CHAR16                          *CfmStr;
+  UINTN                           CfmStrLen;
+  UINT32                          CheckFlags;
+  BOOLEAN                         RetVal;
+  UINTN                           CatLen;
+  UINTN                           MaxLen;
+
+  CfmStrLen = 0;
+  CatLen    = StrLen (gConfirmMsgConnect);
+
+  //
+  // Below action need extra popup dialog to confirm.
+  // 
+  CheckFlags = BROWSER_ACTION_DISCARD | 
+               BROWSER_ACTION_DEFAULT |
+               BROWSER_ACTION_SUBMIT |
+               BROWSER_ACTION_RESET |
+               BROWSER_ACTION_EXIT;
+
+  //
+  // Not need to confirm with user, just return TRUE.
+  //
+  if ((Action & CheckFlags) == 0) {
+    return TRUE;
+  }
+
+  if ((Action & BROWSER_ACTION_DISCARD) == BROWSER_ACTION_DISCARD) {
+    CfmStrLen += StrLen (gConfirmDiscardMsg);
+  } 
+
+  if ((Action & BROWSER_ACTION_DEFAULT) == BROWSER_ACTION_DEFAULT) {
+    if (CfmStrLen != 0) {
+      CfmStrLen += CatLen;
+    } 
+
+    CfmStrLen += StrLen (gConfirmDefaultMsg);
+  }
+
+  if ((Action & BROWSER_ACTION_SUBMIT)  == BROWSER_ACTION_SUBMIT) {
+    if (CfmStrLen != 0) {
+      CfmStrLen += CatLen;
+    } 
+
+    CfmStrLen += StrLen (gConfirmSubmitMsg);
+  }
+
+  if ((Action & BROWSER_ACTION_RESET)  == BROWSER_ACTION_RESET) {
+    if (CfmStrLen != 0) {
+      CfmStrLen += CatLen;
+    } 
+
+    CfmStrLen += StrLen (gConfirmResetMsg);
+  }
+
+  if ((Action & BROWSER_ACTION_EXIT)  == BROWSER_ACTION_EXIT) {
+    if (CfmStrLen != 0) {
+      CfmStrLen += CatLen;
+    } 
+
+    CfmStrLen += StrLen (gConfirmExitMsg);
+  }
+
+  //
+  // Allocate buffer to save the string.
+  // String + "?" + "\0"
+  //
+  MaxLen = CfmStrLen + 1 + 1;
+  CfmStr = AllocateZeroPool (MaxLen * sizeof (CHAR16));
+  ASSERT (CfmStr != NULL);
+
+  if ((Action & BROWSER_ACTION_DISCARD) == BROWSER_ACTION_DISCARD) {
+    StrCpyS (CfmStr, MaxLen, gConfirmDiscardMsg);
+  }
+
+  if ((Action & BROWSER_ACTION_DEFAULT) == BROWSER_ACTION_DEFAULT) {
+    if (CfmStr[0] != 0) {
+      StrCatS (CfmStr, MaxLen, gConfirmMsgConnect);
+      StrCatS (CfmStr, MaxLen, gConfirmDefaultMsg2nd);
+    } else {
+      StrCpyS (CfmStr, MaxLen, gConfirmDefaultMsg);
+    }
+  }
+
+  if ((Action & BROWSER_ACTION_SUBMIT)  == BROWSER_ACTION_SUBMIT) {
+    if (CfmStr[0] != 0) {
+      StrCatS (CfmStr, MaxLen, gConfirmMsgConnect);
+      StrCatS (CfmStr, MaxLen, gConfirmSubmitMsg2nd);
+    } else {
+      StrCpyS (CfmStr, MaxLen, gConfirmSubmitMsg);
+    }
+  }
+
+  if ((Action & BROWSER_ACTION_RESET)  == BROWSER_ACTION_RESET) {
+    if (CfmStr[0] != 0) {
+      StrCatS (CfmStr, MaxLen, gConfirmMsgConnect);
+      StrCatS (CfmStr, MaxLen, gConfirmResetMsg2nd);
+    } else {
+      StrCpyS (CfmStr, MaxLen, gConfirmResetMsg);
+    }
+  }
+
+  if ((Action & BROWSER_ACTION_EXIT)  == BROWSER_ACTION_EXIT) {
+    if (CfmStr[0] != 0) {
+      StrCatS (CfmStr, MaxLen, gConfirmMsgConnect);
+      StrCatS (CfmStr, MaxLen, gConfirmExitMsg2nd);
+    } else {
+      StrCpyS (CfmStr, MaxLen, gConfirmExitMsg);
+    }
+  }
+
+  StrCatS (CfmStr, MaxLen, gConfirmMsgEnd);
+
+  do {
+    CreateDialog (&Key, gEmptyString, CfmStr, gConfirmOpt, gEmptyString, NULL);
+  } while (((Key.UnicodeChar | UPPER_LOWER_CASE_OFFSET) != (gConfirmOptYes[0] | UPPER_LOWER_CASE_OFFSET)) &&
+           ((Key.UnicodeChar | UPPER_LOWER_CASE_OFFSET) != (gConfirmOptNo[0] | UPPER_LOWER_CASE_OFFSET)) &&
+           (Key.ScanCode != SCAN_ESC));
+
+  if ((Key.UnicodeChar | UPPER_LOWER_CASE_OFFSET) == (gConfirmOptYes[0] | UPPER_LOWER_CASE_OFFSET)) {
+    RetVal = TRUE;
+  } else {
+    RetVal = FALSE;
+  }
+
+  FreePool (CfmStr);
+
+  return RetVal;
+}
 
 /**
   Print string for this menu option.
@@ -2110,6 +2313,7 @@ DisplayOneMenu (
   UINTN                           Temp3;
   EFI_STATUS                      Status;
   UINTN                           Row;
+  BOOLEAN                         IsProcessingFirstRow;
   UINTN                           Col;
   UINTN                           PromptLineNum;
   UINTN                           OptionLineNum;
@@ -2124,6 +2328,7 @@ DisplayOneMenu (
   PromptLineNum = 0;
   OptionLineNum = 0;
   MaxRow        = 0;
+  IsProcessingFirstRow = TRUE;
 
   //
   // Set default color.
@@ -2227,7 +2432,7 @@ DisplayOneMenu (
         //
         PrintStringAtWithWidth (BeginCol, Row, L"", SkipWidth);
         
-        if (Statement->OpCode->OpCode == EFI_IFR_REF_OP && MenuOption->Col >= 2) {
+        if (Statement->OpCode->OpCode == EFI_IFR_REF_OP && MenuOption->Col >= 2 && IsProcessingFirstRow) {
           //
           // Print Arrow for Goto button.
           //
@@ -2236,6 +2441,7 @@ DisplayOneMenu (
             Row,
             GEOMETRICSHAPE_RIGHT_TRIANGLE
             );
+          IsProcessingFirstRow = FALSE;
         }
         DisplayMenuString (MenuOption, MenuOption->Col, Row, OutputString, PromptWidth + AdjustValue, Highlight);
         PromptLineNum ++;
@@ -2344,6 +2550,8 @@ UiDisplayMenu (
   UINTN                           BottomRow;
   UINTN                           Index;
   CHAR16                          *StringPtr;
+  CHAR16                          *StringRightPtr;
+  CHAR16                          *StringErrorPtr;
   CHAR16                          *OptionString;
   CHAR16                          *HelpString;
   CHAR16                          *HelpHeaderString;
@@ -2378,6 +2586,7 @@ UiDisplayMenu (
   EFI_STRING_ID                   HelpInfo;
   UI_EVENT_TYPE                   EventType;
   BOOLEAN                         SkipHighLight;
+  EFI_HII_VALUE                   *StatementValue;
 
   EventType           = UIEventNone;
   Status              = EFI_SUCCESS;
@@ -2684,10 +2893,26 @@ UiDisplayMenu (
           //
           ASSERT(MenuOption != NULL);
           HelpInfo = ((EFI_IFR_STATEMENT_HEADER *) ((CHAR8 *)MenuOption->ThisTag->OpCode + sizeof (EFI_IFR_OP_HEADER)))->Help;
+          Statement = MenuOption->ThisTag;
+          StatementValue = &Statement->CurrentValue;
           if (HelpInfo == 0 || !IsSelectable (MenuOption)) {
-            StringPtr = GetToken (STRING_TOKEN (EMPTY_STRING), gHiiHandle);
+            if ((Statement->OpCode->OpCode == EFI_IFR_DATE_OP && StatementValue->Value.date.Month== 0xff)||(Statement->OpCode->OpCode == EFI_IFR_TIME_OP && StatementValue->Value.time.Hour == 0xff)){
+              StringPtr = GetToken (STRING_TOKEN (GET_TIME_FAIL), gHiiHandle);
+            } else {
+              StringPtr = GetToken (STRING_TOKEN (EMPTY_STRING), gHiiHandle);
+            }
           } else {
-            StringPtr = GetToken (HelpInfo, gFormData->HiiHandle);
+            if ((Statement->OpCode->OpCode == EFI_IFR_DATE_OP && StatementValue->Value.date.Month== 0xff)||(Statement->OpCode->OpCode == EFI_IFR_TIME_OP && StatementValue->Value.time.Hour == 0xff)){
+              StringRightPtr = GetToken (HelpInfo, gFormData->HiiHandle);
+              StringErrorPtr = GetToken (STRING_TOKEN (GET_TIME_FAIL), gHiiHandle);
+              StringPtr = AllocateZeroPool ((StrLen (StringRightPtr) + StrLen (StringErrorPtr)+ 1 ) * sizeof (CHAR16));
+              StrCpyS (StringPtr, StrLen (StringRightPtr) + StrLen (StringErrorPtr) + 1, StringRightPtr);
+              StrCatS (StringPtr, StrLen (StringRightPtr) + StrLen (StringErrorPtr) + 1, StringErrorPtr);
+              FreePool (StringRightPtr);
+              FreePool (StringErrorPtr);
+            } else {
+              StringPtr = GetToken (HelpInfo, gFormData->HiiHandle);
+            }
           }
         }
 
@@ -2724,7 +2949,7 @@ UiDisplayMenu (
           //
           if (HelpLine > 2 * RowCount - 2) {
             HelpPageCount = (HelpLine - RowCount + 1) / (RowCount - 2) + 1;
-            if ((HelpLine - RowCount + 1) % (RowCount - 2) > 1) {
+            if ((HelpLine - RowCount + 1) % (RowCount - 2) != 0) {
               HelpPageCount += 1;
             }
           } else {
@@ -3096,8 +3321,19 @@ UiDisplayMenu (
       ControlFlag = CfRepaint;
 
       ASSERT (HotKey != NULL);
-      gUserInput->Action = HotKey->Action;
-      ControlFlag = CfExit;
+
+      if (FxConfirmPopup(HotKey->Action)) {
+        gUserInput->Action = HotKey->Action;
+        if ((HotKey->Action & BROWSER_ACTION_DEFAULT) == BROWSER_ACTION_DEFAULT) {
+          gUserInput->DefaultId = HotKey->DefaultId;
+        }
+        ControlFlag = CfExit;
+      } else {
+        Repaint     = TRUE;
+        NewLine     = TRUE;
+        ControlFlag = CfRepaint;
+      }
+
       break;
 
     case CfUiLeft:
@@ -3576,8 +3812,20 @@ BrowserStatusProcess (
       ErrorInfo = gNoSubmitIfFailed;
       break;
 
+    case BROWSER_RECONNECT_FAIL:
+      ErrorInfo = gReconnectFail;
+      break;
+
+    case BROWSER_RECONNECT_SAVE_CHANGES:
+      ErrorInfo = gReconnectConfirmChanges;
+      break;
+
+    case BROWSER_RECONNECT_REQUIRED:
+      ErrorInfo = gReconnectRequired;
+      break;
+
     default:
-      ErrorInfo = gBrwoserError;
+      ErrorInfo = gBrowserError;
       break;
     }
   }
@@ -3585,15 +3833,21 @@ BrowserStatusProcess (
   switch (gFormData->BrowserStatus) {
   case BROWSER_SUBMIT_FAIL:
   case BROWSER_SUBMIT_FAIL_NO_SUBMIT_IF:
+  case BROWSER_RECONNECT_SAVE_CHANGES:
     ASSERT (gUserInput != NULL);
     if (gFormData->BrowserStatus == (BROWSER_SUBMIT_FAIL)) {
       PrintString = gSaveProcess;
       JumpToFormSet = gJumpToFormSet[0];
+      DiscardChange = gDiscardChange[0];
+    } else if (gFormData->BrowserStatus == (BROWSER_RECONNECT_SAVE_CHANGES)){
+      PrintString = gChangesOpt;
+      JumpToFormSet = gConfirmOptYes[0];
+      DiscardChange = gConfirmOptNo[0];
     } else {
       PrintString = gSaveNoSubmitProcess;
       JumpToFormSet = gCheckError[0];
+      DiscardChange = gDiscardChange[0];
     }
-    DiscardChange = gDiscardChange[0];
 
     do {
       CreateDialog (&Key, gEmptyString, ErrorInfo, PrintString, gEmptyString, NULL);

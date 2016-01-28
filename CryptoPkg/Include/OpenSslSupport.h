@@ -1,7 +1,7 @@
 /** @file
   Root include file to support building OpenSSL Crypto Library.
 
-Copyright (c) 2010 - 2011, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2010 - 2015, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -20,6 +20,33 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Library/BaseMemoryLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/DebugLib.h>
+
+#define MAX_STRING_SIZE  0x1000
+
+//
+// OpenSSL relies on explicit configuration for word size in crypto/bn,
+// but we want it to be automatically inferred from the target. So we
+// bypass what's in <openssl/opensslconf.h> for OPENSSL_SYS_UEFI, and
+// define our own here.
+//
+#ifdef CONFIG_HEADER_BN_H
+#error CONFIG_HEADER_BN_H already defined
+#endif
+
+#define CONFIG_HEADER_BN_H
+
+#if defined(MDE_CPU_X64) || defined(MDE_CPU_AARCH64) || defined(MDE_CPU_IA64)
+//
+// With GCC we would normally use SIXTY_FOUR_BIT_LONG, but MSVC needs
+// SIXTY_FOUR_BIT, because 'long' is 32-bit and only 'long long' is
+// 64-bit. Since using 'long long' works fine on GCC too, just do that.
+//
+#define SIXTY_FOUR_BIT
+#elif defined(MDE_CPU_IA32) || defined(MDE_CPU_ARM) || defined(MDE_CPU_EBC)
+#define THIRTY_TWO_BIT
+#else
+#error Unknown target architecture
+#endif
 
 //
 // File operations are not required for building Open SSL, 
@@ -107,6 +134,11 @@ struct tm {
   int   tm_isdst;   /* Daylight Savings Time flag */
   long  tm_gmtoff;  /* offset from CUT in seconds */
   char  *tm_zone;   /* timezone abbreviation */
+};
+
+struct timeval {
+  long tv_sec;      /* time value, in seconds */
+  long tv_usec;     /* time value, in microseconds */
 };
 
 struct dirent {
@@ -231,14 +263,15 @@ extern FILE  *stdout;
 #define memmove(dest,source,count)        CopyMem(dest,source,(UINTN)(count))
 #define strcmp                            AsciiStrCmp
 #define strncmp(string1,string2,count)    (int)(AsciiStrnCmp(string1,string2,(UINTN)(count)))
-#define strcpy(strDest,strSource)         AsciiStrCpy(strDest,strSource)
-#define strncpy(strDest,strSource,count)  AsciiStrnCpy(strDest,strSource,(UINTN)count)
-#define strlen(str)                       (size_t)(AsciiStrLen(str))
-#define strcat(strDest,strSource)         AsciiStrCat(strDest,strSource)
+#define strcpy(strDest,strSource)         AsciiStrCpyS(strDest,MAX_STRING_SIZE,strSource)
+#define strncpy(strDest,strSource,count)  AsciiStrnCpyS(strDest,MAX_STRING_SIZE,strSource,(UINTN)count)
+#define strlen(str)                       (size_t)(AsciiStrnLenS(str,MAX_STRING_SIZE))
+#define strcat(strDest,strSource)         AsciiStrCatS(strDest,MAX_STRING_SIZE,strSource)
 #define strchr(str,ch)                    ScanMem8((VOID *)(str),AsciiStrSize(str),(UINT8)ch)
 #define abort()                           ASSERT (FALSE)
 #define assert(expression)
 #define localtime(timer)                  NULL
 #define gmtime_r(timer,result)            (result = NULL)
+#define atoi(nptr)                        AsciiStrDecimalToUintn(nptr)
 
 #endif

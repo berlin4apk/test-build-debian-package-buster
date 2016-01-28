@@ -60,8 +60,8 @@
 
 #include <IndustryStandard/Xen/hvm/params.h>
 
-#include "XenHypercall.h"
 #include "EventChannel.h"
+#include <Library/XenHypercallLib.h>
 
 //
 // Private Data Structures
@@ -992,9 +992,9 @@ NotifyEventChannelCheckForEvent (
   IN VOID *Context
   )
 {
-  XENSTORE_PRIVATE *xs;
-  xs = (XENSTORE_PRIVATE *)Context;
-  if (TestAndClearBit (xs->EventChannel, xs->Dev->SharedInfo->evtchn_pending)) {
+  XENSTORE_PRIVATE *xsp;
+  xsp = (XENSTORE_PRIVATE *)Context;
+  if (TestAndClearBit (xsp->EventChannel, xsp->Dev->SharedInfo->evtchn_pending)) {
     gBS->SignalEvent (Event);
   }
 }
@@ -1007,12 +1007,12 @@ NotifyEventChannelCheckForEvent (
 STATIC
 EFI_STATUS
 XenStoreInitComms (
-  XENSTORE_PRIVATE *xs
+  XENSTORE_PRIVATE *xsp
   )
 {
   EFI_STATUS Status;
   EFI_EVENT TimerEvent;
-  struct xenstore_domain_interface *XenStore = xs->XenStore;
+  struct xenstore_domain_interface *XenStore = xsp->XenStore;
 
   Status = gBS->CreateEvent (EVT_TIMER, 0, NULL, NULL, &TimerEvent);
   Status = gBS->SetTimer (TimerEvent, TimerRelative,
@@ -1029,8 +1029,8 @@ XenStoreInitComms (
   gBS->CloseEvent (TimerEvent);
 
   Status = gBS->CreateEvent (EVT_NOTIFY_WAIT, TPL_NOTIFY,
-                             NotifyEventChannelCheckForEvent, xs,
-                             &xs->EventChannelEvent);
+                             NotifyEventChannelCheckForEvent, xsp,
+                             &xsp->EventChannelEvent);
   ASSERT_EFI_ERROR (Status);
 
   return Status;
@@ -1057,8 +1057,8 @@ XenStoreInit (
 
   xs.Dev = Dev;
 
-  xs.EventChannel = (evtchn_port_t)XenHypercallHvmGetParam (Dev, HVM_PARAM_STORE_EVTCHN);
-  XenStoreGpfn = (UINTN)XenHypercallHvmGetParam (Dev, HVM_PARAM_STORE_PFN);
+  xs.EventChannel = (evtchn_port_t)XenHypercallHvmGetParam (HVM_PARAM_STORE_EVTCHN);
+  XenStoreGpfn = (UINTN)XenHypercallHvmGetParam (HVM_PARAM_STORE_PFN);
   xs.XenStore = (VOID *) (XenStoreGpfn << EFI_PAGE_SHIFT);
   DEBUG ((EFI_D_INFO, "XenBusInit: XenBus rings @%p, event channel %x\n",
           xs.XenStore, xs.EventChannel));

@@ -2,8 +2,8 @@
 # Embedded Package
 #
 #
-# Copyright (c) 2007, Intel Corporation. All rights reserved.<BR>
-# Copyright (c) 2012-2014, ARM Ltd. All rights reserved.<BR>
+# Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2012-2015, ARM Ltd. All rights reserved.<BR>
 #
 #    This program and the accompanying materials
 #    are licensed and made available under the terms and conditions of the BSD License
@@ -59,8 +59,6 @@
   UefiDecompressLib|MdePkg/Library/BaseUefiDecompressLib/BaseUefiDecompressLib.inf
   EfiFileLib|EmbeddedPkg/Library/EfiFileLib/EfiFileLib.inf
 
-  TimerLib|MdePkg/Library/BaseTimerLibNullTemplate/BaseTimerLibNullTemplate.inf
-
   ReportStatusCodeLib|IntelFrameworkModulePkg/Library/PeiDxeDebugLibReportStatusCode/PeiDxeDebugLibReportStatusCode.inf
 
   PeCoffGetEntryPointLib|MdePkg/Library/BasePeCoffGetEntryPointLib/BasePeCoffGetEntryPointLib.inf
@@ -70,7 +68,6 @@
   PrePiLib|EmbeddedPkg/Library/PrePiLib/PrePiLib.inf
 
   SerialPortLib|MdePkg/Library/BaseSerialPortLibNull/BaseSerialPortLibNull.inf
-  SerialPortExtLib|EmbeddedPkg/Library/TemplateSerialPortExtLib/TemplateSerialPortExtLib.inf
   RealTimeClockLib|EmbeddedPkg/Library/TemplateRealTimeClockLib/TemplateRealTimeClockLib.inf
   EfiResetSystemLib|EmbeddedPkg/Library/TemplateResetSystemLib/TemplateResetSystemLib.inf
   GdbSerialLib|EmbeddedPkg/Library/GdbSerialLib/GdbSerialLib.inf
@@ -98,7 +95,13 @@
 
   EblNetworkLib|EmbeddedPkg/Library/EblNetworkLib/EblNetworkLib.inf
 
+  AcpiLib|EmbeddedPkg/Library/AcpiLib/AcpiLib.inf
   FdtLib|EmbeddedPkg/Library/FdtLib/FdtLib.inf
+
+  # Shell libraries
+  ShellLib|ShellPkg/Library/UefiShellLib/UefiShellLib.inf
+  FileHandleLib|MdePkg/Library/UefiFileHandleLib/UefiFileHandleLib.inf
+  SortLib|MdeModulePkg/Library/UefiSortLib/UefiSortLib.inf
 
   # Networking Requirements
   NetLib|MdeModulePkg/Library/DxeNetLib/DxeNetLib.inf
@@ -245,8 +248,6 @@
   EmbeddedPkg/Library/GdbSerialLib/GdbSerialLib.inf
   EmbeddedPkg/Library/PrePiExtractGuidedSectionLib/PrePiExtractGuidedSectionLib.inf
   EmbeddedPkg/Library/PrePiLib/PrePiLib.inf
-  MdePkg/Library/BaseSerialPortLibNull/BaseSerialPortLibNull.inf
-  EmbeddedPkg/Library/SerialPortExtLibNull/SerialPortExtLibNull.inf
   EmbeddedPkg/Library/TemplateResetSystemLib/TemplateResetSystemLib.inf
   EmbeddedPkg/Library/TemplateRealTimeClockLib/TemplateRealTimeClockLib.inf
   EmbeddedPkg/Library/LzmaHobCustomDecompressLib/LzmaHobCustomDecompressLib.inf
@@ -257,22 +258,33 @@
   EmbeddedPkg/EmbeddedMonotonicCounter/EmbeddedMonotonicCounter.inf
   EmbeddedPkg/RealTimeClockRuntimeDxe/RealTimeClockRuntimeDxe.inf
   EmbeddedPkg/ResetRuntimeDxe/ResetRuntimeDxe.inf
-  EmbeddedPkg/SerialDxe/SerialDxe.inf
   EmbeddedPkg/SimpleTextInOutSerial/SimpleTextInOutSerial.inf
-  EmbeddedPkg/MetronomeDxe/MetronomeDxe.inf
+  EmbeddedPkg/MetronomeDxe/MetronomeDxe.inf {
+    <LibraryClasses>
+      TimerLib|MdePkg/Library/BaseTimerLibNullTemplate/BaseTimerLibNullTemplate.inf
+  }
 
   EmbeddedPkg/Universal/MmcDxe/MmcDxe.inf
 
-  # FDT Support
-  EmbeddedPkg/Library/FdtLoadLib/FdtLoadLib.inf
+  # FDT installation
+  EmbeddedPkg/Drivers/FdtPlatformDxe/FdtPlatformDxe.inf {
+    <LibraryClasses>
+      # It depends on BdsLib that depends on TimerLib
+      TimerLib|MdePkg/Library/BaseTimerLibNullTemplate/BaseTimerLibNullTemplate.inf
+  }
 
-  EmbeddedPkg/Application/AndroidFastboot/AndroidFastbootApp.inf
+  EmbeddedPkg/Application/AndroidFastboot/AndroidFastbootApp.inf {
+    <LibraryClasses>
+      # It depends on BdsLib that depends on TimerLib
+      TimerLib|MdePkg/Library/BaseTimerLibNullTemplate/BaseTimerLibNullTemplate.inf
+  }
   EmbeddedPkg/Drivers/AndroidFastbootTransportUsbDxe/FastbootTransportUsbDxe.inf
   EmbeddedPkg/Drivers/AndroidFastbootTransportTcpDxe/FastbootTransportTcpDxe.inf
 
   # Drivers
   EmbeddedPkg/Drivers/Isp1761UsbDxe/Isp1761UsbDxe.inf
   EmbeddedPkg/Drivers/Lan9118Dxe/Lan9118Dxe.inf
+  EmbeddedPkg/Drivers/SataSiI3132Dxe/SataSiI3132Dxe.inf
 
 [Components.IA32, Components.X64, Components.IPF, Components.ARM]
   EmbeddedPkg/GdbStub/GdbStub.inf

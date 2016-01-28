@@ -53,6 +53,11 @@ QEMU_VIDEO_CARD gQemuVideoCardList[] = {
         QEMU_VIDEO_BOCHS,
         L"QEMU QXL VGA"
     },{
+        0x1af4,
+        0x1050,
+        QEMU_VIDEO_BOCHS_MMIO,
+        L"QEMU VirtIO VGA"
+    },{
         0 /* end of list */
     }
 };
@@ -405,10 +410,12 @@ QemuVideoControllerDriverStart (
     goto UninstallGop;
   }
 
+#if defined MDE_CPU_IA32 || defined MDE_CPU_X64
   if (Private->Variant == QEMU_VIDEO_BOCHS_MMIO ||
       Private->Variant == QEMU_VIDEO_BOCHS) {
     InstallVbeShim (Card->Name, Private->GraphicsOutput.Mode->FrameBufferBase);
   }
+#endif
 
   gBS->RestoreTPL (OldTpl);
   return EFI_SUCCESS;

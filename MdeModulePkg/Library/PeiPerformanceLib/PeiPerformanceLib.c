@@ -6,7 +6,8 @@
   performance data to the GUIDed HOB. Due to the limitation of temporary RAM, the maximum
   number of performance logging entry is specified by PcdMaxPeiPerformanceLogEntries.  
 
-Copyright (c) 2006 - 2012, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
+(C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -183,6 +184,7 @@ StartPerformanceMeasurementEx (
   InternalGetPerformanceHobLog (&PeiPerformanceLog, &PeiPerformanceIdArray);
 
   if (PeiPerformanceLog->NumberOfEntries >= PcdGet8 (PcdMaxPeiPerformanceLogEntries)) {
+    DEBUG ((DEBUG_ERROR, "PEI performance log array out of resources\n"));
     return RETURN_OUT_OF_RESOURCES;
   }
   Index                       = PeiPerformanceLog->NumberOfEntries++;
@@ -190,10 +192,10 @@ StartPerformanceMeasurementEx (
   LogEntryArray[Index].Handle = (EFI_PHYSICAL_ADDRESS) (UINTN) Handle;
 
   if (Token != NULL) {
-    AsciiStrnCpy (LogEntryArray[Index].Token, Token, PEI_PERFORMANCE_STRING_LENGTH);
+    AsciiStrnCpyS (LogEntryArray[Index].Token, PEI_PERFORMANCE_STRING_SIZE, Token, PEI_PERFORMANCE_STRING_LENGTH);
   }
   if (Module != NULL) {
-    AsciiStrnCpy (LogEntryArray[Index].Module, Module, PEI_PERFORMANCE_STRING_LENGTH);
+    AsciiStrnCpyS (LogEntryArray[Index].Module, PEI_PERFORMANCE_STRING_SIZE, Module, PEI_PERFORMANCE_STRING_LENGTH);
   }
 
   LogEntryArray[Index].EndTimeStamp = 0;

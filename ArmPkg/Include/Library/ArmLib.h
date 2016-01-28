@@ -1,7 +1,7 @@
 /** @file
 
   Copyright (c) 2008 - 2009, Apple Inc. All rights reserved.<BR>
-  Copyright (c) 2011 - 2014, ARM Ltd. All rights reserved.<BR>
+  Copyright (c) 2011 - 2015, ARM Ltd. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -19,40 +19,12 @@
 #include <Uefi/UefiBaseType.h>
 
 #ifdef MDE_CPU_ARM
-  #ifdef ARM_CPU_ARMv6
-    #include <Chipset/ARM1176JZ-S.h>
-  #else
-    #include <Chipset/ArmV7.h>
-  #endif
+  #include <Chipset/ArmV7.h>
 #elif defined(MDE_CPU_AARCH64)
   #include <Chipset/AArch64.h>
 #else
  #error "Unknown chipset."
 #endif
-
-typedef enum {
-  ARM_CACHE_TYPE_WRITE_BACK,
-  ARM_CACHE_TYPE_UNKNOWN
-} ARM_CACHE_TYPE;
-
-typedef enum {
-  ARM_CACHE_ARCHITECTURE_UNIFIED,
-  ARM_CACHE_ARCHITECTURE_SEPARATE,
-  ARM_CACHE_ARCHITECTURE_UNKNOWN
-} ARM_CACHE_ARCHITECTURE;
-
-typedef struct {
-  ARM_CACHE_TYPE          Type;
-  ARM_CACHE_ARCHITECTURE  Architecture;
-  BOOLEAN                 DataCachePresent;
-  UINTN                   DataCacheSize;
-  UINTN                   DataCacheAssociativity;
-  UINTN                   DataCacheLineLength;
-  BOOLEAN                 InstructionCachePresent;
-  UINTN                   InstructionCacheSize;
-  UINTN                   InstructionCacheAssociativity;
-  UINTN                   InstructionCacheLineLength;
-} ARM_CACHE_INFO;
 
 /**
  * The UEFI firmware must not use the ARM_MEMORY_REGION_ATTRIBUTE_NONSECURE_* attributes.
@@ -118,48 +90,17 @@ typedef enum {
 //
 // ARM MP Core IDs
 //
-#define ARM_CORE_MASK         0xFF
-#define ARM_CLUSTER_MASK      (0xFF << 8)
+#define ARM_CORE_AFF0         0xFF
+#define ARM_CORE_AFF1         (0xFF << 8)
+#define ARM_CORE_AFF2         (0xFF << 16)
+#define ARM_CORE_AFF3         (0xFFULL << 32)
+
+#define ARM_CORE_MASK         ARM_CORE_AFF0
+#define ARM_CLUSTER_MASK      ARM_CORE_AFF1
 #define GET_CORE_ID(MpId)     ((MpId) & ARM_CORE_MASK)
 #define GET_CLUSTER_ID(MpId)  (((MpId) & ARM_CLUSTER_MASK) >> 8)
 #define GET_MPID(ClusterId, CoreId)   (((ClusterId) << 8) | (CoreId))
 #define PRIMARY_CORE_ID       (PcdGet32(PcdArmPrimaryCore) & ARM_CORE_MASK)
-
-ARM_CACHE_TYPE
-EFIAPI
-ArmCacheType (
-  VOID
-  );
-
-ARM_CACHE_ARCHITECTURE
-EFIAPI
-ArmCacheArchitecture (
-  VOID
-  );
-
-VOID
-EFIAPI
-ArmCacheInformation (
-  OUT ARM_CACHE_INFO  *CacheInfo
-  );
-
-BOOLEAN
-EFIAPI
-ArmDataCachePresent (
-  VOID
-  );
-
-UINTN
-EFIAPI
-ArmDataCacheSize (
-  VOID
-  );
-
-UINTN
-EFIAPI
-ArmDataCacheAssociativity (
-  VOID
-  );
 
 UINTN
 EFIAPI
@@ -167,27 +108,15 @@ ArmDataCacheLineLength (
   VOID
   );
 
-BOOLEAN
-EFIAPI
-ArmInstructionCachePresent (
-  VOID
-  );
-
-UINTN
-EFIAPI
-ArmInstructionCacheSize (
-  VOID
-  );
-
-UINTN
-EFIAPI
-ArmInstructionCacheAssociativity (
-  VOID
-  );
-
 UINTN
 EFIAPI
 ArmInstructionCacheLineLength (
+  VOID
+  );
+
+UINTN
+EFIAPI
+ArmCacheWritebackGranule (
   VOID
   );
 
@@ -242,12 +171,6 @@ ArmCleanDataCache (
 
 VOID
 EFIAPI
-ArmCleanDataCacheToPoU (
-  VOID
-  );
-
-VOID
-EFIAPI
 ArmInvalidateInstructionCache (
   VOID
   );
@@ -260,9 +183,15 @@ ArmInvalidateDataCacheEntryByMVA (
 
 VOID
 EFIAPI
-ArmCleanDataCacheEntryByMVA (
+ArmCleanDataCacheEntryToPoUByMVA(
   IN  UINTN   Address
   );
+
+VOID
+EFIAPI
+ArmCleanDataCacheEntryByMVA(
+IN  UINTN   Address
+);
 
 VOID
 EFIAPI
@@ -470,19 +399,13 @@ ArmSetHighVectors (
 
 VOID
 EFIAPI
-ArmDrainWriteBuffer (
-  VOID
-  );
-
-VOID
-EFIAPI
 ArmDataMemoryBarrier (
   VOID
   );
 
 VOID
 EFIAPI
-ArmDataSyncronizationBarrier (
+ArmDataSynchronizationBarrier (
   VOID
   );
 
@@ -658,6 +581,30 @@ VOID
 EFIAPI
 ArmUnsetCpuActlrBit (
   IN  UINTN    Bits
+  );
+
+RETURN_STATUS
+ArmSetMemoryRegionNoExec (
+  IN  EFI_PHYSICAL_ADDRESS      BaseAddress,
+  IN  UINT64                    Length
+  );
+
+RETURN_STATUS
+ArmClearMemoryRegionNoExec (
+  IN  EFI_PHYSICAL_ADDRESS      BaseAddress,
+  IN  UINT64                    Length
+  );
+
+RETURN_STATUS
+ArmSetMemoryRegionReadOnly (
+  IN  EFI_PHYSICAL_ADDRESS      BaseAddress,
+  IN  UINT64                    Length
+  );
+
+RETURN_STATUS
+ArmClearMemoryRegionReadOnly (
+  IN  EFI_PHYSICAL_ADDRESS      BaseAddress,
+  IN  UINT64                    Length
   );
 
 #endif // __ARM_LIB__

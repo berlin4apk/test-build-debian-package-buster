@@ -1,7 +1,8 @@
 /** @file
   The Common operations used by IKE Exchange Process.
 
-  Copyright (c) 2010 - 2014, Intel Corporation. All rights reserved.<BR>
+  (C) Copyright 2015 Hewlett-Packard Development Company, L.P.<BR>
+  Copyright (c) 2010 - 2015, Intel Corporation. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -571,7 +572,6 @@ Ikev2ChildSaSessionReg (
   IKEV2_SESSION_COMMON         *SessionCommon;
   IKEV2_CHILD_SA_SESSION       *OldChildSaSession;
   IKEV2_SA_SESSION             *IkeSaSession;
-  IKEV2_SA_PARAMS              *SaParams;
   EFI_STATUS                   Status;
   UINT64                       Lifetime;
 
@@ -624,7 +624,6 @@ Ikev2ChildSaSessionReg (
   //
   // Start to count the lifetime of the IKE SA.
   //
-  SaParams = SessionCommon->SaParams;
   if (ChildSaSession->Spd->Data->ProcessingPolicy->SaLifetime.HardLifetime != 0){
     Lifetime = ChildSaSession->Spd->Data->ProcessingPolicy->SaLifetime.HardLifetime;
   } else {
@@ -892,9 +891,7 @@ Ikev2ChildSaSilentDelete (
   RemoteSelector  = NULL;
   UdpService      = IkeSaSession->SessionCommon.UdpService;
 
-  Private  = (UdpService->IpVersion == IP_VERSION_4) ?
-             IPSEC_PRIVATE_DATA_FROM_UDP4LIST(UdpService->ListHead) :
-             IPSEC_PRIVATE_DATA_FROM_UDP6LIST(UdpService->ListHead);
+  Private = IkeSaSession->SessionCommon.Private;
 
   //
   // Remove the Established SA from ChildSaEstablishlist.

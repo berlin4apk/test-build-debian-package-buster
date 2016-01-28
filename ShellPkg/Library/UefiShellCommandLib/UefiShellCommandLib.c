@@ -1,7 +1,7 @@
 /** @file
   Provides interface to shell internal functions for shell commands.
 
-  Copyright (c) 2013-2014, Hewlett-Packard Development Company, L.P.<BR>
+  (C) Copyright 2013-2015 Hewlett-Packard Development Company, L.P.<BR>
   Copyright (c) 2009 - 2014, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -892,7 +892,7 @@ ShellCommandIsOnAliasList(
 }
 
 /**
-  Function to determine current state of ECHO.  Echo determins if lines from scripts
+  Function to determine current state of ECHO.  Echo determines if lines from scripts
   and ECHO commands are enabled.
 
   @retval TRUE    Echo is currently enabled
@@ -908,7 +908,7 @@ ShellCommandGetEchoState(
 }
 
 /**
-  Function to set current state of ECHO.  Echo determins if lines from scripts
+  Function to set current state of ECHO.  Echo determines if lines from scripts
   and ECHO commands are enabled.
 
   If State is TRUE, Echo will be enabled.
@@ -1261,6 +1261,9 @@ ShellCommandCreateInitialMappingsAndPaths(
         ; MapListNode = (SHELL_MAP_LIST *)GetFirstNode(&gShellMapList.Link)
        ){
           RemoveEntryList(&MapListNode->Link);
+          SHELL_FREE_NON_NULL(MapListNode->DevicePath);
+          SHELL_FREE_NON_NULL(MapListNode->MapName);
+          SHELL_FREE_NON_NULL(MapListNode->CurrentDirectoryPath);
           FreePool(MapListNode);
     } // for loop
   }
@@ -1622,7 +1625,6 @@ ShellFileHandleEof(
 
   gEfiShellProtocol->GetFilePosition(Handle, &Pos);
   Info = gEfiShellProtocol->GetFileInfo (Handle);
-  ASSERT(Info != NULL);
   gEfiShellProtocol->SetFilePosition(Handle, Pos);
 
   if (Info == NULL) {

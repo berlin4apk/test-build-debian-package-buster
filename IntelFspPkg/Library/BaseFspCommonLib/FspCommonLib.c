@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2014 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -27,7 +27,7 @@
 //   API Parameter                +0x34
 //   API return address           +0x30
 //
-//   push    offset exit          +0x2C
+//   push    FspInfoHeader        +0x2C
 //   pushfd                       +0x28
 //   cli
 //   pushad                       +0x24
@@ -47,7 +47,7 @@ typedef struct {
   UINT32    Ecx;
   UINT32    Eax;
   UINT16    Flags[2];
-  UINT32    ExitOff;
+  UINT32    FspInfoHeader;
   UINT32    ApiRet;
   UINT32    ApiParam;
 } CONTEXT_STACK;
@@ -144,7 +144,7 @@ SetFspContinuationFuncParameter (
 
 
 /**
-  This function changes the Bootloader return address in stack.
+  This function changes the BootLoader return address in stack.
 
   @param[in] ReturnAddress       Address to return.
 
@@ -162,7 +162,7 @@ SetFspApiReturnAddress (
 }
 
 /**
-  This function set the API status code returned to the bootloader.
+  This function set the API status code returned to the BootLoader.
 
   @param[in] ReturnStatus       Status code to return.
 
@@ -289,6 +289,91 @@ GetFspUpdDataPointer (
   return FspData->UpdDataRgnPtr;
 }
 
+
+/**
+  This function sets the memory init UPD data pointer.
+
+  @param[in] MemoryInitUpdPtr   memory init UPD data pointer.
+**/
+VOID
+EFIAPI
+SetFspMemoryInitUpdDataPointer (
+  IN VOID    *MemoryInitUpdPtr
+  )
+{
+  FSP_GLOBAL_DATA  *FspData;
+
+  //
+  // Get the Fsp Global Data Pointer
+  //
+  FspData  = GetFspGlobalDataPointer ();
+
+  //
+  // Set the memory init UPD pointer.
+  //
+  FspData->MemoryInitUpdPtr = MemoryInitUpdPtr;
+}
+
+/**
+  This function gets the memory init UPD data pointer.
+
+  @return memory init UPD data pointer.
+**/
+VOID *
+EFIAPI
+GetFspMemoryInitUpdDataPointer (
+  VOID
+  )
+{
+  FSP_GLOBAL_DATA  *FspData;
+
+  FspData  = GetFspGlobalDataPointer ();
+  return FspData->MemoryInitUpdPtr;
+}
+
+
+/**
+  This function sets the silicon init UPD data pointer.
+
+  @param[in] SiliconInitUpdPtr   silicon init UPD data pointer.
+**/
+VOID
+EFIAPI
+SetFspSiliconInitUpdDataPointer (
+  IN VOID    *SiliconInitUpdPtr
+  )
+{
+  FSP_GLOBAL_DATA  *FspData;
+
+  //
+  // Get the Fsp Global Data Pointer
+  //
+  FspData  = GetFspGlobalDataPointer ();
+
+  //
+  // Set the silicon init UPD data pointer.
+  //
+  FspData->SiliconInitUpdPtr = SiliconInitUpdPtr;
+}
+
+/**
+  This function gets the silicon init UPD data pointer.
+
+  @return silicon init UPD data pointer.
+**/
+VOID *
+EFIAPI
+GetFspSiliconInitUpdDataPointer (
+  VOID
+  )
+{
+  FSP_GLOBAL_DATA  *FspData;
+
+  FspData  = GetFspGlobalDataPointer ();
+  return FspData->SiliconInitUpdPtr;
+}
+
+
 /**
   Set FSP measurement point timestamp.
 
@@ -316,3 +401,83 @@ SetFspMeasurePoint (
 
   return FspData->PerfData[(FspData->PerfIdx)++];
 }
+
+/**
+  This function gets the FSP info header pointer.
+
+  @retval FspInfoHeader   FSP info header pointer
+**/
+FSP_INFO_HEADER *
+EFIAPI
+GetFspInfoHeader (
+  VOID
+  )
+{
+  return  GetFspGlobalDataPointer()->FspInfoHeader;
+}
+
+/**
+  This function gets the FSP info header pointer using the API stack context.
+
+  @retval FspInfoHeader   FSP info header pointer using the API stack context
+**/
+FSP_INFO_HEADER *
+EFIAPI
+GetFspInfoHeaderFromApiContext (
+  VOID
+  )
+{
+  FSP_GLOBAL_DATA  *FspData;
+
+  FspData  = GetFspGlobalDataPointer ();
+  return  (FSP_INFO_HEADER *)(*(UINT32 *)(UINTN)(FspData->CoreStack + CONTEXT_STACK_OFFSET(FspInfoHeader)));
+}
+
+/**
+  This function gets the VPD data pointer.
+
+  @return VpdDataRgnPtr   VPD data pointer.
+**/
+VOID *
+EFIAPI
+GetFspVpdDataPointer (
+  VOID
+  )
+{
+  FSP_INFO_HEADER   *FspInfoHeader;
+
+  FspInfoHeader = GetFspInfoHeader ();
+  return (VOID *)(FspInfoHeader->ImageBase + FspInfoHeader->CfgRegionOffset);
+}
+
+/**
+  This function gets FSP API calling mode.
+
+  @retval API calling mode
+**/
+UINT8
+EFIAPI
+GetFspApiCallingMode (
+  VOID
+  )
+{
+  return  GetFspGlobalDataPointer()->ApiMode;
+}
+
+/**
+  This function sets FSP API calling mode.
+
+  @param[in] Mode     API calling mode
+**/
+VOID
+EFIAPI
+SetFspApiCallingMode (
+  UINT8  Mode
+  )
+{
+  FSP_GLOBAL_DATA  *FspData;
+
+  FspData  = GetFspGlobalDataPointer ();
+  FspData->ApiMode = Mode;
+}
+

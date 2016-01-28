@@ -1,8 +1,8 @@
 /** @file
   Main file for If and else shell level 1 function.
 
-  Copyright (c) 2013, Hewlett-Packard Development Company, L.P.
-  Copyright (c) 2009 - 2011, Intel Corporation. All rights reserved.<BR>
+  (C) Copyright 2013-2015 Hewlett-Packard Development Company, L.P.<BR>
+  Copyright (c) 2009 - 2014, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -15,7 +15,6 @@
 
 #include "UefiShellLevel1CommandsLib.h"
 #include <Library/PrintLib.h>
-#include <Library/PathLib.h>
 
 typedef enum {
   EndTagOr,
@@ -832,12 +831,12 @@ ShellCommandRunIf (
   ASSERT_EFI_ERROR(Status);
 
   if (!gEfiShellProtocol->BatchIsActive()) {
-    ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_NO_SCRIPT), gShellLevel1HiiHandle, L"If");
+    ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_NO_SCRIPT), gShellLevel1HiiHandle, L"if");  
     return (SHELL_UNSUPPORTED);
   }
 
   if (gEfiShellParametersProtocol->Argc < 3) {
-    ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_GEN_TOO_FEW), gShellLevel1HiiHandle);
+    ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_GEN_TOO_FEW), gShellLevel1HiiHandle, L"if");  
     return (SHELL_INVALID_PARAMETER);
   }
 
@@ -915,12 +914,12 @@ ShellCommandRunIf (
       // we are at the then
       //
       if (CurrentParameter+1 != gEfiShellParametersProtocol->Argc) {
-        ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_TEXT_AFTER_THEN), gShellLevel1HiiHandle);
+        ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_TEXT_AFTER_THEN), gShellLevel1HiiHandle, L"if");  
         ShellStatus = SHELL_INVALID_PARAMETER;
       } else {
         Status = PerformResultOperation(CurrentValue);
         if (EFI_ERROR(Status)) {
-          ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_SYNTAX_AFTER_BAD), gShellLevel1HiiHandle, gEfiShellParametersProtocol->Argv[CurrentParameter]);
+          ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_SYNTAX_AFTER_BAD), gShellLevel1HiiHandle, L"if", gEfiShellParametersProtocol->Argv[CurrentParameter]);  
           ShellStatus = SHELL_INVALID_PARAMETER;
         }
       }
@@ -958,7 +957,7 @@ ShellCommandRunIf (
           if ((Ending == EndTagOr && CurrentValue) || (Ending == EndTagAnd && !CurrentValue)) {
             Status = PerformResultOperation(CurrentValue);
             if (EFI_ERROR(Status)) {
-              ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_SYNTAX_AFTER_BAD), gShellLevel1HiiHandle, gEfiShellParametersProtocol->Argv[CurrentParameter]);
+              ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_SYNTAX_AFTER_BAD), gShellLevel1HiiHandle, L"if", gEfiShellParametersProtocol->Argv[CurrentParameter]);  
               ShellStatus = SHELL_INVALID_PARAMETER;
             }
             break;
@@ -996,7 +995,7 @@ ShellCommandRunElse (
   ASSERT_EFI_ERROR(CommandInit());
 
   if (gEfiShellParametersProtocol->Argc > 1) {
-    ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_GEN_TOO_MANY), gShellLevel1HiiHandle);
+    ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_GEN_TOO_MANY), gShellLevel1HiiHandle, L"if");  
     return (SHELL_INVALID_PARAMETER);
   }
 
@@ -1071,7 +1070,7 @@ ShellCommandRunEndIf (
   ASSERT_EFI_ERROR(CommandInit());
 
   if (gEfiShellParametersProtocol->Argc > 1) {
-    ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_GEN_TOO_MANY), gShellLevel1HiiHandle);
+    ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_GEN_TOO_MANY), gShellLevel1HiiHandle, L"if");  
     return (SHELL_INVALID_PARAMETER);
   }
 

@@ -1,7 +1,8 @@
 /** @file
   Utility functions used by the Dp application.
 
-  Copyright (c) 2009 - 2014, Intel Corporation. All rights reserved.
+  Copyright (c) 2009 - 2015, Intel Corporation. All rights reserved.
+  (C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -131,7 +132,7 @@ IsPhase(
   
 **/
 VOID
-GetShortPdbFileName (
+DpGetShortPdbFileName (
   IN  CHAR8     *PdbFileName,
   OUT CHAR16    *UnicodeBuffer
   )
@@ -141,10 +142,10 @@ GetShortPdbFileName (
   UINTN StartIndex;
   UINTN EndIndex;
 
-  ZeroMem (UnicodeBuffer, DXE_PERFORMANCE_STRING_LENGTH * sizeof (CHAR16));
+  ZeroMem (UnicodeBuffer, (DP_GAUGE_STRING_LENGTH + 1) * sizeof (CHAR16));
 
   if (PdbFileName == NULL) {
-    StrnCpy (UnicodeBuffer, L" ", 1);
+    StrnCpyS (UnicodeBuffer, DP_GAUGE_STRING_LENGTH + 1, L" ", 1);
   } else {
     StartIndex = 0;
     for (EndIndex = 0; PdbFileName[EndIndex] != 0; EndIndex++)
@@ -163,8 +164,8 @@ GetShortPdbFileName (
     for (IndexA = StartIndex; IndexA < EndIndex; IndexA++) {
       UnicodeBuffer[IndexU] = (CHAR16) PdbFileName[IndexA];
       IndexU++;
-      if (IndexU >= DXE_PERFORMANCE_STRING_LENGTH) {
-        UnicodeBuffer[DXE_PERFORMANCE_STRING_LENGTH] = 0;
+      if (IndexU >= DP_GAUGE_STRING_LENGTH) {
+        UnicodeBuffer[DP_GAUGE_STRING_LENGTH] = 0;
         break;
       }
     }
@@ -188,7 +189,7 @@ GetShortPdbFileName (
 
 **/
 VOID
-GetNameFromHandle (
+DpGetNameFromHandle (
   IN EFI_HANDLE   Handle
   )
 {
@@ -236,7 +237,7 @@ GetNameFromHandle (
     PdbFileName = PeCoffLoaderGetPdbPointer (Image->ImageBase);
 
     if (PdbFileName != NULL) {
-      GetShortPdbFileName (PdbFileName, mGaugeString);
+      DpGetShortPdbFileName (PdbFileName, mGaugeString);
       return;
     }
   }
@@ -261,7 +262,7 @@ GetNameFromHandle (
                                );
     if (!EFI_ERROR (Status)) {
       SHELL_FREE_NON_NULL (PlatformLanguage);
-      StrnCpy (mGaugeString, StringPtr, DP_GAUGE_STRING_LENGTH);
+      StrnCpyS (mGaugeString, DP_GAUGE_STRING_LENGTH + 1, StringPtr, DP_GAUGE_STRING_LENGTH);
       mGaugeString[DP_GAUGE_STRING_LENGTH] = 0;
       return;
     }
@@ -305,7 +306,7 @@ GetNameFromHandle (
         //
         // Method 3. Get the name string from FFS UI section
         //
-        StrnCpy (mGaugeString, NameString, DP_GAUGE_STRING_LENGTH);
+        StrnCpyS (mGaugeString, DP_GAUGE_STRING_LENGTH + 1, NameString, DP_GAUGE_STRING_LENGTH);
         mGaugeString[DP_GAUGE_STRING_LENGTH] = 0;
         FreePool (NameString);
       } else {
@@ -321,7 +322,7 @@ GetNameFromHandle (
       //
       NameString = ConvertDevicePathToText (LoadedImageDevicePath, TRUE, FALSE);
       if (NameString != NULL) {
-        StrnCpy (mGaugeString, NameString, DP_GAUGE_STRING_LENGTH);
+        StrnCpyS (mGaugeString, DP_GAUGE_STRING_LENGTH + 1, NameString, DP_GAUGE_STRING_LENGTH);
         mGaugeString[DP_GAUGE_STRING_LENGTH] = 0;
         FreePool (NameString);
         return;
@@ -334,7 +335,7 @@ GetNameFromHandle (
   //
   StringPtr = HiiGetString (gDpHiiHandle, STRING_TOKEN (STR_DP_ERROR_NAME), NULL);
   ASSERT (StringPtr != NULL);
-  StrnCpy (mGaugeString, StringPtr, DP_GAUGE_STRING_LENGTH);
+  StrnCpyS (mGaugeString, DP_GAUGE_STRING_LENGTH + 1, StringPtr, DP_GAUGE_STRING_LENGTH);
   FreePool (StringPtr);
 }
 

@@ -1,7 +1,7 @@
 ##  @file
 # Shell Package
 #
-# Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
 #
 #    This program and the accompanying materials
 #    are licensed and made available under the terms and conditions of the BSD License
@@ -16,7 +16,7 @@
 [Defines]
   PLATFORM_NAME                  = Shell
   PLATFORM_GUID                  = E1DC9BF8-7013-4c99-9437-795DAA45F3BD
-  PLATFORM_VERSION               = 0.50
+  PLATFORM_VERSION               = 1.0
   DSC_SPECIFICATION              = 0x00010006
   OUTPUT_DIRECTORY               = Build/Shell
   SUPPORTED_ARCHITECTURES        = IA32|IPF|X64|EBC|ARM|AARCH64
@@ -35,6 +35,8 @@
   BaseLib|MdePkg/Library/BaseLib/BaseLib.inf
   BaseMemoryLib|MdePkg/Library/BaseMemoryLib/BaseMemoryLib.inf
   PrintLib|MdePkg/Library/BasePrintLib/BasePrintLib.inf
+  FileHandleLib|MdePkg/Library/UefiFileHandleLib/UefiFileHandleLib.inf
+  SortLib|MdeModulePkg/Library/UefiSortLib/UefiSortLib.inf
   UefiRuntimeServicesTableLib|MdePkg/Library/UefiRuntimeServicesTableLib/UefiRuntimeServicesTableLib.inf
   UefiHiiServicesLib|MdeModulePkg/Library/UefiHiiServicesLib/UefiHiiServicesLib.inf
   HiiLib|MdeModulePkg/Library/UefiHiiLib/UefiHiiLib.inf
@@ -42,14 +44,12 @@
 
   ShellLib|ShellPkg/Library/UefiShellLib/UefiShellLib.inf
   ShellCommandLib|ShellPkg/Library/UefiShellCommandLib/UefiShellCommandLib.inf
-  FileHandleLib|ShellPkg/Library/UefiFileHandleLib/UefiFileHandleLib.inf
   ShellCEntryLib|ShellPkg/Library/UefiShellCEntryLib/UefiShellCEntryLib.inf
-  SortLib|ShellPkg/Library/UefiSortLib/UefiSortLib.inf
   HandleParsingLib|ShellPkg/Library/UefiHandleParsingLib/UefiHandleParsingLib.inf
   
   PeCoffGetEntryPointLib|MdePkg/Library/BasePeCoffGetEntryPointLib/BasePeCoffGetEntryPointLib.inf
-  PathLib|ShellPkg/Library/BasePathLib/BasePathLib.inf
   BcfgCommandLib|ShellPkg/Library/UefiShellBcfgCommandLib/UefiShellBcfgCommandLib.inf
+  IoLib|MdePkg/Library/BaseIoLibIntrinsic/BaseIoLibIntrinsic.inf
 
 [LibraryClasses.ARM]
   #
@@ -74,11 +74,21 @@
 !endif #$(NO_SHELL_PROFILES)
 
 [Components]
-  ShellPkg/Library/UefiFileHandleLib/UefiFileHandleLib.inf
+  #
+  # Build all the libraries when building this package.
+  # This helps developers test changes and how they affect the package.
+  #
   ShellPkg/Library/UefiShellLib/UefiShellLib.inf
   ShellPkg/Library/UefiShellCommandLib/UefiShellCommandLib.inf
-  ShellPkg/Library/UefiShellLevel2CommandsLib/UefiShellLevel2CommandsLib.inf
   ShellPkg/Library/UefiHandleParsingLib/UefiHandleParsingLib.inf
+  ShellPkg/Library/UefiShellLevel1CommandsLib/UefiShellLevel1CommandsLib.inf
+  ShellPkg/Library/UefiShellLevel2CommandsLib/UefiShellLevel2CommandsLib.inf
+  ShellPkg/Library/UefiShellLevel3CommandsLib/UefiShellLevel3CommandsLib.inf
+  ShellPkg/Library/UefiShellDriver1CommandsLib/UefiShellDriver1CommandsLib.inf
+  ShellPkg/Library/UefiShellInstall1CommandsLib/UefiShellInstall1CommandsLib.inf
+  ShellPkg/Library/UefiShellDebug1CommandsLib/UefiShellDebug1CommandsLib.inf
+  ShellPkg/Library/UefiShellNetwork1CommandsLib/UefiShellNetwork1CommandsLib.inf
+  ShellPkg/Library/UefiShellTftpCommandLib/UefiShellTftpCommandLib.inf
 
   ShellPkg/Library/UefiDpLib/UefiDpLib.inf {
     <LibraryClasses>
@@ -100,6 +110,9 @@
 !ifdef $(INCLUDE_DP)
       NULL|ShellPkg/Library/UefiDpLib/UefiDpLib.inf
 !endif #$(INCLUDE_DP)
+!ifdef $(INCLUDE_TFTP_COMMAND)
+      NULL|ShellPkg/Library/UefiShellTftpCommandLib/UefiShellTftpCommandLib.inf
+!endif #$(INCLUDE_TFTP_COMMAND)
 !endif #$(NO_SHELL_PROFILES)
   }
 

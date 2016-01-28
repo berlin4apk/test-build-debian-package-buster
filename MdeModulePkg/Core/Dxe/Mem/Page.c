@@ -1,7 +1,7 @@
 /** @file
   UEFI Memory page management functions.
 
-Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -67,6 +67,7 @@ EFI_MEMORY_TYPE_STATISTICS mMemoryTypeStatistics[EfiMaxMemoryType + 1] = {
   { 0, MAX_ADDRESS, 0, 0, EfiMaxMemoryType, FALSE, FALSE },  // EfiMemoryMappedIO
   { 0, MAX_ADDRESS, 0, 0, EfiMaxMemoryType, FALSE, FALSE },  // EfiMemoryMappedIOPortSpace
   { 0, MAX_ADDRESS, 0, 0, EfiMaxMemoryType, TRUE,  TRUE  },  // EfiPalCode
+  { 0, MAX_ADDRESS, 0, 0, EfiMaxMemoryType, FALSE, FALSE },  // EfiPersistentMemory
   { 0, MAX_ADDRESS, 0, 0, EfiMaxMemoryType, FALSE, FALSE }   // EfiMaxMemoryType
 };
 
@@ -88,6 +89,7 @@ EFI_MEMORY_TYPE_INFORMATION gMemoryTypeInformation[EfiMaxMemoryType + 1] = {
   { EfiMemoryMappedIO,          0 },
   { EfiMemoryMappedIOPortSpace, 0 },
   { EfiPalCode,                 0 },
+  { EfiPersistentMemory,        0 },
   { EfiMaxMemoryType,           0 }
 };
 //
@@ -414,7 +416,11 @@ PromoteMemoryResource (
       //
       // Update the GCD map
       //
-      Entry->GcdMemoryType = EfiGcdMemoryTypeSystemMemory;
+      if ((Entry->Capabilities & EFI_MEMORY_MORE_RELIABLE) == EFI_MEMORY_MORE_RELIABLE) {
+        Entry->GcdMemoryType = EfiGcdMemoryTypeMoreReliable;
+      } else {
+        Entry->GcdMemoryType = EfiGcdMemoryTypeSystemMemory;
+      }
       Entry->Capabilities |= EFI_MEMORY_TESTED;
       Entry->ImageHandle  = gDxeCoreImageHandle;
       Entry->DeviceHandle = NULL;
@@ -538,7 +544,7 @@ CoreAddMemoryDescriptor (
     return;
   }
 
-  if (Type >= EfiMaxMemoryType && Type <= 0x7fffffff) {
+  if (Type >= EfiMaxMemoryType && Type < MEMORY_TYPE_OEM_RESERVED_MIN) {
     return;
   }
   CoreAcquireMemoryLock ();
@@ -1045,6 +1051,11 @@ CoreFindFreePagesI (
 
     DescEnd = ((DescEnd + 1) & (~(Alignment - 1))) - 1;
 
+    // Skip if DescEnd is less than DescStart after alignment clipping
+    if (DescEnd < DescStart) {
+      continue;
+    }
+
     //
     // Compute the number of bytes we can used from this
     // descriptor, and see it's enough to satisfy the request
@@ -1197,8 +1208,8 @@ CoreInternalAllocatePages (
     return EFI_INVALID_PARAMETER;
   }
 
-  if ((MemoryType >= EfiMaxMemoryType && MemoryType <= 0x7fffffff) ||
-       MemoryType == EfiConventionalMemory) {
+  if ((MemoryType >= EfiMaxMemoryType && MemoryType < MEMORY_TYPE_OEM_RESERVED_MIN) ||
+       (MemoryType == EfiConventionalMemory) || (MemoryType == EfiPersistentMemory)) {
     return EFI_INVALID_PARAMETER;
   }
 
@@ -1528,10 +1539,11 @@ CoreGetMemoryMap (
   EFI_STATUS                        Status;
   UINTN                             Size;
   UINTN                             BufferSize;
-  UINTN                             NumberOfRuntimeEntries;
+  UINTN                             NumberOfEntries;
   LIST_ENTRY                        *Link;
   MEMORY_MAP                        *Entry;
   EFI_GCD_MAP_ENTRY                 *GcdMapEntry;
+  EFI_GCD_MAP_ENTRY                 MergeGcdMapEntry;
   EFI_MEMORY_TYPE                   Type;
   EFI_MEMORY_DESCRIPTOR             *MemoryMapStart;
 
@@ -1545,16 +1557,17 @@ CoreGetMemoryMap (
   CoreAcquireGcdMemoryLock ();
 
   //
-  // Count the number of Reserved and MMIO entries that are marked for runtime use
+  // Count the number of Reserved and runtime MMIO entries
+  // And, count the number of Persistent entries.
   //
-  NumberOfRuntimeEntries = 0;
+  NumberOfEntries = 0;
   for (Link = mGcdMemorySpaceMap.ForwardLink; Link != &mGcdMemorySpaceMap; Link = Link->ForwardLink) {
     GcdMapEntry = CR (Link, EFI_GCD_MAP_ENTRY, Link, EFI_GCD_MAP_SIGNATURE);
-    if ((GcdMapEntry->GcdMemoryType == EfiGcdMemoryTypeReserved) ||
-        (GcdMapEntry->GcdMemoryType == EfiGcdMemoryTypeMemoryMappedIo)) {
-      if ((GcdMapEntry->Attributes & EFI_MEMORY_RUNTIME) == EFI_MEMORY_RUNTIME) {
-        NumberOfRuntimeEntries++;
-      }
+    if ((GcdMapEntry->GcdMemoryType == EfiGcdMemoryTypePersistentMemory) || 
+        (GcdMapEntry->GcdMemoryType == EfiGcdMemoryTypeReserved) ||
+        ((GcdMapEntry->GcdMemoryType == EfiGcdMemoryTypeMemoryMappedIo) &&
+        ((GcdMapEntry->Attributes & EFI_MEMORY_RUNTIME) == EFI_MEMORY_RUNTIME))) {
+      NumberOfEntries ++;
     }
   }
 
@@ -1580,7 +1593,7 @@ CoreGetMemoryMap (
   //
   // Compute the buffer size needed to fit the entire map
   //
-  BufferSize = Size * NumberOfRuntimeEntries;
+  BufferSize = Size * NumberOfEntries;
   for (Link = gMemoryMap.ForwardLink; Link != &gMemoryMap; Link = Link->ForwardLink) {
     BufferSize += Size;
   }
@@ -1642,36 +1655,98 @@ CoreGetMemoryMap (
     MemoryMap = MergeMemoryMapDescriptor (MemoryMapStart, MemoryMap, Size);
   }
 
-  for (Link = mGcdMemorySpaceMap.ForwardLink; Link != &mGcdMemorySpaceMap; Link = Link->ForwardLink) {
-    GcdMapEntry = CR (Link, EFI_GCD_MAP_ENTRY, Link, EFI_GCD_MAP_SIGNATURE);
-    if ((GcdMapEntry->GcdMemoryType == EfiGcdMemoryTypeReserved) ||
-        (GcdMapEntry->GcdMemoryType == EfiGcdMemoryTypeMemoryMappedIo)) {
-      if ((GcdMapEntry->Attributes & EFI_MEMORY_RUNTIME) == EFI_MEMORY_RUNTIME) {
-        // 
-        // Create EFI_MEMORY_DESCRIPTOR for every Reserved and MMIO GCD entries
-        // that are marked for runtime use
-        //
-        MemoryMap->PhysicalStart = GcdMapEntry->BaseAddress;
-        MemoryMap->VirtualStart  = 0;
-        MemoryMap->NumberOfPages = RShiftU64 ((GcdMapEntry->EndAddress - GcdMapEntry->BaseAddress + 1), EFI_PAGE_SHIFT);
-        MemoryMap->Attribute     = GcdMapEntry->Attributes & ~EFI_MEMORY_PORT_IO;
-
-        if (GcdMapEntry->GcdMemoryType == EfiGcdMemoryTypeReserved) {
-          MemoryMap->Type = EfiReservedMemoryType;
-        } else if (GcdMapEntry->GcdMemoryType == EfiGcdMemoryTypeMemoryMappedIo) {
-          if ((GcdMapEntry->Attributes & EFI_MEMORY_PORT_IO) == EFI_MEMORY_PORT_IO) {
-            MemoryMap->Type = EfiMemoryMappedIOPortSpace;
-          } else {
-            MemoryMap->Type = EfiMemoryMappedIO;
-          }
-        }
-
-        //
-        // Check to see if the new Memory Map Descriptor can be merged with an 
-        // existing descriptor if they are adjacent and have the same attributes
-        //
-        MemoryMap = MergeMemoryMapDescriptor (MemoryMapStart, MemoryMap, Size);
+ 
+  ZeroMem (&MergeGcdMapEntry, sizeof (MergeGcdMapEntry));
+  GcdMapEntry = NULL;
+  for (Link = mGcdMemorySpaceMap.ForwardLink; ; Link = Link->ForwardLink) {
+    if (Link != &mGcdMemorySpaceMap) {
+      //
+      // Merge adjacent same type and attribute GCD memory range
+      //
+      GcdMapEntry = CR (Link, EFI_GCD_MAP_ENTRY, Link, EFI_GCD_MAP_SIGNATURE);
+  
+      if ((MergeGcdMapEntry.Capabilities == GcdMapEntry->Capabilities) && 
+          (MergeGcdMapEntry.Attributes == GcdMapEntry->Attributes) &&
+          (MergeGcdMapEntry.GcdMemoryType == GcdMapEntry->GcdMemoryType) &&
+          (MergeGcdMapEntry.GcdIoType == GcdMapEntry->GcdIoType)) {
+        MergeGcdMapEntry.EndAddress  = GcdMapEntry->EndAddress;
+        continue;
       }
+    }
+
+    if ((MergeGcdMapEntry.GcdMemoryType == EfiGcdMemoryTypeReserved) ||
+        ((MergeGcdMapEntry.GcdMemoryType == EfiGcdMemoryTypeMemoryMappedIo) &&
+        ((MergeGcdMapEntry.Attributes & EFI_MEMORY_RUNTIME) == EFI_MEMORY_RUNTIME))) {
+      //
+      // Page Align GCD range is required. When it is converted to EFI_MEMORY_DESCRIPTOR, 
+      // it will be recorded as page PhysicalStart and NumberOfPages. 
+      //
+      ASSERT ((MergeGcdMapEntry.BaseAddress & EFI_PAGE_MASK) == 0);
+      ASSERT (((MergeGcdMapEntry.EndAddress - MergeGcdMapEntry.BaseAddress + 1) & EFI_PAGE_MASK) == 0);
+      
+      // 
+      // Create EFI_MEMORY_DESCRIPTOR for every Reserved and runtime MMIO GCD entries
+      //
+      MemoryMap->PhysicalStart = MergeGcdMapEntry.BaseAddress;
+      MemoryMap->VirtualStart  = 0;
+      MemoryMap->NumberOfPages = RShiftU64 ((MergeGcdMapEntry.EndAddress - MergeGcdMapEntry.BaseAddress + 1), EFI_PAGE_SHIFT);
+      MemoryMap->Attribute     = (MergeGcdMapEntry.Attributes & ~EFI_MEMORY_PORT_IO) | 
+                                (MergeGcdMapEntry.Capabilities & (EFI_MEMORY_RP | EFI_MEMORY_WP | EFI_MEMORY_XP | EFI_MEMORY_RO |
+                                EFI_MEMORY_UC | EFI_MEMORY_UCE | EFI_MEMORY_WC | EFI_MEMORY_WT | EFI_MEMORY_WB));
+
+      if (MergeGcdMapEntry.GcdMemoryType == EfiGcdMemoryTypeReserved) {
+        MemoryMap->Type = EfiReservedMemoryType;
+      } else if (MergeGcdMapEntry.GcdMemoryType == EfiGcdMemoryTypeMemoryMappedIo) {
+        if ((MergeGcdMapEntry.Attributes & EFI_MEMORY_PORT_IO) == EFI_MEMORY_PORT_IO) {
+          MemoryMap->Type = EfiMemoryMappedIOPortSpace;
+        } else {
+          MemoryMap->Type = EfiMemoryMappedIO;
+        }
+      }
+
+      //
+      // Check to see if the new Memory Map Descriptor can be merged with an 
+      // existing descriptor if they are adjacent and have the same attributes
+      //
+      MemoryMap = MergeMemoryMapDescriptor (MemoryMapStart, MemoryMap, Size);
+    }
+    
+    if (MergeGcdMapEntry.GcdMemoryType == EfiGcdMemoryTypePersistentMemory) {
+      //
+      // Page Align GCD range is required. When it is converted to EFI_MEMORY_DESCRIPTOR, 
+      // it will be recorded as page PhysicalStart and NumberOfPages. 
+      //
+      ASSERT ((MergeGcdMapEntry.BaseAddress & EFI_PAGE_MASK) == 0);
+      ASSERT (((MergeGcdMapEntry.EndAddress - MergeGcdMapEntry.BaseAddress + 1) & EFI_PAGE_MASK) == 0);
+
+      // 
+      // Create EFI_MEMORY_DESCRIPTOR for every Persistent GCD entries
+      //
+      MemoryMap->PhysicalStart = MergeGcdMapEntry.BaseAddress;
+      MemoryMap->VirtualStart  = 0;
+      MemoryMap->NumberOfPages = RShiftU64 ((MergeGcdMapEntry.EndAddress - MergeGcdMapEntry.BaseAddress + 1), EFI_PAGE_SHIFT);
+      MemoryMap->Attribute     = MergeGcdMapEntry.Attributes | EFI_MEMORY_NV | 
+                                (MergeGcdMapEntry.Capabilities & (EFI_MEMORY_RP | EFI_MEMORY_WP | EFI_MEMORY_XP | EFI_MEMORY_RO |
+                                EFI_MEMORY_UC | EFI_MEMORY_UCE | EFI_MEMORY_WC | EFI_MEMORY_WT | EFI_MEMORY_WB));
+      MemoryMap->Type          = EfiPersistentMemory;
+      
+      //
+      // Check to see if the new Memory Map Descriptor can be merged with an 
+      // existing descriptor if they are adjacent and have the same attributes
+      //
+      MemoryMap = MergeMemoryMapDescriptor (MemoryMapStart, MemoryMap, Size);
+    }
+    if (Link == &mGcdMemorySpaceMap) {
+      //
+      // break loop when arrive at head.
+      //
+      break;
+    }
+    if (GcdMapEntry != NULL) {
+      //
+      // Copy new GCD map entry for the following GCD range merge
+      //
+      CopyMem (&MergeGcdMapEntry, GcdMapEntry, sizeof (MergeGcdMapEntry));
     }
   }
 
@@ -1790,21 +1865,20 @@ CoreTerminateMemoryMap (
 
     for (Link = gMemoryMap.ForwardLink; Link != &gMemoryMap; Link = Link->ForwardLink) {
       Entry = CR(Link, MEMORY_MAP, Link, MEMORY_MAP_SIGNATURE);
-      if ((Entry->Attribute & EFI_MEMORY_RUNTIME) != 0) {
-        if (Entry->Type == EfiACPIReclaimMemory || Entry->Type == EfiACPIMemoryNVS) {
-          DEBUG((DEBUG_ERROR | DEBUG_PAGE, "ExitBootServices: ACPI memory entry has RUNTIME attribute set.\n"));
-          Status =  EFI_INVALID_PARAMETER;
-          goto Done;
-        }
-        if ((Entry->Start & (EFI_ACPI_RUNTIME_PAGE_ALLOCATION_ALIGNMENT - 1)) != 0) {
-          DEBUG((DEBUG_ERROR | DEBUG_PAGE, "ExitBootServices: A RUNTIME memory entry is not on a proper alignment.\n"));
-          Status =  EFI_INVALID_PARAMETER;
-          goto Done;
-        }
-        if (((Entry->End + 1) & (EFI_ACPI_RUNTIME_PAGE_ALLOCATION_ALIGNMENT - 1)) != 0) {
-          DEBUG((DEBUG_ERROR | DEBUG_PAGE, "ExitBootServices: A RUNTIME memory entry is not on a proper alignment.\n"));
-          Status =  EFI_INVALID_PARAMETER;
-          goto Done;
+      if (Entry->Type < EfiMaxMemoryType) {
+        if (mMemoryTypeStatistics[Entry->Type].Runtime) {
+          ASSERT (Entry->Type != EfiACPIReclaimMemory);
+          ASSERT (Entry->Type != EfiACPIMemoryNVS);
+          if ((Entry->Start & (EFI_ACPI_RUNTIME_PAGE_ALLOCATION_ALIGNMENT - 1)) != 0) {
+            DEBUG((DEBUG_ERROR | DEBUG_PAGE, "ExitBootServices: A RUNTIME memory entry is not on a proper alignment.\n"));
+            Status =  EFI_INVALID_PARAMETER;
+            goto Done;
+          }
+          if (((Entry->End + 1) & (EFI_ACPI_RUNTIME_PAGE_ALLOCATION_ALIGNMENT - 1)) != 0) {
+            DEBUG((DEBUG_ERROR | DEBUG_PAGE, "ExitBootServices: A RUNTIME memory entry is not on a proper alignment.\n"));
+            Status =  EFI_INVALID_PARAMETER;
+            goto Done;
+          }
         }
       }
     }

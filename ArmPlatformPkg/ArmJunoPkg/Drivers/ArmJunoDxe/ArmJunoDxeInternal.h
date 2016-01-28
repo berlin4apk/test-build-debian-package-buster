@@ -1,6 +1,6 @@
 /** @file
 *
-*  Copyright (c) 2013-2014, ARM Limited. All rights reserved.
+*  Copyright (c) 2013-2015, ARM Limited. All rights reserved.
 *
 *  This program and the accompanying materials
 *  are licensed and made available under the terms and conditions of the BSD License
@@ -17,9 +17,15 @@
 
 #include <Uefi.h>
 
+#include <Library/BaseLib.h>
+#include <Library/ArmLib.h>
+#include <Library/AcpiLib.h>
 #include <Library/DebugLib.h>
 #include <Library/DxeServicesTableLib.h>
 #include <Library/UefiBootServicesTableLib.h>
+#include <Library/UefiLib.h>
+
+#include <Protocol/AcpiTable.h>
 
 #include <IndustryStandard/Acpi.h>
 
@@ -28,9 +34,13 @@ PciEmulationEntryPoint (
   VOID
   );
 
-EFI_STATUS
-JunoFdtInstall (
-  IN EFI_HANDLE                            ImageHandle
+/**
+ * Callback called when ACPI Protocol is installed
+ */
+VOID
+AcpiPciNotificationEvent (
+  IN  EFI_EVENT                Event,
+  IN  VOID                     *Context
   );
 
 #endif // __ARM_JUNO_DXE_INTERNAL_H__

@@ -3,7 +3,7 @@
 #
 # This driver will register two callbacks to call fsp's notifies.
 #
-#  Copyright (c) 2014, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2014 - 2015, Intel Corporation. All rights reserved.<BR>
 #
 #  This program and the accompanying materials
 #  are licensed and made available under the terms and conditions of the BSD License
@@ -30,6 +30,7 @@
 
 [Sources]
   FspNotifyDxe.c
+  LoadBelow4G.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -43,13 +44,17 @@
   BaseMemoryLib
   UefiLib
   FspApiLib
+  PeCoffLib
+  CacheMaintenanceLib
+  DxeServicesLib
 
 [Protocols]
-  gEfiPciEnumerationCompleteProtocolGuid
+  gEfiPciEnumerationCompleteProtocolGuid            ## CONSUMES
 
 [Pcd]
-  gFspWrapperTokenSpaceGuid.PcdFlashFvFspBase
-  gFspWrapperTokenSpaceGuid.PcdFlashFvFspSize
+  gFspWrapperTokenSpaceGuid.PcdFlashFvFspBase       ## CONSUMES
+  gFspWrapperTokenSpaceGuid.PcdFlashFvSecondFspBase ## CONSUMES
+  gFspWrapperTokenSpaceGuid.PcdFlashFvFspSize       ## CONSUMES
 
 [Depex]
   TRUE

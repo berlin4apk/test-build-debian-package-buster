@@ -1,7 +1,7 @@
 /** @file
   Pei Core Main Entry Point
   
-Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -63,7 +63,8 @@ EFI_PEI_SERVICES  gPs = {
   PeiFfsGetVolumeInfo,
   PeiRegisterForShadow,
   PeiFfsFindSectionData3,
-  PeiFfsGetFileInfo2
+  PeiFfsGetFileInfo2,
+  PeiResetSystem2
 };
 
 /**
@@ -258,7 +259,11 @@ PeiCore (
       // Shadow PEI Core. When permanent memory is avaiable, shadow
       // PEI Core and PEIMs to get high performance.
       //
-      OldCoreData->ShadowedPeiCore = ShadowPeiCore (OldCoreData);
+      OldCoreData->ShadowedPeiCore = (PEICORE_FUNCTION_POINTER) (UINTN) PeiCore;
+      if ((HandoffInformationTable->BootMode == BOOT_ON_S3_RESUME && PcdGetBool (PcdShadowPeimOnS3Boot))
+          || (HandoffInformationTable->BootMode != BOOT_ON_S3_RESUME && PcdGetBool (PcdShadowPeimOnBoot))) {
+        OldCoreData->ShadowedPeiCore = ShadowPeiCore (OldCoreData);
+      }
       
       //
       // PEI Core has now been shadowed to memory.  Restart PEI Core in memory.
@@ -435,6 +440,17 @@ PeiCore (
              (VOID **)&TempPtr.DxeIpl
              );
   ASSERT_EFI_ERROR (Status);
+
+  if (EFI_ERROR (Status)) {
+    //
+    // Report status code to indicate DXE IPL PPI could not be found.
+    //
+    REPORT_STATUS_CODE (
+      EFI_ERROR_CODE | EFI_ERROR_MAJOR,
+      (EFI_SOFTWARE_PEI_CORE | EFI_SW_PEI_CORE_EC_DXEIPL_NOT_FOUND)
+      );
+    CpuDeadLoop ();
+  }
 
   //
   // Enter DxeIpl to load Dxe core.

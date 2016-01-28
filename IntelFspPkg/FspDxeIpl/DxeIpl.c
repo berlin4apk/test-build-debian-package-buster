@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2014 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -301,67 +301,58 @@ Decompress (
   //
   switch (CompressionType) {
   case EFI_STANDARD_COMPRESSION:
-    if (TRUE) {
+    //
+    // Load EFI standard compression.
+    // For compressed data, decompress them to destination buffer.
+    //
+    Status = UefiDecompressGetInfo (
+               CompressionSource,
+               CompressionSourceSize,
+               &DstBufferSize,
+               &ScratchBufferSize
+               );
+    if (EFI_ERROR (Status)) {
       //
-      // Load EFI standard compression.
-      // For compressed data, decompress them to destination buffer.
+      // GetInfo failed
       //
-      Status = UefiDecompressGetInfo (
-                 CompressionSource,
-                 CompressionSourceSize,
-                 &DstBufferSize,
-                 &ScratchBufferSize
-                 );
-      if (EFI_ERROR (Status)) {
-        //
-        // GetInfo failed
-        //
-        DEBUG ((DEBUG_ERROR, "Decompress GetInfo Failed - %r\n", Status));
-        return EFI_NOT_FOUND;
-      }
-      //
-      // Allocate scratch buffer
-      //
-      ScratchBuffer = AllocatePages (EFI_SIZE_TO_PAGES (ScratchBufferSize));
-      if (ScratchBuffer == NULL) {
-        return EFI_OUT_OF_RESOURCES;
-      }
-      //
-      // Allocate destination buffer, extra one page for adjustment
-      //
-      DstBuffer = AllocatePages (EFI_SIZE_TO_PAGES (DstBufferSize) + 1);
-      if (DstBuffer == NULL) {
-        return EFI_OUT_OF_RESOURCES;
-      }
-      //
-      // DstBuffer still is one section. Adjust DstBuffer offset, skip EFI section header
-      // to make section data at page alignment.
-      //
-      DstBuffer = DstBuffer + EFI_PAGE_SIZE - sizeof (EFI_COMMON_SECTION_HEADER);
-      //
-      // Call decompress function
-      //
-      Status = UefiDecompress (
-                  CompressionSource,
-                  DstBuffer,
-                  ScratchBuffer
-                  );
-      if (EFI_ERROR (Status)) {
-        //
-        // Decompress failed
-        //
-        DEBUG ((DEBUG_ERROR, "Decompress Failed - %r\n", Status));
-        return EFI_NOT_FOUND;
-      }
-      break;
-    } else {
-      //
-      // PcdDxeIplSupportUefiDecompress is FALSE
-      // Don't support UEFI decompression algorithm.
-      //
-      ASSERT (FALSE);
+      DEBUG ((DEBUG_ERROR, "Decompress GetInfo Failed - %r\n", Status));
       return EFI_NOT_FOUND;
     }
+    //
+    // Allocate scratch buffer
+    //
+    ScratchBuffer = AllocatePages (EFI_SIZE_TO_PAGES (ScratchBufferSize));
+    if (ScratchBuffer == NULL) {
+      return EFI_OUT_OF_RESOURCES;
+    }
+    //
+    // Allocate destination buffer, extra one page for adjustment
+    //
+    DstBuffer = AllocatePages (EFI_SIZE_TO_PAGES (DstBufferSize) + 1);
+    if (DstBuffer == NULL) {
+      return EFI_OUT_OF_RESOURCES;
+    }
+    //
+    // DstBuffer still is one section. Adjust DstBuffer offset, skip EFI section header
+    // to make section data at page alignment.
+    //
+    DstBuffer = DstBuffer + EFI_PAGE_SIZE - sizeof (EFI_COMMON_SECTION_HEADER);
+    //
+    // Call decompress function
+    //
+    Status = UefiDecompress (
+                CompressionSource,
+                DstBuffer,
+                ScratchBuffer
+                );
+    if (EFI_ERROR (Status)) {
+      //
+      // Decompress failed
+      //
+      DEBUG ((DEBUG_ERROR, "Decompress Failed - %r\n", Status));
+      return EFI_NOT_FOUND;
+    }
+    break;
 
   case EFI_NOT_COMPRESSED:
     //
@@ -430,13 +421,13 @@ DxeLoadCore (
   ASSERT_EFI_ERROR (Status);
 
   //
-  // Give control back to bootloader after FspInit
+  // Give control back to BootLoader after FspInit
   //
   DEBUG ((DEBUG_INFO | DEBUG_INIT, "FSP is waiting for NOTIFY\n"));
   FspInitDone ();
 
   //
-  // Bootloader called FSP again through NotifyPhase
+  // BootLoader called FSP again through NotifyPhase
   //
   FspWaitForNotify ();
 

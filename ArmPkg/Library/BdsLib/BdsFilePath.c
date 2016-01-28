@@ -467,7 +467,7 @@ BdsFileSystemSupport (
 
 EFI_STATUS
 BdsFileSystemLoadImage (
-  IN     EFI_DEVICE_PATH       *DevicePath,
+  IN OUT EFI_DEVICE_PATH       **DevicePath,
   IN     EFI_HANDLE            Handle,
   IN     EFI_DEVICE_PATH       *RemainingDevicePath,
   IN     EFI_ALLOCATE_TYPE     Type,
@@ -560,9 +560,9 @@ BdsMemoryMapSupport (
 
 EFI_STATUS
 BdsMemoryMapLoadImage (
-  IN     EFI_DEVICE_PATH *DevicePath,
-  IN     EFI_HANDLE Handle,
-  IN     EFI_DEVICE_PATH *RemainingDevicePath,
+  IN OUT EFI_DEVICE_PATH       **DevicePath,
+  IN     EFI_HANDLE            Handle,
+  IN     EFI_DEVICE_PATH       *RemainingDevicePath,
   IN     EFI_ALLOCATE_TYPE     Type,
   IN OUT EFI_PHYSICAL_ADDRESS* Image,
   OUT    UINTN                 *ImageSize
@@ -575,8 +575,8 @@ BdsMemoryMapLoadImage (
   if (IS_DEVICE_PATH_NODE (RemainingDevicePath, HARDWARE_DEVICE_PATH, HW_MEMMAP_DP)) {
     MemMapPathDevicePath = (MEMMAP_DEVICE_PATH*)RemainingDevicePath;
   } else {
-    ASSERT (IS_DEVICE_PATH_NODE (DevicePath, HARDWARE_DEVICE_PATH, HW_MEMMAP_DP));
-    MemMapPathDevicePath = (MEMMAP_DEVICE_PATH*)DevicePath;
+    ASSERT (IS_DEVICE_PATH_NODE (*DevicePath, HARDWARE_DEVICE_PATH, HW_MEMMAP_DP));
+    MemMapPathDevicePath = (MEMMAP_DEVICE_PATH*)*DevicePath;
   }
 
   Size = MemMapPathDevicePath->EndingAddress - MemMapPathDevicePath->StartingAddress;
@@ -612,9 +612,9 @@ BdsFirmwareVolumeSupport (
 
 EFI_STATUS
 BdsFirmwareVolumeLoadImage (
-  IN     EFI_DEVICE_PATH *DevicePath,
-  IN     EFI_HANDLE Handle,
-  IN     EFI_DEVICE_PATH *RemainingDevicePath,
+  IN OUT EFI_DEVICE_PATH       **DevicePath,
+  IN     EFI_HANDLE            Handle,
+  IN     EFI_DEVICE_PATH       *RemainingDevicePath,
   IN     EFI_ALLOCATE_TYPE     Type,
   IN OUT EFI_PHYSICAL_ADDRESS* Image,
   OUT    UINTN                 *ImageSize
@@ -697,7 +697,7 @@ BdsFirmwareVolumeLoadImage (
         Status = FwVol->ReadFile (
                                 FwVol,
                                 FvNameGuid,
-                                (VOID*)(UINTN)(*Image),
+                                (VOID**)Image,
                                 ImageSize,
                                 &FvType,
                                 &Attrib,
@@ -733,12 +733,12 @@ BdsPxeSupport (
 
 EFI_STATUS
 BdsPxeLoadImage (
-  IN     EFI_DEVICE_PATH*       DevicePath,
-  IN     EFI_HANDLE             Handle,
-  IN     EFI_DEVICE_PATH*       RemainingDevicePath,
-  IN     EFI_ALLOCATE_TYPE      Type,
-  IN OUT EFI_PHYSICAL_ADDRESS   *Image,
-  OUT    UINTN                  *ImageSize
+  IN OUT EFI_DEVICE_PATH       **DevicePath,
+  IN     EFI_HANDLE            Handle,
+  IN     EFI_DEVICE_PATH       *RemainingDevicePath,
+  IN     EFI_ALLOCATE_TYPE     Type,
+  IN OUT EFI_PHYSICAL_ADDRESS* Image,
+  OUT    UINTN                 *ImageSize
   )
 {
   EFI_STATUS              Status;
@@ -752,14 +752,14 @@ BdsPxeLoadImage (
     return Status;
   }
 
-  Status = LoadFileProtocol->LoadFile (LoadFileProtocol, DevicePath, TRUE, &BufferSize, NULL);
+  Status = LoadFileProtocol->LoadFile (LoadFileProtocol, RemainingDevicePath, TRUE, &BufferSize, NULL);
   if (Status == EFI_BUFFER_TOO_SMALL) {
     Status = gBS->AllocatePages (Type, EfiBootServicesCode, EFI_SIZE_TO_PAGES(BufferSize), Image);
     if (EFI_ERROR (Status)) {
       return Status;
     }
 
-    Status = LoadFileProtocol->LoadFile (LoadFileProtocol, DevicePath, TRUE, &BufferSize, (VOID*)(UINTN)(*Image));
+    Status = LoadFileProtocol->LoadFile (LoadFileProtocol, RemainingDevicePath, TRUE, &BufferSize, (VOID*)(UINTN)(*Image));
     if (!EFI_ERROR (Status) && (ImageSize != NULL)) {
       *ImageSize = BufferSize;
     }
@@ -1018,12 +1018,12 @@ Mtftp4CheckPacket (
 **/
 EFI_STATUS
 BdsTftpLoadImage (
-  IN     EFI_DEVICE_PATH*       DevicePath,
-  IN     EFI_HANDLE             ControllerHandle,
-  IN     EFI_DEVICE_PATH*       RemainingDevicePath,
-  IN     EFI_ALLOCATE_TYPE      Type,
-  IN OUT EFI_PHYSICAL_ADDRESS   *Image,
-  OUT    UINTN                  *ImageSize
+  IN OUT EFI_DEVICE_PATH       **DevicePath,
+  IN     EFI_HANDLE            ControllerHandle,
+  IN     EFI_DEVICE_PATH       *RemainingDevicePath,
+  IN     EFI_ALLOCATE_TYPE     Type,
+  IN OUT EFI_PHYSICAL_ADDRESS  *Image,
+  OUT    UINTN                 *ImageSize
   )
 {
   EFI_STATUS               Status;
@@ -1038,7 +1038,7 @@ BdsTftpLoadImage (
   EFI_DHCP4_MODE_DATA      Dhcp4Mode;
   EFI_MTFTP4_CONFIG_DATA   Mtftp4CfgData;
   IPv4_DEVICE_PATH         *IPv4DevicePathNode;
-  FILEPATH_DEVICE_PATH     *FilePathDevicePathNode;
+  CHAR16                   *PathName;
   CHAR8                    *AsciiFilePath;
   EFI_MTFTP4_TOKEN         Mtftp4Token;
   UINT64                   FileSize;
@@ -1185,17 +1185,10 @@ BdsTftpLoadImage (
     goto Error;
   }
 
-  //
-  // Convert the Unicode path of the file to Ascii
-  //
-
-  FilePathDevicePathNode = (FILEPATH_DEVICE_PATH*)(IPv4DevicePathNode + 1);
-  AsciiFilePath = AllocatePool ((StrLen (FilePathDevicePathNode->PathName) + 1) * sizeof (CHAR8));
-  if (AsciiFilePath == NULL) {
-    Status = EFI_OUT_OF_RESOURCES;
-    goto Error;
-  }
-  UnicodeStrToAsciiStr (FilePathDevicePathNode->PathName, AsciiFilePath);
+  // The Device Path might contain multiple FilePath nodes
+  PathName      = ConvertDevicePathToText ((EFI_DEVICE_PATH_PROTOCOL*)(IPv4DevicePathNode + 1), FALSE, FALSE);
+  AsciiFilePath = AllocatePool (StrLen (PathName) + 1);
+  UnicodeStrToAsciiStr (PathName, AsciiFilePath);
 
   //
   // Try to get the size of the file in bytes from the server. If it fails,
@@ -1205,7 +1198,7 @@ BdsTftpLoadImage (
   if (Mtftp4GetFileSize (Mtftp4, AsciiFilePath, &FileSize) == EFI_SUCCESS) {
     TftpBufferSize = FileSize;
   } else {
-    TftpBufferSize = SIZE_8MB;
+    TftpBufferSize = SIZE_16MB;
   }
 
   TftpContext = AllocatePool (sizeof (BDS_TFTP_CONTEXT));
@@ -1216,7 +1209,7 @@ BdsTftpLoadImage (
   TftpContext->FileSize = FileSize;
 
   for (; TftpBufferSize <= FixedPcdGet32 (PcdMaxTftpFileSize);
-         TftpBufferSize = (TftpBufferSize + SIZE_8MB) & (~(SIZE_8MB-1))) {
+         TftpBufferSize = (TftpBufferSize + SIZE_16MB) & (~(SIZE_16MB-1))) {
     //
     // Allocate a buffer to hold the whole file.
     //
@@ -1241,7 +1234,7 @@ BdsTftpLoadImage (
     Mtftp4Token.CheckPacket = Mtftp4CheckPacket;
     Mtftp4Token.Context     = (VOID*)TftpContext;
 
-    Print (L"Downloading the file <%s> from the TFTP server\n", FilePathDevicePathNode->PathName);
+    Print (L"Downloading the file <%a> from the TFTP server\n", AsciiFilePath);
     Status = Mtftp4->ReadFile (Mtftp4, &Mtftp4Token);
     Print (L"\n");
     if (EFI_ERROR (Status)) {
@@ -1303,6 +1296,7 @@ Error:
   }
 
   if (EFI_ERROR (Status)) {
+    *Image = 0;
     Print (L"Failed to download the file - Error=%r\n", Status);
   }
 
@@ -1340,7 +1334,7 @@ BdsLoadImageAndUpdateDevicePath (
   FileLoader = FileLoaders;
   while (FileLoader->Support != NULL) {
     if (FileLoader->Support (*DevicePath, Handle, RemainingDevicePath)) {
-      return FileLoader->LoadImage (*DevicePath, Handle, RemainingDevicePath, Type, Image, FileSize);
+      return FileLoader->LoadImage (DevicePath, Handle, RemainingDevicePath, Type, Image, FileSize);
     }
     FileLoader++;
   }

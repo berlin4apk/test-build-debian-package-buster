@@ -8,7 +8,7 @@ buffer overflow, integer overflow.
 
 TcgDxePassThroughToTpm() will receive untrusted input and do basic validation.
 
-Copyright (c) 2005 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2005 - 2015, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials 
 are licensed and made available under the terms and conditions of the BSD License 
 which accompanies this distribution.  The full text of the license may be found at 
@@ -23,11 +23,9 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <IndustryStandard/Tpm12.h>
 #include <IndustryStandard/Acpi.h>
 #include <IndustryStandard/PeImage.h>
-#include <IndustryStandard/SmBios.h>
 #include <IndustryStandard/TcpaAcpi.h>
 
 #include <Guid/GlobalVariable.h>
-#include <Guid/SmBios.h>
 #include <Guid/HobList.h>
 #include <Guid/TcgEventHob.h>
 #include <Guid/EventGroup.h>
@@ -51,6 +49,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Library/TpmCommLib.h>
 #include <Library/PcdLib.h>
 #include <Library/UefiLib.h>
+#include <Library/ReportStatusCodeLib.h>
 
 #include "TpmComm.h"
 
@@ -264,7 +263,7 @@ TcgDxeStatusCheck (
   }
 
   if (EventLogLastEntry != NULL) {
-    if (TcgData->BsCap.TPMDeactivatedFlag) {
+    if (TcgData->BsCap.TPMDeactivatedFlag || (!TcgData->BsCap.TPMPresentFlag)) {
       *EventLogLastEntry = (EFI_PHYSICAL_ADDRESS)(UINTN)0;
     } else {
       *EventLogLastEntry = (EFI_PHYSICAL_ADDRESS)(UINTN)TcgData->LastEvent;
@@ -411,7 +410,7 @@ TcgDxeLogEvent (
 
   TcgData = TCG_DXE_DATA_FROM_THIS (This);
   
-  if (TcgData->BsCap.TPMDeactivatedFlag) {
+  if (TcgData->BsCap.TPMDeactivatedFlag || (!TcgData->BsCap.TPMPresentFlag)) {
     return EFI_DEVICE_ERROR;
   }
   return TcgDxeLogEventI (
@@ -495,8 +494,8 @@ TcgDxeHashLogExtendEventI (
 {
   EFI_STATUS                        Status;
 
-  if (HashData == NULL && HashDataLen > 0) {
-    return EFI_INVALID_PARAMETER;
+  if (!TcgData->BsCap.TPMPresentFlag) {
+    return EFI_DEVICE_ERROR;
   }
 
   if (HashDataLen > 0 || HashData != NULL) {
@@ -507,7 +506,7 @@ TcgDxeHashLogExtendEventI (
                );
     if (EFI_ERROR(Status)) {
       DEBUG ((DEBUG_ERROR, "TpmCommHashAll Failed. %x\n", Status));
-      return Status;
+      goto Done;
     }
   }
 
@@ -519,6 +518,17 @@ TcgDxeHashLogExtendEventI (
              );
   if (!EFI_ERROR (Status)) {
     Status = TcgDxeLogEventI (TcgData, NewEventHdr, NewEventData);
+  }
+
+Done:
+  if ((Status == EFI_DEVICE_ERROR) || (Status == EFI_TIMEOUT)) {
+    DEBUG ((EFI_D_ERROR, "TcgDxeHashLogExtendEventI - %r. Disable TPM.\n", Status));
+    TcgData->BsCap.TPMPresentFlag = FALSE;
+    REPORT_STATUS_CODE (
+      EFI_ERROR_CODE | EFI_ERROR_MINOR,
+      (PcdGet32 (PcdStatusCodeSubClassTpmDevice) | EFI_P_EC_INTERFACE_ERROR)
+      );
+    Status = EFI_DEVICE_ERROR;
   }
 
   return Status;
@@ -569,12 +579,16 @@ TcgDxeHashLogExtendEvent (
 
   TcgData = TCG_DXE_DATA_FROM_THIS (This);
   
-  if (TcgData->BsCap.TPMDeactivatedFlag) {
+  if (TcgData->BsCap.TPMDeactivatedFlag || (!TcgData->BsCap.TPMPresentFlag)) {
     return EFI_DEVICE_ERROR;
   }
     
   if (AlgorithmId != TPM_ALG_SHA) {
     return EFI_UNSUPPORTED;
+  }
+  
+  if (HashData == 0 && HashDataLen > 0) {
+    return EFI_INVALID_PARAMETER;
   }
 
   Status = TcgDxeHashLogExtendEventI (
@@ -732,42 +746,13 @@ MeasureHandoffTables (
   )
 {
   EFI_STATUS                        Status;
-  SMBIOS_TABLE_ENTRY_POINT          *SmbiosTable;
   TCG_PCR_EVENT_HDR                 TcgEvent;
   EFI_HANDOFF_TABLE_POINTERS        HandoffTables;
   UINTN                             ProcessorNum;
   EFI_CPU_PHYSICAL_LOCATION         *ProcessorLocBuf;
 
   ProcessorLocBuf = NULL;
-
-  //
-  // Measure SMBIOS with EV_EFI_HANDOFF_TABLES to PCR[1]
-  //
-  Status = EfiGetSystemConfigurationTable (
-             &gEfiSmbiosTableGuid,
-             (VOID **) &SmbiosTable
-             );
-
-  if (!EFI_ERROR (Status) && SmbiosTable != NULL) {
-    TcgEvent.PCRIndex  = 1;
-    TcgEvent.EventType = EV_EFI_HANDOFF_TABLES;
-    TcgEvent.EventSize = sizeof (HandoffTables);
-
-    HandoffTables.NumberOfTables = 1;
-    HandoffTables.TableEntry[0].VendorGuid  = gEfiSmbiosTableGuid;
-    HandoffTables.TableEntry[0].VendorTable = SmbiosTable;
-
-    DEBUG ((DEBUG_INFO, "The Smbios Table starts at: 0x%x\n", SmbiosTable->TableAddress));
-    DEBUG ((DEBUG_INFO, "The Smbios Table size: 0x%x\n", SmbiosTable->TableLength));
-
-    Status = TcgDxeHashLogExtendEventI (
-               &mTcgDxeData,
-               (UINT8*)(UINTN)SmbiosTable->TableAddress,
-               SmbiosTable->TableLength,
-               &TcgEvent,
-               (UINT8*)&HandoffTables
-               );
-  }
+  Status = EFI_SUCCESS;
 
   if (PcdGet8 (PcdTpmPlatformClass) == TCG_PLATFORM_TYPE_SERVER) {
     //
@@ -943,8 +928,8 @@ MeasureVariable (
 
   Status = TcgDxeHashLogExtendEventI (
              &mTcgDxeData,
-             (UINT8*)VarData,
-             VarSize,
+             (UINT8*)VarLog,
+             TcgEvent.EventSize,
              &TcgEvent,
              (UINT8*)VarLog
              );
@@ -1339,6 +1324,11 @@ DriverEntry (
     return EFI_UNSUPPORTED;
   }
 
+  if (GetFirstGuidHob (&gTpmErrorHobGuid) != NULL) {
+    DEBUG ((EFI_D_ERROR, "TPM error!\n"));
+    return EFI_DEVICE_ERROR;
+  }
+
   mTcgDxeData.TpmHandle = (TIS_TPM_HANDLE)(UINTN)TPM_BASE_ADDRESS;
   Status = TisPcRequestUseTpm (mTcgDxeData.TpmHandle);
   if (EFI_ERROR (Status)) {
@@ -1363,7 +1353,7 @@ DriverEntry (
                   EFI_NATIVE_INTERFACE,
                   &mTcgDxeData.TcgProtocol
                   );
-  if (!EFI_ERROR (Status) && !mTcgDxeData.BsCap.TPMDeactivatedFlag) {
+  if (!EFI_ERROR (Status) && (!mTcgDxeData.BsCap.TPMDeactivatedFlag) && mTcgDxeData.BsCap.TPMPresentFlag) {
     //
     // Setup the log area and copy event log from hob list to it
     //

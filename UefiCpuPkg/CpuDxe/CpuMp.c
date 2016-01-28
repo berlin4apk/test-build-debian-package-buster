@@ -1,7 +1,7 @@
 /** @file
   CPU DXE Module.
 
-  Copyright (c) 2008 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2008 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -298,12 +298,59 @@ CheckAndUpdateAllAPsToIdleState (
           SetApProcedure (&mMpSystemData.CpuDatas[NextNumber],
                           mMpSystemData.Procedure,
                           mMpSystemData.ProcedureArgument);
+          //
+          // If this AP previous state is blocked, we should
+          // wake up this AP by sent a SIPI. and avoid
+          // re-involve the sleeping state. we must call
+          // SetApProcedure() first.
+          //
+          ResetProcessorToIdleState (&mMpSystemData.CpuDatas[NextNumber]);
         }
       }
-
       SetApState (CpuData, CpuStateIdle);
     }
   }
+}
+
+/**
+  Check if all APs are in state CpuStateSleeping.
+
+  Return TRUE if all APs are in the CpuStateSleeping state.  Do not
+  check the state of the BSP or any disabled APs.
+
+  @retval TRUE   All APs are in CpuStateSleeping state.
+  @retval FALSE  One or more APs are not in CpuStateSleeping state.
+
+**/
+BOOLEAN
+CheckAllAPsSleeping (
+  VOID
+  )
+{
+  UINTN           ProcessorNumber;
+  CPU_DATA_BLOCK  *CpuData;
+
+  for (ProcessorNumber = 0; ProcessorNumber < mMpSystemData.NumberOfProcessors; ProcessorNumber++) {
+    CpuData = &mMpSystemData.CpuDatas[ProcessorNumber];
+    if (TestCpuStatusFlag (CpuData, PROCESSOR_AS_BSP_BIT)) {
+      //
+      // Skip BSP
+      //
+      continue;
+    }
+
+    if (!TestCpuStatusFlag (CpuData, PROCESSOR_ENABLED_BIT)) {
+      //
+      // Skip Disabled processors
+      //
+      continue;
+    }
+
+    if (GetApState (CpuData) != CpuStateSleeping) {
+      return FALSE;
+    }
+  }
+  return TRUE;
 }
 
 /**
@@ -343,7 +390,8 @@ ResetAllFailedAPs (
     }
 
     CpuState = GetApState (CpuData);
-    if (CpuState != CpuStateIdle) {
+    if (CpuState != CpuStateIdle &&
+        CpuState != CpuStateSleeping) {
       if (mMpSystemData.FailedList != NULL) {
         (*mMpSystemData.FailedList)[mMpSystemData.FailedListIndex++] = Number;
       }
@@ -615,6 +663,7 @@ StartupAllAPs (
   CPU_DATA_BLOCK        *CpuData;
   UINTN                 Number;
   CPU_STATE             APInitialState;
+  CPU_STATE             CpuState;
 
   CpuData = NULL;
 
@@ -655,7 +704,9 @@ StartupAllAPs (
       continue;
     }
 
-    if (GetApState (CpuData) != CpuStateIdle) {
+    CpuState = GetApState (CpuData);
+    if (CpuState != CpuStateIdle &&
+        CpuState != CpuStateSleeping) {
       return EFI_NOT_READY;
     }
   }
@@ -694,13 +745,24 @@ StartupAllAPs (
     // state 1 by 1, until the previous 1 finished its task
     // if not "SingleThread", all APs are put to ready state from the beginning
     //
-    if (GetApState (CpuData) == CpuStateIdle) {
+    CpuState = GetApState (CpuData);
+    if (CpuState == CpuStateIdle ||
+        CpuState == CpuStateSleeping) {
       mMpSystemData.StartCount++;
 
       SetApState (CpuData, APInitialState);
 
       if (APInitialState == CpuStateReady) {
         SetApProcedure (CpuData, Procedure, ProcedureArgument);
+        //
+        // If this AP previous state is Sleeping, we should
+        // wake up this AP by sent a SIPI. and avoid
+        // re-involve the sleeping state. we must call
+        // SetApProcedure() first.
+        //
+        if (CpuState == CpuStateSleeping) {
+          ResetProcessorToIdleState (CpuData);
+        }
       }
 
       if (SingleThread) {
@@ -739,7 +801,7 @@ StartupAllAPs (
       goto Done;
     }
 
-    gBS->Stall (gPollInterval);
+    MicroSecondDelay (gPollInterval);
     mMpSystemData.Timeout -= gPollInterval;
   }
 
@@ -847,6 +909,7 @@ StartupThisAP (
   )
 {
   CPU_DATA_BLOCK        *CpuData;
+  CPU_STATE             CpuState;
 
   CpuData = NULL;
 
@@ -877,13 +940,24 @@ StartupThisAP (
     return EFI_INVALID_PARAMETER;
   }
 
-  if (GetApState (CpuData) != CpuStateIdle) {
+  CpuState = GetApState (CpuData);
+  if (CpuState != CpuStateIdle &&
+      CpuState != CpuStateSleeping) {
     return EFI_NOT_READY;
   }
 
   SetApState (CpuData, CpuStateReady);
 
   SetApProcedure (CpuData, Procedure, ProcedureArgument);
+  //
+  // If this AP previous state is Sleeping, we should
+  // wake up this AP by sent a SIPI. and avoid
+  // re-involve the sleeping state. we must call
+  // SetApProcedure() first.
+  //
+  if (CpuState == CpuStateSleeping) {
+    ResetProcessorToIdleState (CpuData);
+  }
 
   CpuData->Timeout = TimeoutInMicroseconds;
   CpuData->WaitEvent = WaitEvent;
@@ -913,7 +987,7 @@ StartupThisAP (
       return EFI_TIMEOUT;
     }
 
-    gBS->Stall (gPollInterval);
+    MicroSecondDelay (gPollInterval);
     CpuData->Timeout -= gPollInterval;
   }
 
@@ -1021,6 +1095,7 @@ EnableDisableAP (
 {
   CPU_DATA_BLOCK *CpuData;
   BOOLEAN        TempStopCheckState;
+  CPU_STATE      CpuState;
 
   CpuData = NULL;
   TempStopCheckState = FALSE;
@@ -1046,7 +1121,9 @@ EnableDisableAP (
     return EFI_INVALID_PARAMETER;
   }
 
-  if (GetApState (CpuData) != CpuStateIdle) {
+  CpuState = GetApState (CpuData);
+  if (CpuState != CpuStateIdle &&
+      CpuState != CpuStateSleeping) {
     return EFI_UNSUPPORTED;
   }
 
@@ -1157,7 +1234,7 @@ ProcessorToIdleState (
   UINTN                 ProcessorNumber;
   CPU_DATA_BLOCK        *CpuData;
   EFI_AP_PROCEDURE      Procedure;
-  VOID                  *ProcedureArgument;
+  volatile VOID         *ProcedureArgument;
 
   AsmApDoneWithCommonStack ();
 
@@ -1176,11 +1253,14 @@ ProcessorToIdleState (
   }
 
   //
-  // Avoid forcibly reset AP caused the AP State is not updated.
+  // Avoid forcibly reset AP caused the timeout AP State is not
+  // updated.
   //
   GetMpSpinLock (CpuData);
+  if (CpuData->State == CpuStateBusy) {
+    CpuData->Procedure = NULL;
+  }
   CpuData->State = CpuStateIdle;
-  CpuData->Procedure = NULL;
   ReleaseMpSpinLock (CpuData);
 
   while (TRUE) {
@@ -1190,12 +1270,28 @@ ProcessorToIdleState (
     ReleaseMpSpinLock (CpuData);
 
     if (Procedure != NULL) {
-      Procedure (ProcedureArgument);
+      SetApState (CpuData, CpuStateBusy);
+
+      Procedure ((VOID*) ProcedureArgument);
 
       GetMpSpinLock (CpuData);
       CpuData->Procedure = NULL;
       CpuData->State = CpuStateFinished;
       ReleaseMpSpinLock (CpuData);
+    } else {
+      //
+      // if no procedure to execution, we simply put AP
+      // into sleeping state, and waiting BSP sent SIPI.
+      //
+      GetMpSpinLock (CpuData);
+      if (CpuData->State == CpuStateIdle) {
+          CpuData->State = CpuStateSleeping;
+      }
+      ReleaseMpSpinLock (CpuData);
+    }
+
+    if (GetApState (CpuData) == CpuStateSleeping) {
+      CpuSleep ();
     }
 
     CpuPause ();
@@ -1407,7 +1503,7 @@ FillInProcessorInformation (
   CpuData->Info.Location.Package = ProcessorId;
   CpuData->Info.Location.Core    = 0;
   CpuData->Info.Location.Thread  = 0;
-  CpuData->State = Bsp ? CpuStateBuzy : CpuStateIdle;
+  CpuData->State = Bsp ? CpuStateBusy : CpuStateIdle;
 
   CpuData->Procedure        = NULL;
   CpuData->Parameter        = NULL;
@@ -1466,6 +1562,89 @@ InitMpSystemData (
 }
 
 /**
+  Collects BIST data from HOB.
+
+  This function collects BIST data from HOB built from Sec Platform Information
+  PPI or SEC Platform Information2 PPI.
+
+**/
+VOID
+CollectBistDataFromHob (
+  VOID
+  )
+{
+  EFI_HOB_GUID_TYPE                     *GuidHob;
+  EFI_SEC_PLATFORM_INFORMATION_RECORD2  *SecPlatformInformation2;
+  EFI_SEC_PLATFORM_INFORMATION_RECORD   *SecPlatformInformation;
+  UINTN                                 NumberOfData;
+  EFI_SEC_PLATFORM_INFORMATION_CPU      *CpuInstance;
+  EFI_SEC_PLATFORM_INFORMATION_CPU      BspCpuInstance;
+  UINTN                                 ProcessorNumber;
+  UINT32                                InitialLocalApicId;
+  CPU_DATA_BLOCK                        *CpuData;
+
+  SecPlatformInformation2 = NULL;
+  SecPlatformInformation  = NULL;
+
+  //
+  // Get gEfiSecPlatformInformation2PpiGuid Guided HOB firstly
+  //
+  GuidHob = GetFirstGuidHob (&gEfiSecPlatformInformation2PpiGuid);
+  if (GuidHob != NULL) {
+    //
+    // Sec Platform Information2 PPI includes BSP/APs' BIST information
+    //
+    SecPlatformInformation2 = GET_GUID_HOB_DATA (GuidHob);
+    NumberOfData = SecPlatformInformation2->NumberOfCpus;
+    CpuInstance  = SecPlatformInformation2->CpuInstance;
+  } else {
+    //
+    // Otherwise, get gEfiSecPlatformInformationPpiGuid Guided HOB
+    //
+    GuidHob = GetFirstGuidHob (&gEfiSecPlatformInformationPpiGuid);
+    if (GuidHob != NULL) {
+      SecPlatformInformation = GET_GUID_HOB_DATA (GuidHob);
+      NumberOfData = 1;
+      //
+      // SEC Platform Information only includes BSP's BIST information
+      // does not have BSP's APIC ID
+      //
+      BspCpuInstance.CpuLocation = GetApicId ();
+      BspCpuInstance.InfoRecord.IA32HealthFlags.Uint32  = SecPlatformInformation->IA32HealthFlags.Uint32;
+      CpuInstance = &BspCpuInstance;
+    } else {
+      DEBUG ((EFI_D_INFO, "Does not find any HOB stored CPU BIST information!\n"));
+      //
+      // Does not find any HOB stored BIST information
+      //
+      return;
+    }
+  }
+
+  while ((NumberOfData--) > 0) {
+    for (ProcessorNumber = 0; ProcessorNumber < mMpSystemData.NumberOfProcessors; ProcessorNumber++) {
+      CpuData = &mMpSystemData.CpuDatas[ProcessorNumber];
+      InitialLocalApicId = (UINT32) CpuData->Info.ProcessorId;
+      if (InitialLocalApicId == CpuInstance[NumberOfData].CpuLocation) {
+        //
+        // Update CPU health status for MP Services Protocol according to BIST data.
+        //
+        if (CpuInstance[NumberOfData].InfoRecord.IA32HealthFlags.Uint32 != 0) {
+          CpuData->Info.StatusFlag &= ~PROCESSOR_HEALTH_STATUS_BIT;
+          //
+          // Report Status Code that self test is failed
+          //
+          REPORT_STATUS_CODE (
+            EFI_ERROR_CODE | EFI_ERROR_MAJOR,
+            (EFI_COMPUTING_UNIT_HOST_PROCESSOR | EFI_CU_HP_EC_SELF_TEST)
+            );
+        }
+      }
+    }
+  }
+}
+
+/**
   Callback function for ExitBootServices.
 
   @param  Event                 Event whose notification function is being invoked.
@@ -1488,6 +1667,22 @@ ExitBootServicesCallback (
 }
 
 /**
+  A minimal wrapper function that allows MtrrSetAllMtrrs() to be passed to
+  EFI_MP_SERVICES_PROTOCOL.StartupAllAPs() as Procedure.
+
+  @param[in] Buffer  Pointer to an MTRR_SETTINGS object, to be passed to
+                     MtrrSetAllMtrrs().
+**/
+VOID
+EFIAPI
+SetMtrrsFromBuffer (
+  IN VOID *Buffer
+  )
+{
+  MtrrSetAllMtrrs (Buffer);
+}
+
+/**
   Initialize Multi-processor support.
 
 **/
@@ -1496,7 +1691,9 @@ InitializeMpSupport (
   VOID
   )
 {
-  EFI_STATUS Status;
+  EFI_STATUS     Status;
+  MTRR_SETTINGS  MtrrSettings;
+  UINTN          Timeout;
 
   gMaxLogicalProcessorNumber = (UINTN) PcdGet32 (PcdCpuMaxLogicalProcessorNumber);
   if (gMaxLogicalProcessorNumber < 1) {
@@ -1504,35 +1701,40 @@ InitializeMpSupport (
     return;
   }
 
-  if (gMaxLogicalProcessorNumber == 1) {
-    return;
-  }
 
-  gApStackSize = (UINTN) PcdGet32 (PcdCpuApStackSize);
-  ASSERT ((gApStackSize & (SIZE_4KB - 1)) == 0);
-
-  mApStackStart = AllocatePages (EFI_SIZE_TO_PAGES (gMaxLogicalProcessorNumber * gApStackSize));
-  ASSERT (mApStackStart != NULL);
-
-  //
-  // the first buffer of stack size used for common stack, when the amount of AP
-  // more than 1, we should never free the common stack which maybe used for AP reset.
-  //
-  mCommonStack = mApStackStart;
-  mTopOfApCommonStack = (UINT8*) mApStackStart + gApStackSize;
-  mApStackStart = mTopOfApCommonStack;
 
   InitMpSystemData ();
 
-  PrepareAPStartupCode ();
+  //
+  // Only perform AP detection if PcdCpuMaxLogicalProcessorNumber is greater than 1
+  //
+  if (gMaxLogicalProcessorNumber > 1) {
 
-  StartApsStackless ();
+    gApStackSize = (UINTN) PcdGet32 (PcdCpuApStackSize);
+    ASSERT ((gApStackSize & (SIZE_4KB - 1)) == 0);
+
+    mApStackStart = AllocatePages (EFI_SIZE_TO_PAGES (gMaxLogicalProcessorNumber * gApStackSize));
+    ASSERT (mApStackStart != NULL);
+
+    //
+    // the first buffer of stack size used for common stack, when the amount of AP
+    // more than 1, we should never free the common stack which maybe used for AP reset.
+    //
+    mCommonStack = mApStackStart;
+    mTopOfApCommonStack = (UINT8*) mApStackStart + gApStackSize;
+    mApStackStart = mTopOfApCommonStack;
+
+    PrepareAPStartupCode ();
+
+    StartApsStackless ();
+  }
 
   DEBUG ((DEBUG_INFO, "Detect CPU count: %d\n", mMpSystemData.NumberOfProcessors));
   if (mMpSystemData.NumberOfProcessors == 1) {
     FreeApStartupCode ();
-    FreePages (mCommonStack, EFI_SIZE_TO_PAGES (gMaxLogicalProcessorNumber * gApStackSize));
-    return;
+    if (mCommonStack != NULL) {
+      FreePages (mCommonStack, EFI_SIZE_TO_PAGES (gMaxLogicalProcessorNumber * gApStackSize));
+    }
   }
 
   mMpSystemData.CpuDatas = ReallocatePool (
@@ -1540,7 +1742,43 @@ InitializeMpSupport (
                              sizeof (CPU_DATA_BLOCK) * mMpSystemData.NumberOfProcessors,
                              mMpSystemData.CpuDatas);
 
+  //
+  // Release all APs to complete initialization and enter idle loop
+  //
   mAPsAlreadyInitFinished = TRUE;
+
+  //
+  // Wait for all APs to enter idle loop.
+  //
+  Timeout = 0;
+  do {
+    if (CheckAllAPsSleeping ()) {
+      break;
+    }
+    MicroSecondDelay (gPollInterval);
+    Timeout += gPollInterval;
+  } while (Timeout <= PcdGet32 (PcdCpuApInitTimeOutInMicroSeconds));
+  ASSERT (Timeout <= PcdGet32 (PcdCpuApInitTimeOutInMicroSeconds));
+
+  //
+  // Update CPU healthy information from Guided HOB
+  //
+  CollectBistDataFromHob ();
+
+  //
+  // Synchronize MTRR settings to APs.
+  //
+  MtrrGetAllMtrrs (&MtrrSettings);
+  Status = mMpServicesTemplate.StartupAllAPs (
+                                 &mMpServicesTemplate, // This
+                                 SetMtrrsFromBuffer,   // Procedure
+                                 TRUE,                 // SingleThread
+                                 NULL,                 // WaitEvent
+                                 0,                    // TimeoutInMicrosecsond
+                                 &MtrrSettings,        // ProcedureArgument
+                                 NULL                  // FailedCpuList
+                                 );
+  ASSERT (Status == EFI_SUCCESS || Status == EFI_NOT_STARTED);
 
   Status = gBS->InstallMultipleProtocolInterfaces (
                   &mMpServiceHandle,
@@ -1549,10 +1787,12 @@ InitializeMpSupport (
                   );
   ASSERT_EFI_ERROR (Status);
 
-  if (mMpSystemData.NumberOfProcessors < gMaxLogicalProcessorNumber) {
-    FreePages (mApStackStart, EFI_SIZE_TO_PAGES (
-                                (gMaxLogicalProcessorNumber - mMpSystemData.NumberOfProcessors) *
-                                gApStackSize));
+  if (mMpSystemData.NumberOfProcessors > 1 && mMpSystemData.NumberOfProcessors < gMaxLogicalProcessorNumber) {
+    if (mApStackStart != NULL) {
+      FreePages (mApStackStart, EFI_SIZE_TO_PAGES (
+                                  (gMaxLogicalProcessorNumber - mMpSystemData.NumberOfProcessors) *
+                                  gApStackSize));
+    }
   }
 
   Status = gBS->CreateEvent (

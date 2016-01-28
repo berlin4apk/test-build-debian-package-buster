@@ -1,7 +1,8 @@
 /** @file
 Utility functions for UI presentation.
 
-Copyright (c) 2004 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2015, Intel Corporation. All rights reserved.<BR>
+(C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -178,7 +179,7 @@ UpdateStatement (
 **/
 VOID
 EFIAPI
-RefreshEventNotify(
+RefreshEventNotifyForStatement(
   IN      EFI_EVENT Event,
   IN      VOID      *Context
   )
@@ -190,6 +191,23 @@ RefreshEventNotify(
   gBS->SignalEvent (mValueChangedEvent);
 }
 
+/**
+  Refresh the questions within this form.
+  
+  @param Event    The event which has this function related.
+  @param Context  The input context info related to this event or the status code return to the caller.
+**/
+VOID
+EFIAPI
+RefreshEventNotifyForForm(
+  IN      EFI_EVENT Event,
+  IN      VOID      *Context
+  )
+{
+  gCurrentSelection->Action = UI_ACTION_REFRESH_FORMSET;
+
+  gBS->SignalEvent (mValueChangedEvent);
+}
 
 /**
   Create refresh hook event for statement which has refresh event or interval.
@@ -198,7 +216,7 @@ RefreshEventNotify(
 
 **/
 VOID
-CreateRefreshEvent (
+CreateRefreshEventForStatement (
   IN     FORM_BROWSER_STATEMENT        *Statement
   )
 {
@@ -212,9 +230,42 @@ CreateRefreshEvent (
   Status = gBS->CreateEventEx (
                     EVT_NOTIFY_SIGNAL,
                     TPL_CALLBACK,
-                    RefreshEventNotify,
+                    RefreshEventNotifyForStatement,
                     Statement,
                     &Statement->RefreshGuid,
+                    &RefreshEvent);
+  ASSERT_EFI_ERROR (Status);
+
+  EventNode = AllocateZeroPool (sizeof (FORM_BROWSER_REFRESH_EVENT_NODE));
+  ASSERT (EventNode != NULL);
+  EventNode->RefreshEvent = RefreshEvent;
+  InsertTailList(&mRefreshEventList, &EventNode->Link);
+}
+
+/**
+  Create refresh hook event for form which has refresh event or interval.
+
+  @param Form           The form need to check.
+
+**/
+VOID
+CreateRefreshEventForForm (
+  IN     FORM_BROWSER_FORM        *Form
+  )
+{
+  EFI_STATUS                      Status;
+  EFI_EVENT                       RefreshEvent;
+  FORM_BROWSER_REFRESH_EVENT_NODE *EventNode;
+
+  //
+  // If question has refresh guid, create the notify function.
+  //
+  Status = gBS->CreateEventEx (
+                    EVT_NOTIFY_SIGNAL,
+                    TPL_CALLBACK,
+                    RefreshEventNotifyForForm,
+                    Form,
+                    &Form->RefreshGuid,
                     &RefreshEvent);
   ASSERT_EFI_ERROR (Status);
 
@@ -308,7 +359,7 @@ InitializeDisplayStatement (
   // Create the refresh event process function.
   //
   if (!CompareGuid (&Statement->RefreshGuid, &gZeroGuid)) {
-    CreateRefreshEvent (Statement);
+    CreateRefreshEventForStatement (Statement);
   }
 
   //
@@ -496,6 +547,21 @@ AddStatementToDisplayForm (
   }
 
   //
+  // treat formset as statement outside the form,get its opcode.
+  //
+  DisplayStatement = AllocateZeroPool (sizeof (FORM_DISPLAY_ENGINE_STATEMENT));
+  ASSERT (DisplayStatement != NULL);
+
+  DisplayStatement->Signature = FORM_DISPLAY_ENGINE_STATEMENT_SIGNATURE;
+  DisplayStatement->Version   = FORM_DISPLAY_ENGINE_STATEMENT_VERSION_1;
+  DisplayStatement->OpCode = gCurrentSelection->FormSet->OpCode;
+
+  InitializeListHead (&DisplayStatement->NestStatementList);
+  InitializeListHead (&DisplayStatement->OptionListHead);
+
+  InsertTailList(&gDisplayFormData.StatementListOSF, &DisplayStatement->DisplayLink);
+
+  //
   // Process the statement in this form.
   //
   Link = GetFirstNode (&gCurrentSelection->Form->StatementListHead);
@@ -557,6 +623,16 @@ AddStatementToDisplayForm (
     ASSERT (EventNode != NULL);
     EventNode->RefreshEvent = RefreshIntervalEvent;
     InsertTailList(&mRefreshEventList, &EventNode->Link);
+  }
+
+  //
+  // Create the refresh event process function for Form.
+  //
+  if (!CompareGuid (&gCurrentSelection->Form->RefreshGuid, &gZeroGuid)) {
+    CreateRefreshEventForForm (gCurrentSelection->Form);
+    if (gDisplayFormData.FormRefreshEvent == NULL) {
+      gDisplayFormData.FormRefreshEvent = mValueChangedEvent;
+    }
   }
 
   //
@@ -1426,6 +1502,8 @@ ProcessQuestionConfig (
   ConfigResp = GetToken (Question->QuestionConfig, Selection->FormSet->HiiHandle);
   if (ConfigResp == NULL) {
     return EFI_NOT_FOUND;
+  } else if (ConfigResp[0] == L'\0') {
+    return EFI_SUCCESS;
   }
 
   //
@@ -1823,6 +1901,30 @@ FindNextMenu (
 }
 
 /**
+  Reconnect the controller.
+
+  @param DriverHandle          The controller handle which need to be reconnect.
+
+  @retval   TRUE     do the reconnect behavior success.
+  @retval   FALSE    do the reconnect behavior failed.
+  
+**/
+BOOLEAN
+ReconnectController (
+  IN EFI_HANDLE   DriverHandle
+  )
+{
+  EFI_STATUS                      Status;
+
+  Status = gBS->DisconnectController(DriverHandle, NULL, NULL);
+  if (!EFI_ERROR (Status)) {
+    Status = gBS->ConnectController(DriverHandle, NULL, NULL, TRUE);
+  }
+
+  return Status == EFI_SUCCESS;
+}
+
+/**
   Call the call back function for the question and process the return action.
 
   @param Selection             On input, Selection tell setup browser the information
@@ -1849,6 +1951,7 @@ ProcessCallBackFunction (
   )
 {
   EFI_STATUS                      Status;
+  EFI_STATUS                      InternalStatus;
   EFI_BROWSER_ACTION_REQUEST      ActionRequest;
   EFI_HII_CONFIG_ACCESS_PROTOCOL  *ConfigAccess;
   EFI_HII_VALUE                   *HiiValue;
@@ -1992,6 +2095,10 @@ ProcessCallBackFunction (
           SettingLevel          = FormLevel;
           break;
 
+        case EFI_BROWSER_ACTION_REQUEST_RECONNECT:
+          gCallbackReconnect    = TRUE;
+          break;
+
         default:
           break;
         }
@@ -2003,6 +2110,11 @@ ProcessCallBackFunction (
         //
         Status = ValueChangedValidation (gCurrentSelection->FormSet, gCurrentSelection->Form, Statement);
         if (!EFI_ERROR (Status)) {
+          //
+          //check whether the question value  changed compared with edit buffer before updating edit buffer
+          // if changed, set the ValueChanged flag to TRUE,in order to trig the CHANGED callback function
+          //
+          IsQuestionValueChanged(gCurrentSelection->FormSet, gCurrentSelection->Form, Statement, GetSetValueWithEditBuffer);
           //
           // According the spec, return value from call back of "changing" and 
           // "retrieve" should update to the question's temp buffer.
@@ -2038,8 +2150,13 @@ ProcessCallBackFunction (
         //
         // Do the question validation.
         //
-        Status = ValueChangedValidation (gCurrentSelection->FormSet, gCurrentSelection->Form, Statement);
-        if (!EFI_ERROR (Status)) {
+        InternalStatus = ValueChangedValidation (gCurrentSelection->FormSet, gCurrentSelection->Form, Statement);
+        if (!EFI_ERROR (InternalStatus)) {
+          //
+          //check whether the question value  changed compared with edit buffer before updating edit buffer
+          // if changed, set the ValueChanged flag to TRUE,in order to trig the CHANGED callback function
+          //
+          IsQuestionValueChanged(gCurrentSelection->FormSet, gCurrentSelection->Form, Statement, GetSetValueWithEditBuffer);
           SetQuestionValue(FormSet, Form, Statement, GetSetValueWithEditBuffer);
         }
       }
@@ -2048,8 +2165,15 @@ ProcessCallBackFunction (
       // According the spec, return fail from call back of "changing" and 
       // "retrieve", should restore the question's value.
       //
-      if ((Action == EFI_BROWSER_ACTION_CHANGING && Status != EFI_UNSUPPORTED) || 
-           Action == EFI_BROWSER_ACTION_RETRIEVE) {
+      if (Action == EFI_BROWSER_ACTION_CHANGING && Status != EFI_UNSUPPORTED) {
+        if (Statement->Storage != NULL) {
+          GetQuestionValue(FormSet, Form, Statement, GetSetValueWithEditBuffer);
+        } else if ((Statement->QuestionFlags & EFI_IFR_FLAG_CALLBACK) != 0) {
+          ProcessCallBackFunction (Selection, FormSet, Form, Question, EFI_BROWSER_ACTION_RETRIEVE, FALSE);
+        }
+      }
+
+      if (Action == EFI_BROWSER_ACTION_RETRIEVE) {
         GetQuestionValue(FormSet, Form, Statement, GetSetValueWithEditBuffer);
       }
 
@@ -2073,6 +2197,28 @@ ProcessCallBackFunction (
     if (Question != NULL) {
       break;
     }
+  }
+
+  if (gCallbackReconnect && (EFI_BROWSER_ACTION_CHANGED == Action)) {
+    //
+    // Confirm changes with user first.
+    //
+    if (IsNvUpdateRequiredForFormSet(FormSet)) {
+      if (BROWSER_ACTION_DISCARD == PopupErrorMessage(BROWSER_RECONNECT_SAVE_CHANGES, NULL, NULL, NULL)) {
+        gCallbackReconnect = FALSE;
+        DiscardFormIsRequired = TRUE;
+      } else {
+        SubmitFormIsRequired = TRUE;
+      }
+    } else {
+      PopupErrorMessage(BROWSER_RECONNECT_REQUIRED, NULL, NULL, NULL);
+    }
+
+    //
+    // Exit current formset before do the reconnect.
+    //
+    NeedExit = TRUE;
+    SettingLevel = FormSetLevel;
   }
 
   if (SubmitFormIsRequired && !SkipSaveOrDiscard) {
@@ -2214,6 +2360,12 @@ SetupBrowser (
   mCurFakeQestId = 0;
 
   do {
+
+    //
+    // Reset Status to prevent the next break from returning incorrect error status.
+    //
+    Status = EFI_SUCCESS;
+
     //
     // IFR is updated, force to reparse the IFR binary
     // This check is shared by EFI_BROWSER_ACTION_FORM_CLOSE and 
@@ -2360,17 +2512,16 @@ SetupBrowser (
           //
           if (EFI_ERROR (Status)) {
             //
-            // Cross reference will not be taken
+            // Cross reference will not be taken, restore all essential field
             //
-            Selection->FormId = Selection->Form->FormId;
+            Selection->Handle = mCurrentHiiHandle;
+            CopyMem (&Selection->FormSetGuid, &mCurrentFormSetGuid, sizeof (EFI_GUID));
+            Selection->FormId = mCurrentFormId;
             Selection->QuestionId = 0;
+            Selection->Action = UI_ACTION_REFRESH_FORM;
           }
         }
 
-        //
-        // Verify whether question value has checked, update the ValueChanged flag in Question.
-        //
-        IsQuestionValueChanged(gCurrentSelection->FormSet, gCurrentSelection->Form, Statement, GetSetValueWithBuffer);
 
         if (!EFI_ERROR (Status) && 
             (Statement->Operand != EFI_IFR_REF_OP) && 
@@ -2379,6 +2530,11 @@ SetupBrowser (
           // Only question value has been changed, browser will trig CHANGED callback.
           //
           ProcessCallBackFunction(Selection, Selection->FormSet, Selection->Form, Statement, EFI_BROWSER_ACTION_CHANGED, FALSE);
+          //
+          //check whether the question value changed compared with buffer value
+          //if doesn't change ,set the ValueChanged flag to FALSE ,in order not to display the "configuration changed "information on the screen
+          //
+          IsQuestionValueChanged(gCurrentSelection->FormSet, gCurrentSelection->Form, Statement, GetSetValueWithBuffer);
         }
       } else {
         //
@@ -2395,13 +2551,18 @@ SetupBrowser (
       }
 
       //
-      // If question has EFI_IFR_FLAG_RESET_REQUIRED flag and without storage and process question success till here, 
-      // trig the gResetFlag.
+      // If question has EFI_IFR_FLAG_RESET_REQUIRED/EFI_IFR_FLAG_RECONNECT_REQUIRED flag and without storage 
+      // and process question success till here, trig the gResetFlag/gFlagReconnect.
       //
       if ((Status == EFI_SUCCESS) && 
-          (Statement->Storage == NULL) && 
-          ((Statement->QuestionFlags & EFI_IFR_FLAG_RESET_REQUIRED) != 0)) {
-        gResetRequired = TRUE;
+          (Statement->Storage == NULL)) { 
+        if ((Statement->QuestionFlags & EFI_IFR_FLAG_RESET_REQUIRED) != 0) {
+          gResetRequired = TRUE;
+        }
+
+        if ((Statement->QuestionFlags & EFI_IFR_FLAG_RECONNECT_REQUIRED) != 0) {
+          gFlagReconnect = TRUE;
+        }
       }
     }
 

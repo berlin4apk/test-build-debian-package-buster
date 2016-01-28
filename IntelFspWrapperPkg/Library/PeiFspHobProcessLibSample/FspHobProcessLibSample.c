@@ -1,7 +1,7 @@
 /** @file
   Sample to provide FSP hob process related function.
 
-  Copyright (c) 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2014 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -25,6 +25,7 @@
 
 #include <Guid/GuidHobFspEas.h>
 #include <Guid/MemoryTypeInformation.h>
+#include <Guid/PcdDataBaseHobGuid.h>
 #include <Ppi/Capsule.h>
 
 //
@@ -132,7 +133,7 @@ GetPeiMemSize (
 }
 
 /**
-  BIOS process FspBobList.
+  BIOS process FspBobList for Memory Resource Descriptor.
 
   @param[in] FspHobList  Pointer to the HOB data structure produced by FSP.
 
@@ -140,7 +141,7 @@ GetPeiMemSize (
 **/
 EFI_STATUS
 EFIAPI
-FspHobProcess (
+FspHobProcessForMemoryResource (
   IN VOID                 *FspHobList
   )
 {
@@ -155,7 +156,7 @@ FspHobProcess (
   BOOLEAN              FoundFspMemHob;
   EFI_STATUS           Status;
   EFI_BOOT_MODE        BootMode;
-  PEI_CAPSULE_PPI      *Capsule;
+  EFI_PEI_CAPSULE_PPI  *Capsule;
   VOID                 *CapsuleBuffer;
   UINTN                CapsuleBufferLength;
   UINT64               RequiredMemSize;
@@ -246,7 +247,7 @@ FspHobProcess (
 
     S3PeiMemBase = 0;
     S3PeiMemSize = 0;
-    Status = GetS3MemoryInfo (&S3PeiMemBase, &S3PeiMemSize);
+    Status = GetS3MemoryInfo (&S3PeiMemSize, &S3PeiMemBase);
     ASSERT_EFI_ERROR (Status);
     DEBUG((DEBUG_INFO, "S3 memory %Xh - %Xh bytes\n", S3PeiMemBase, S3PeiMemSize));
 
@@ -271,7 +272,7 @@ FspHobProcess (
     CapsuleBufferLength = 0;
     if (BootMode == BOOT_ON_FLASH_UPDATE) {
       Status = PeiServicesLocatePpi (
-                 &gPeiCapsulePpiGuid,
+                 &gEfiPeiCapsulePpiGuid,
                  0,
                  NULL,
                  (VOID **) &Capsule
@@ -331,9 +332,82 @@ FspHobProcess (
     }
   }
 
+  return EFI_SUCCESS;
+}
+
+/**
+  Process FSP HOB list
+
+  @param[in] FspHobList  Pointer to the HOB data structure produced by FSP.
+
+**/
+VOID
+ProcessFspHobList (
+  IN VOID                 *FspHobList
+  )
+{
+  EFI_PEI_HOB_POINTERS  FspHob;
+
+  FspHob.Raw = FspHobList;
+
   //
-  // NV Storage Hob
+  // Add all the HOBs from FSP binary to FSP wrapper
   //
+  while (!END_OF_HOB_LIST (FspHob)) {
+    if (FspHob.Header->HobType == EFI_HOB_TYPE_GUID_EXTENSION) {
+      //
+      // Skip FSP binary creates PcdDataBaseHobGuid
+      //
+      if (!CompareGuid(&FspHob.Guid->Name, &gPcdDataBaseHobGuid)) { 
+        BuildGuidDataHob (
+          &FspHob.Guid->Name,
+          GET_GUID_HOB_DATA(FspHob),
+          GET_GUID_HOB_DATA_SIZE(FspHob)
+        );
+      }
+    }
+    FspHob.Raw = GET_NEXT_HOB (FspHob);
+  }
+}
+
+/**
+  BIOS process FspBobList for other data (not Memory Resource Descriptor).
+
+  @param[in] FspHobList  Pointer to the HOB data structure produced by FSP.
+
+  @return If platform process the FSP hob list successfully.
+**/
+EFI_STATUS
+EFIAPI
+FspHobProcessForOtherData (
+  IN VOID                 *FspHobList
+  )
+{
+  ProcessFspHobList (FspHobList);
 
   return EFI_SUCCESS;
+}
+
+/**
+  BIOS process FspBobList.
+
+  @param[in] FspHobList  Pointer to the HOB data structure produced by FSP.
+
+  @return If platform process the FSP hob list successfully.
+**/
+EFI_STATUS
+EFIAPI
+FspHobProcess (
+  IN VOID                 *FspHobList
+  )
+{
+  EFI_STATUS  Status;
+
+  Status = FspHobProcessForMemoryResource (FspHobList);
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+  Status = FspHobProcessForOtherData (FspHobList);
+
+  return Status;
 }

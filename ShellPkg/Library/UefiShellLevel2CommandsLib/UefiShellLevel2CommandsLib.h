@@ -47,7 +47,6 @@
 #include <Library/HiiLib.h>
 #include <Library/SortLib.h>
 #include <Library/FileHandleLib.h>
-#include <Library/PathLib.h>
 
 extern CONST  CHAR16                            mFileName[];
 extern        EFI_HANDLE                        gShellLevel2HiiHandle;
@@ -339,6 +338,7 @@ ShellCommandRunVol (
   @param[in] Dest       pointer to destination file name
   @param[out] Resp      pointer to response from question.  Pass back on looped calling
   @param[in] SilentMode whether to run in quiet mode or not
+  @param[in] CmdName    Source command name requesting single file copy
 
   @retval SHELL_SUCCESS   The source file was copied to the destination
 **/
@@ -348,7 +348,8 @@ CopySingleFile(
   IN CONST CHAR16 *Source,
   IN CONST CHAR16 *Dest,
   OUT VOID        **Resp,
-  IN BOOLEAN      SilentMode
+  IN BOOLEAN      SilentMode,
+  IN CONST CHAR16 *CmdName
   );
 
 /**

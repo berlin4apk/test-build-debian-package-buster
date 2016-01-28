@@ -2,6 +2,8 @@
   Main file for Reconnect shell Driver1 function.
 
   Copyright (c) 2010 - 2014, Intel Corporation. All rights reserved.<BR>
+  (C) Copyright 2015 Hewlett-Packard Development Company, L.P.<BR>
+  (C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>  
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -74,7 +76,7 @@ ShellCommandRunReconnect (
   Status = ShellCommandLineParse (ParamList, &Package, &ProblemParam, TRUE);
   if (EFI_ERROR(Status)) {
     if (Status == EFI_VOLUME_CORRUPTED && ProblemParam != NULL) {
-      ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_GEN_PROBLEM), gShellDriver1HiiHandle, ProblemParam);
+      ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_GEN_PROBLEM), gShellDriver1HiiHandle, L"reconnect", ProblemParam);
       FreePool(ProblemParam);
       ShellStatus = SHELL_INVALID_PARAMETER;
     } else {

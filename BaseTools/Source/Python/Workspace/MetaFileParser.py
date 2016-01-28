@@ -1,7 +1,8 @@
 ## @file
 # This file is used to parse meta files
 #
-# Copyright (c) 2008 - 2014, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2008 - 2015, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2015, Hewlett Packard Enterprise Development, L.P.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -342,9 +343,14 @@ class MetaFileParser(object):
         Name, Value = self._ValueList[1], self._ValueList[2]
         # Sometimes, we need to make differences between EDK and EDK2 modules 
         if Name == 'INF_VERSION':
-            try:
-                self._Version = int(Value, 0)
-            except:
+            if re.match(r'0[xX][\da-f-A-F]{5,8}', Value):
+                self._Version = int(Value, 0)   
+            elif re.match(r'\d+\.\d+', Value):
+                ValueList = Value.split('.')
+                Major = '%04o' % int(ValueList[0], 0)
+                Minor = '%04o' % int(ValueList[1], 0)
+                self._Version = int('0x' + Major + Minor, 0)
+            else:
                 EdkLogger.error('Parser', FORMAT_INVALID, "Invalid version number",
                                 ExtraData=self._CurrentLine, File=self.MetaFile, Line=self._LineIndex + 1)
 
@@ -376,7 +382,8 @@ class MetaFileParser(object):
                 File=self.MetaFile,
                 Line=self._LineIndex + 1
                 )
-
+    def GetValidExpression(self, TokenSpaceGuid, PcdCName):
+        return self._Table.GetValidExpression(TokenSpaceGuid, PcdCName)
     def _GetMacros(self):
         Macros = {}
         Macros.update(self._FileLocalMacros)
@@ -814,6 +821,7 @@ class DscParser(MetaFileParser):
         "PLATFORM_VERSION",
         "SKUID_IDENTIFIER",
         "PCD_INFO_GENERATION",
+        "PCD_VAR_CHECK_GENERATION",
         "SUPPORTED_ARCHITECTURES",
         "BUILD_TARGETS",
         "OUTPUT_DIRECTORY",
@@ -1008,11 +1016,6 @@ class DscParser(MetaFileParser):
                                 File=self.MetaFile, Line=self._LineIndex + 1,
                                 ExtraData=self._CurrentLine)
             self._DirectiveStack.append((ItemType, self._LineIndex + 1, self._CurrentLine))
-        elif self._From > 0:
-            EdkLogger.error('Parser', FORMAT_INVALID,
-                            "No '!include' allowed in included file",
-                            ExtraData=self._CurrentLine, File=self.MetaFile,
-                            Line=self._LineIndex + 1)
 
         #
         # Model, Value1, Value2, Value3, Arch, ModuleType, BelongsToItem=-1, BelongsToFile=-1,
@@ -1338,18 +1341,6 @@ class DscParser(MetaFileParser):
             self._SubsectionType = MODEL_UNKNOWN
 
     def __RetrievePcdValue(self):
-        Records = self._RawTable.Query(MODEL_PCD_FEATURE_FLAG, BelongsToItem= -1.0)
-        for TokenSpaceGuid, PcdName, Value, Dummy2, Dummy3, ID, Line in Records:
-            Name = TokenSpaceGuid + '.' + PcdName
-            ValList, Valid, Index = AnalyzeDscPcd(Value, MODEL_PCD_FEATURE_FLAG)
-            self._Symbols[Name] = ValList[Index]
-
-        Records = self._RawTable.Query(MODEL_PCD_FIXED_AT_BUILD, BelongsToItem= -1.0)
-        for TokenSpaceGuid, PcdName, Value, Dummy2, Dummy3, ID, Line in Records:
-            Name = TokenSpaceGuid + '.' + PcdName
-            ValList, Valid, Index = AnalyzeDscPcd(Value, MODEL_PCD_FIXED_AT_BUILD)
-            self._Symbols[Name] = ValList[Index]
-
         Content = open(str(self.MetaFile), 'r').readlines()
         GlobalData.gPlatformOtherPcds['DSCFILE'] = str(self.MetaFile)
         for PcdType in (MODEL_PCD_PATCHABLE_IN_MODULE, MODEL_PCD_DYNAMIC_DEFAULT, MODEL_PCD_DYNAMIC_HII,
@@ -1489,6 +1480,12 @@ class DscParser(MetaFileParser):
             Parser = DscParser(IncludedFile1, self._FileType, IncludedFileTable,
                                Owner=Owner, From=Owner)
 
+            # Does not allow lower level included file to include upper level included file
+            if Parser._From != Owner and int(Owner) > int (Parser._From):
+                EdkLogger.error('parser', FILE_ALREADY_EXIST, File=self._FileWithError,
+                    Line=self._LineIndex + 1, ExtraData="{0} is already included at a higher level.".format(IncludedFile1))
+
+
             # set the parser status with current status
             Parser._SectionName = self._SectionName
             Parser._SectionType = self._SectionType
@@ -1528,7 +1525,7 @@ class DscParser(MetaFileParser):
 
         ValList, Valid, Index = AnalyzeDscPcd(self._ValueList[2], self._ItemType)
         if not Valid:
-            EdkLogger.error('build', FORMAT_INVALID, "Pcd format incorrect.", File=self._FileWithError, Line=self._LineIndex+1,
+            EdkLogger.error('build', FORMAT_INVALID, "Pcd format incorrect.", File=self._FileWithError, Line=self._LineIndex + 1,
                             ExtraData="%s.%s|%s" % (self._ValueList[0], self._ValueList[1], self._ValueList[2]))
         PcdValue = ValList[Index]
         if PcdValue:
@@ -1542,7 +1539,9 @@ class DscParser(MetaFileParser):
         if ValList[Index] == 'False':
             ValList[Index] = '0'
 
-        GlobalData.gPlatformPcds[TAB_SPLIT.join(self._ValueList[0:2])] = PcdValue
+        if (not self._DirectiveEvalStack) or (False not in self._DirectiveEvalStack):
+            GlobalData.gPlatformPcds[TAB_SPLIT.join(self._ValueList[0:2])] = PcdValue
+            self._Symbols[TAB_SPLIT.join(self._ValueList[0:2])] = PcdValue
         self._ValueList[2] = '|'.join(ValList)
 
     def __ProcessComponent(self):

@@ -1,7 +1,7 @@
 /** @file
 Private MACRO, structure and function definitions for Setup Browser module.
 
-Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -32,10 +32,12 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Protocol/HiiString.h>
 #include <Protocol/UserManager.h>
 #include <Protocol/DevicePathFromText.h>
+#include <Protocol/RegularExpressionProtocol.h>
 
 #include <Guid/MdeModuleHii.h>
 #include <Guid/HiiPlatformSetupFormset.h>
 #include <Guid/HiiFormMapMethodGuid.h>
+#include <Guid/ZeroGuid.h>
 
 #include <Library/PrintLib.h>
 #include <Library/DebugLib.h>
@@ -150,7 +152,6 @@ typedef struct {
 
   UINT32           Attributes;     // For EFI_IFR_VARSTORE_EFI: EFI Variable attribute
 
-  CHAR16           *ConfigHdr;     // <ConfigHdr>
   CHAR16           *ConfigRequest; // <ConfigRequest> = <ConfigHdr> + <RequestElement>
                                    // <RequestElement> includes all fields which is used by current form sets.
   UINTN            SpareStrLen;    // Spare length of ConfigRequest string buffer
@@ -169,6 +170,8 @@ typedef struct {
   UINT16           VarStoreId;
 
   BROWSER_STORAGE  *BrowserStorage;
+
+  CHAR16           *ConfigHdr;     // <ConfigHdr>
 
   CHAR16           *ConfigRequest; // <ConfigRequest> = <ConfigHdr> + <RequestElement>
   CHAR16           *ConfigAltResp; // Alt config response string for this ConfigRequest.
@@ -405,6 +408,7 @@ typedef struct {
 
   BOOLEAN              ModalForm;            // Whether this is a modal form.
   BOOLEAN              Locked;               // Whether this form is locked.
+  EFI_GUID             RefreshGuid;          // Form refresh event guid.
 
   LIST_ENTRY           FormViewListHead;     // List of type FORMID_INFO is Browser View Form History List.
   LIST_ENTRY           ExpressionListHead;   // List of Expressions (FORM_EXPRESSION)
@@ -451,6 +455,7 @@ typedef struct {
   UINT16                          Class;                // Tiano extended Class code
   UINT16                          SubClass;             // Tiano extended Subclass code
   EFI_IMAGE_ID                    ImageId;
+  EFI_IFR_OP_HEADER               *OpCode;              //mainly for formset op to get ClassGuid
 
   FORM_BROWSER_STATEMENT          *StatementBuffer;     // Buffer for all Statements and Questions
   EXPRESSION_OPCODE               *ExpressionBuffer;    // Buffer for all Expression OpCode
@@ -525,14 +530,20 @@ typedef struct {
   //
   // Globals defined in Setup.c
   //
+  BOOLEAN                  FlagReconnect;
+  BOOLEAN                  CallbackReconnect;
   BOOLEAN                  ResetRequired;
   BOOLEAN                  ExitRequired;
   EFI_HII_HANDLE           HiiHandle;
   EFI_GUID                 FormSetGuid;
   EFI_FORM_ID              FormId;
   UI_MENU_SELECTION        *Selection;
-
-  LIST_ENTRY           FormHistoryList;
+  FORM_BROWSER_FORMSET     *SystemLevelFormSet;
+  EFI_QUESTION_ID          CurFakeQestId;
+  BOOLEAN                  HiiPackageListUpdated;
+  BOOLEAN                  FinishRetrieveCall;
+  LIST_ENTRY               FormHistoryList;
+  LIST_ENTRY               FormSetList;
 } BROWSER_CONTEXT;
 
 #define BROWSER_CONTEXT_FROM_LINK(a)  CR (a, BROWSER_CONTEXT, Link, BROWSER_CONTEXT_SIGNATURE)
@@ -563,6 +574,8 @@ extern EFI_HII_CONFIG_ROUTING_PROTOCOL   *mHiiConfigRouting;
 extern EFI_DEVICE_PATH_FROM_TEXT_PROTOCOL *mPathFromText;
 extern EDKII_FORM_DISPLAY_ENGINE_PROTOCOL *mFormDisplay;
 
+extern BOOLEAN               gCallbackReconnect;
+extern BOOLEAN               gFlagReconnect;
 extern BOOLEAN               gResetRequired;
 extern BOOLEAN               gExitRequired;
 extern LIST_ENTRY            gBrowserFormSetList;
@@ -576,9 +589,10 @@ extern SETUP_DRIVER_PRIVATE_DATA mPrivateData;
 //
 extern CHAR16            *gEmptyString;
 
-extern EFI_GUID          gZeroGuid;
-
 extern UI_MENU_SELECTION  *gCurrentSelection;
+extern BOOLEAN            mHiiPackageListUpdated;
+extern UINT16             mCurFakeQestId;
+extern BOOLEAN            mFinishRetrieveCall;
 
 //
 // Global Procedure Defines
@@ -1301,6 +1315,7 @@ SetScope (
   @retval EFI_INVALID_PARAMETER  KeyData is NULL.
   @retval EFI_NOT_FOUND          KeyData is not found to be unregistered.
   @retval EFI_UNSUPPORTED        Key represents a printable character. It is conflicted with Browser.
+  @retval EFI_ALREADY_STARTED    Key already been registered for one hot key.
 **/
 EFI_STATUS
 EFIAPI
@@ -1793,6 +1808,66 @@ PopupErrorMessage (
 BOOLEAN
 IsTrue (
   IN EFI_HII_VALUE     *Result
+  );
+
+/**
+  Get Formset_storage base on the input varstoreid info.
+
+  @param  FormSet                Pointer of the current FormSet.
+  @param  VarStoreId             Varstore ID info.
+
+  @return Pointer to a FORMSET_STORAGE data structure.
+
+**/
+FORMSET_STORAGE *
+GetFstStgFromVarId (
+  IN FORM_BROWSER_FORMSET  *FormSet,
+  IN EFI_VARSTORE_ID       VarStoreId
+  );
+
+/**
+  Get Formset_storage base on the input browser storage.
+
+  More than one formsets may share the same browser storage,
+  this function just get the first formset storage which
+  share the browser storage.
+
+  @param  Storage              browser storage info.
+
+  @return Pointer to a FORMSET_STORAGE data structure.
+  
+
+**/
+FORMSET_STORAGE *
+GetFstStgFromBrsStg (
+  IN BROWSER_STORAGE       *Storage
+  );
+
+/**
+  Reconnect the controller.
+
+  @param DriverHandle          The controller handle which need to be reconnect.
+
+  @retval   TRUE     do the reconnect behavior success.
+  @retval   FALSE    do the reconnect behavior failed.
+  
+**/
+BOOLEAN
+ReconnectController (
+  IN EFI_HANDLE   DriverHandle
+  );
+
+/**
+  Converts the unicode character of the string from uppercase to lowercase.
+  This is a internal function.
+
+  @param ConfigString  String to be converted
+
+**/
+VOID
+EFIAPI
+HiiToLower (
+  IN EFI_STRING  ConfigString
   );
 
 #endif

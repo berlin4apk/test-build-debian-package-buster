@@ -2,7 +2,7 @@
   PKCS#7 SignedData Verification Wrapper Implementation which does not provide
   real capabilities.
 
-Copyright (c) 2012, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2012 - 2015, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -67,6 +67,40 @@ Pkcs7FreeSigners (
 }
 
 /**
+  Retrieves all embedded certificates from PKCS#7 signed data as described in "PKCS #7:
+  Cryptographic Message Syntax Standard", and outputs two certificate lists chained and
+  unchained to the signer's certificates.
+  The input signed data could be wrapped in a ContentInfo structure.
+
+  @param[in]  P7Data            Pointer to the PKCS#7 message.
+  @param[in]  P7Length          Length of the PKCS#7 message in bytes.
+  @param[out] SignerChainCerts  Pointer to the certificates list chained to signer's
+                                certificate. It's caller's responsiblity to free the buffer.
+  @param[out] ChainLength       Length of the chained certificates list buffer in bytes.
+  @param[out] UnchainCerts      Pointer to the unchained certificates lists. It's caller's
+                                responsiblity to free the buffer.
+  @param[out] UnchainLength     Length of the unchained certificates list buffer in bytes.
+
+  @retval  TRUE         The operation is finished successfully.
+  @retval  FALSE        Error occurs during the operation.
+
+**/
+BOOLEAN
+EFIAPI
+Pkcs7GetCertificatesList (
+  IN  CONST UINT8  *P7Data,
+  IN  UINTN        P7Length,
+  OUT UINT8        **SignerChainCerts,
+  OUT UINTN        *ChainLength,
+  OUT UINT8        **UnchainCerts,
+  OUT UINTN        *UnchainLength
+  )
+{
+  ASSERT (FALSE);
+  return FALSE;
+}
+
+/**
   Verifies the validility of a PKCS#7 signed data as described in "PKCS #7:
   Cryptographic Message Syntax Standard". The input signed data could be wrapped
   in a ContentInfo structure.
@@ -93,6 +127,35 @@ Pkcs7Verify (
   IN  UINTN        CertLength,
   IN  CONST UINT8  *InData,
   IN  UINTN        DataLength
+  )
+{
+  ASSERT (FALSE);
+  return FALSE;
+}
+
+/**
+  Extracts the attached content from a PKCS#7 signed data if existed. The input signed
+  data could be wrapped in a ContentInfo structure.
+
+  Return FALSE to indicate this interface is not supported.
+
+  @param[in]   P7Data       Pointer to the PKCS#7 signed data to process.
+  @param[in]   P7Length     Length of the PKCS#7 signed data in bytes.
+  @param[out]  Content      Pointer to the extracted content from the PKCS#7 signedData.
+                            It's caller's responsiblity to free the buffer.
+  @param[out]  ContentSize  The size of the extracted content in bytes.
+
+  @retval     TRUE          The P7Data was correctly formatted for processing.
+  @retval     FALSE         The P7Data was not correctly formatted for processing.
+
+**/
+BOOLEAN
+EFIAPI
+Pkcs7GetAttachedContent (
+  IN  CONST UINT8  *P7Data,
+  IN  UINTN        P7Length,
+  OUT VOID         **Content,
+  OUT UINTN        *ContentSize
   )
 {
   ASSERT (FALSE);

@@ -1,6 +1,7 @@
 ## @file
+# Provides driver and definitions to build fsp in EDKII bios.
 #
-# Copyright (c) 2014, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2014 - 2015, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials are licensed and made available under
 # the terms and conditions of the BSD License that accompanies this distribution.
 # The full text of the license may be found at
@@ -45,6 +46,7 @@
   FspCommonLib|IntelFspPkg/Library/BaseFspCommonLib/BaseFspCommonLib.inf
   FspPlatformLib|IntelFspPkg/Library/BaseFspPlatformLib/BaseFspPlatformLib.inf
   FspSwitchStackLib|IntelFspPkg/Library/BaseFspSwitchStackLib/BaseFspSwitchStackLib.inf
+  FspSecPlatformLib|IntelFspPkg/Library/SecFspSecPlatformLibNull/SecFspSecPlatformLibNull.inf
 
 [LibraryClasses.common.PEIM]
   PeimEntryPoint|MdePkg/Library/PeimEntryPoint/PeimEntryPoint.inf
@@ -63,10 +65,7 @@
   IntelFspPkg/Library/BaseFspPlatformLib/BaseFspPlatformLib.inf
   IntelFspPkg/Library/BaseFspSwitchStackLib/BaseFspSwitchStackLib.inf
 
-  IntelFspPkg/FspSecCore/FspSecCore.inf {
-    <LibraryClasses>
-    NULL|IntelFspPkg/Library/SecPlatformSecLibNull/SecPlatformSecLibNull.inf
-  }
+  IntelFspPkg/FspSecCore/FspSecCore.inf
   IntelFspPkg/FspDxeIpl/FspDxeIpl.inf
 
 [PcdsFixedAtBuild.common]

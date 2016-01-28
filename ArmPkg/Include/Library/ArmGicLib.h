@@ -1,6 +1,6 @@
 /** @file
 *
-*  Copyright (c) 2011-2014, ARM Limited. All rights reserved.
+*  Copyright (c) 2011-2015, ARM Limited. All rights reserved.
 *
 *  This program and the accompanying materials
 *  are licensed and made available under the terms and conditions of the BSD License
@@ -15,13 +15,7 @@
 #ifndef __ARMGIC_H
 #define __ARMGIC_H
 
-//
-// GIC definitions
-//
-typedef enum {
-  ARM_GIC_ARCH_REVISION_2,
-  ARM_GIC_ARCH_REVISION_3
-} ARM_GIC_ARCH_REVISION;
+#include <Library/ArmGicArchLib.h>
 
 //
 // GIC Distributor
@@ -30,7 +24,7 @@ typedef enum {
 #define ARM_GIC_ICDICTR         0x004 // Interrupt Controller Type Register
 #define ARM_GIC_ICDIIDR         0x008 // Implementer Identification Register
 
-// Each reg base below repeats for VE_NUM_ARM_GIC_REG_PER_INT_BITS (see GIC spec)
+// Each reg base below repeats for Number of interrupts / 4 (see GIC spec)
 #define ARM_GIC_ICDISR          0x080 // Interrupt Security Registers
 #define ARM_GIC_ICDISER         0x100 // Interrupt Set-Enable Registers
 #define ARM_GIC_ICDICER         0x180 // Interrupt Clear-Enable Registers
@@ -38,10 +32,10 @@ typedef enum {
 #define ARM_GIC_ICDICPR         0x280 // Interrupt Clear-Pending Registers
 #define ARM_GIC_ICDABR          0x300 // Active Bit Registers
 
-// Each reg base below repeats for VE_NUM_ARM_GIC_REG_PER_INT_BYTES
+// Each reg base below repeats for Number of interrupts / 4
 #define ARM_GIC_ICDIPR          0x400 // Interrupt Priority Registers
 
-// Each reg base below repeats for VE_NUM_ARM_GIC_INTERRUPTS
+// Each reg base below repeats for Number of interrupts
 #define ARM_GIC_ICDIPTR         0x800 // Interrupt Processor Target Registers
 #define ARM_GIC_ICDICFR         0xC00 // Interrupt Configuration Registers
 
@@ -49,6 +43,26 @@ typedef enum {
 
 // just one of these
 #define ARM_GIC_ICDSGIR         0xF00 // Software Generated Interrupt Register
+
+// GICv3 specific registers
+#define ARM_GICD_IROUTER        0x6100 // Interrupt Routing Registers
+
+// the Affinity Routing Enable (ARE) bit in GICD_CTLR
+#define ARM_GIC_ICDDCR_ARE      (1 << 4)
+
+//
+// GIC Redistributor
+//
+
+#define ARM_GICR_CTLR_FRAME_SIZE    SIZE_64KB
+#define ARM_GICR_SGI_PPI_FRAME_SIZE SIZE_64KB
+
+// GIC Redistributor Control frame
+#define ARM_GICR_TYPER          0x0008  // Redistributor Type Register
+
+// GIC SGI & PPI Redistributor frame
+#define ARM_GICR_ISENABLER      0x0100  // Interrupt Set-Enable Registers
+#define ARM_GICR_ICENABLER      0x0180  // Interrupt Clear-Enable Registers
 
 //
 // GIC Cpu interface
@@ -82,12 +96,6 @@ typedef enum {
 
 // Bit Mask for
 #define ARM_GIC_ICCIAR_ACKINTID                 0x3FF
-
-ARM_GIC_ARCH_REVISION
-EFIAPI
-ArmGicGetSupportedArchRevision (
-  VOID
-  );
 
 UINTN
 EFIAPI
@@ -191,6 +199,7 @@ VOID
 EFIAPI
 ArmGicEnableInterrupt (
   IN UINTN                  GicDistributorBase,
+  IN UINTN                  GicRedistributorBase,
   IN UINTN                  Source
   );
 
@@ -198,6 +207,7 @@ VOID
 EFIAPI
 ArmGicDisableInterrupt (
   IN UINTN                  GicDistributorBase,
+  IN UINTN                  GicRedistributorBase,
   IN UINTN                  Source
   );
 
@@ -205,7 +215,102 @@ BOOLEAN
 EFIAPI
 ArmGicIsInterruptEnabled (
   IN UINTN                  GicDistributorBase,
+  IN UINTN                  GicRedistributorBase,
   IN UINTN                  Source
+  );
+
+//
+// GIC revision 2 specific declarations
+//
+
+// Interrupts from 1020 to 1023 are considered as special interrupts (eg: spurious interrupts)
+#define ARM_GIC_IS_SPECIAL_INTERRUPTS(Interrupt) (((Interrupt) >= 1020) && ((Interrupt) <= 1023))
+
+VOID
+EFIAPI
+ArmGicV2SetupNonSecure (
+  IN  UINTN         MpId,
+  IN  INTN          GicDistributorBase,
+  IN  INTN          GicInterruptInterfaceBase
+  );
+
+VOID
+EFIAPI
+ArmGicV2EnableInterruptInterface (
+  IN  INTN          GicInterruptInterfaceBase
+  );
+
+VOID
+EFIAPI
+ArmGicV2DisableInterruptInterface (
+  IN  INTN          GicInterruptInterfaceBase
+  );
+
+UINTN
+EFIAPI
+ArmGicV2AcknowledgeInterrupt (
+  IN  UINTN          GicInterruptInterfaceBase
+  );
+
+VOID
+EFIAPI
+ArmGicV2EndOfInterrupt (
+  IN UINTN                  GicInterruptInterfaceBase,
+  IN UINTN                  Source
+  );
+
+//
+// GIC revision 3 specific declarations
+//
+
+#define ICC_SRE_EL2_SRE         (1 << 0)
+
+#define ARM_GICD_IROUTER_IRM BIT31
+
+UINT32
+EFIAPI
+ArmGicV3GetControlSystemRegisterEnable (
+  VOID
+  );
+
+VOID
+EFIAPI
+ArmGicV3SetControlSystemRegisterEnable (
+  IN UINT32         ControlSystemRegisterEnable
+  );
+
+VOID
+EFIAPI
+ArmGicV3EnableInterruptInterface (
+  VOID
+  );
+
+VOID
+EFIAPI
+ArmGicV3DisableInterruptInterface (
+  VOID
+  );
+
+UINTN
+EFIAPI
+ArmGicV3AcknowledgeInterrupt (
+  VOID
+  );
+
+VOID
+EFIAPI
+ArmGicV3EndOfInterrupt (
+  IN UINTN                  Source
+  );
+
+VOID
+ArmGicV3SetBinaryPointer (
+  IN UINTN                  BinaryPoint
+  );
+
+VOID
+ArmGicV3SetPriorityMask (
+  IN UINTN                  Priority
   );
 
 #endif

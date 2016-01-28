@@ -1,7 +1,6 @@
 /** @file
-
-  The sample implementation for SMM variable protocol. And this driver 
-  implements  an SMI handler to communicate with the DXE runtime driver 
+  The sample implementation for SMM variable protocol. And this driver
+  implements an SMI handler to communicate with the DXE runtime driver
   to provide variable services.
 
   Caution: This module requires additional review when modified.
@@ -11,45 +10,59 @@
 
   SmmVariableHandler() will receive untrusted input and do basic validation.
 
-  Each sub function VariableServiceGetVariable(), VariableServiceGetNextVariableName(), 
-  VariableServiceSetVariable(), VariableServiceQueryVariableInfo(), ReclaimForOS(), 
+  Each sub function VariableServiceGetVariable(), VariableServiceGetNextVariableName(),
+  VariableServiceSetVariable(), VariableServiceQueryVariableInfo(), ReclaimForOS(),
   SmmVariableGetStatistics() should also do validation based on its own knowledge.
 
 Copyright (c) 2010 - 2015, Intel Corporation. All rights reserved.<BR>
-This program and the accompanying materials 
-are licensed and made available under the terms and conditions of the BSD License 
-which accompanies this distribution.  The full text of the license may be found at 
+This program and the accompanying materials
+are licensed and made available under the terms and conditions of the BSD License
+which accompanies this distribution.  The full text of the license may be found at
 http://opensource.org/licenses/bsd-license.php
 
-THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,                     
-WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.  
+THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 **/
+
 #include <Protocol/SmmVariable.h>
 #include <Protocol/SmmFirmwareVolumeBlock.h>
 #include <Protocol/SmmFaultTolerantWrite.h>
-#include <Protocol/SmmAccess2.h>
 #include <Protocol/SmmEndOfDxe.h>
 #include <Protocol/SmmVarCheck.h>
 
 #include <Library/SmmServicesTableLib.h>
+#include <Library/SmmMemLib.h>
 
-#include <Guid/VariableFormat.h>
 #include <Guid/SmmVariableCommon.h>
+#include <Guid/ZeroGuid.h>
 #include "Variable.h"
-
-EFI_SMRAM_DESCRIPTOR                                 *mSmramRanges;
-UINTN                                                mSmramRangeCount;
 
 extern VARIABLE_INFO_ENTRY                           *gVariableInfo;
 EFI_HANDLE                                           mSmmVariableHandle      = NULL;
 EFI_HANDLE                                           mVariableHandle         = NULL;
 BOOLEAN                                              mAtRuntime              = FALSE;
-EFI_GUID                                             mZeroGuid               = {0, 0, 0, {0, 0, 0, 0, 0, 0, 0, 0}};
 UINT8                                                *mVariableBufferPayload = NULL;
 UINTN                                                mVariableBufferPayloadSize;
 extern BOOLEAN                                       mEndOfDxe;
-extern BOOLEAN                                       mEnableLocking;
+extern VAR_CHECK_REQUEST_SOURCE                      mRequestSource;
+
+/**
+  SecureBoot Hook for SetVariable.
+
+  @param[in] VariableName                 Name of Variable to be found.
+  @param[in] VendorGuid                   Variable vendor GUID.
+
+**/
+VOID
+EFIAPI
+SecureBootHook (
+  IN CHAR16                                 *VariableName,
+  IN EFI_GUID                               *VendorGuid
+  )
+{
+  return ;
+}
 
 /**
 
@@ -84,7 +97,7 @@ SmmVariableSetVariable (
   //
   // Disable write protection when the calling SetVariable() through EFI_SMM_VARIABLE_PROTOCOL.
   //
-  mEnableLocking = FALSE;
+  mRequestSource = VarCheckFromTrusted;
   Status         = VariableServiceSetVariable (
                      VariableName,
                      VendorGuid,
@@ -92,7 +105,7 @@ SmmVariableSetVariable (
                      DataSize,
                      Data
                      );
-  mEnableLocking = TRUE;
+  mRequestSource = VarCheckFromUntrusted;
   return Status;
 }
 
@@ -109,7 +122,7 @@ EDKII_SMM_VAR_CHECK_PROTOCOL mSmmVarCheck = { VarCheckRegisterSetVariableCheckHa
 
 /**
   Return TRUE if ExitBootServices () has been called.
-  
+
   @retval TRUE If ExitBootServices () has been called.
 **/
 BOOLEAN
@@ -121,64 +134,10 @@ AtRuntime (
 }
 
 /**
-  This function check if the address is in SMRAM.
-
-  @param Buffer  the buffer address to be checked.
-  @param Length  the buffer length to be checked.
-
-  @retval TRUE  this address is in SMRAM.
-  @retval FALSE this address is NOT in SMRAM.
-**/
-BOOLEAN
-InternalIsAddressInSmram (
-  IN EFI_PHYSICAL_ADDRESS  Buffer,
-  IN UINT64                Length
-  )
-{
-  UINTN  Index;
-
-  for (Index = 0; Index < mSmramRangeCount; Index ++) {
-    if (((Buffer >= mSmramRanges[Index].CpuStart) && (Buffer < mSmramRanges[Index].CpuStart + mSmramRanges[Index].PhysicalSize)) ||
-        ((mSmramRanges[Index].CpuStart >= Buffer) && (mSmramRanges[Index].CpuStart < Buffer + Length))) {
-      return TRUE;
-    }
-  }
-
-  return FALSE;
-}
-
-/**
-  This function check if the address refered by Buffer and Length is valid.
-
-  @param Buffer  the buffer address to be checked.
-  @param Length  the buffer length to be checked.
-
-  @retval TRUE  this address is valid.
-  @retval FALSE this address is NOT valid.
-**/
-BOOLEAN
-InternalIsAddressValid (
-  IN UINTN                 Buffer,
-  IN UINTN                 Length
-  )
-{
-  if (Buffer > (MAX_ADDRESS - Length)) {
-    //
-    // Overflow happen
-    //
-    return FALSE;
-  }
-  if (InternalIsAddressInSmram ((EFI_PHYSICAL_ADDRESS)Buffer, (UINT64)Length)) {
-    return FALSE;
-  }
-  return TRUE;
-}
-
-/**
   Initializes a basic mutual exclusion lock.
 
-  This function initializes a basic mutual exclusion lock to the released state 
-  and returns the lock.  Each lock provides mutual exclusion access at its task 
+  This function initializes a basic mutual exclusion lock to the released state
+  and returns the lock.  Each lock provides mutual exclusion access at its task
   priority level.  Since there is no preemption or multiprocessor support in EFI,
   acquiring the lock only consists of raising to the locks TPL.
   If Lock is NULL, then ASSERT().
@@ -261,8 +220,8 @@ GetFtwProtocol (
   // Locate Smm Fault Tolerent Write protocol
   //
   Status = gSmst->SmmLocateProtocol (
-                    &gEfiSmmFaultTolerantWriteProtocolGuid, 
-                    NULL, 
+                    &gEfiSmmFaultTolerantWriteProtocolGuid,
+                    NULL,
                     FtwProtocol
                     );
   return Status;
@@ -300,7 +259,7 @@ GetFvbByHandle (
 
 /**
   Function returns an array of handles that support the SMM FVB protocol
-  in a buffer allocated from pool. 
+  in a buffer allocated from pool.
 
   @param[out]  NumberHandles    The number of handles returned in Buffer.
   @param[out]  Buffer           A pointer to the buffer to return the requested
@@ -371,16 +330,17 @@ GetFvbCountAndBuffer (
   InfoEntry and InfoSize are external input. Care must be taken to make sure not security issue at runtime.
 
   @param[in, out]  InfoEntry    A pointer to the buffer of variable information entry.
-                                On input, point to the variable information returned last time. if 
+                                On input, point to the variable information returned last time. if
                                 InfoEntry->VendorGuid is zero, return the first information.
                                 On output, point to the next variable information.
   @param[in, out]  InfoSize     On input, the size of the variable information buffer.
                                 On output, the returned variable information size.
 
-  @retval EFI_SUCCESS          The variable information is found and returned successfully.
-  @retval EFI_UNSUPPORTED      No variable inoformation exists in variable driver. The 
-                               PcdVariableCollectStatistics should be set TRUE to support it.
-  @retval EFI_BUFFER_TOO_SMALL The buffer is too small to hold the next variable information.
+  @retval EFI_SUCCESS           The variable information is found and returned successfully.
+  @retval EFI_UNSUPPORTED       No variable inoformation exists in variable driver. The
+                                PcdVariableCollectStatistics should be set TRUE to support it.
+  @retval EFI_BUFFER_TOO_SMALL  The buffer is too small to hold the next variable information.
+  @retval EFI_INVALID_PARAMETER Input parameter is invalid.
 
 **/
 EFI_STATUS
@@ -395,8 +355,11 @@ SmmVariableGetStatistics (
   CHAR16                                               *InfoName;
   EFI_GUID                                             VendorGuid;
 
-  ASSERT (InfoEntry != NULL);
-  VariableInfo = gVariableInfo; 
+  if (InfoEntry == NULL) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  VariableInfo = gVariableInfo;
   if (VariableInfo == NULL) {
     return EFI_UNSUPPORTED;
   }
@@ -410,7 +373,7 @@ SmmVariableGetStatistics (
 
   CopyGuid (&VendorGuid, &InfoEntry->VendorGuid);
 
-  if (CompareGuid (&VendorGuid, &mZeroGuid)) {
+  if (CompareGuid (&VendorGuid, &gZeroGuid)) {
     //
     // Return the first variable info
     //
@@ -438,7 +401,7 @@ SmmVariableGetStatistics (
     }
     VariableInfo = VariableInfo->Next;
   };
-    
+
   if (VariableInfo == NULL) {
     *InfoSize = 0;
     return EFI_SUCCESS;
@@ -456,7 +419,7 @@ SmmVariableGetStatistics (
   CopyMem (InfoEntry, VariableInfo, sizeof (VARIABLE_INFO_ENTRY));
   CopyMem (InfoName, VariableInfo->Name, StrSize (VariableInfo->Name));
   *InfoSize = StatisticsInfoSize;
-  
+
   return EFI_SUCCESS;
 }
 
@@ -468,8 +431,8 @@ SmmVariableGetStatistics (
 
   Caution: This function may receive untrusted input.
   This variable data and communicate buffer are external input, so this function will do basic validation.
-  Each sub function VariableServiceGetVariable(), VariableServiceGetNextVariableName(), 
-  VariableServiceSetVariable(), VariableServiceQueryVariableInfo(), ReclaimForOS(), 
+  Each sub function VariableServiceGetVariable(), VariableServiceGetNextVariableName(),
+  VariableServiceSetVariable(), VariableServiceQueryVariableInfo(), ReclaimForOS(),
   SmmVariableGetStatistics() should also do validation based on its own knowledge.
 
   @param[in]     DispatchHandle  The unique handle assigned to this handler by SmiHandlerRegister().
@@ -479,11 +442,11 @@ SmmVariableGetStatistics (
                                  be conveyed from a non-SMM environment into an SMM environment.
   @param[in, out] CommBufferSize The size of the CommBuffer.
 
-  @retval EFI_SUCCESS                         The interrupt was handled and quiesced. No other handlers 
+  @retval EFI_SUCCESS                         The interrupt was handled and quiesced. No other handlers
                                               should still be called.
-  @retval EFI_WARN_INTERRUPT_SOURCE_QUIESCED  The interrupt has been quiesced but other handlers should 
+  @retval EFI_WARN_INTERRUPT_SOURCE_QUIESCED  The interrupt has been quiesced but other handlers should
                                               still be called.
-  @retval EFI_WARN_INTERRUPT_SOURCE_PENDING   The interrupt is still pending and other handlers should still 
+  @retval EFI_WARN_INTERRUPT_SOURCE_PENDING   The interrupt is still pending and other handlers should still
                                               be called.
   @retval EFI_INTERRUPT_PENDING               The interrupt could not be quiesced.
 **/
@@ -501,6 +464,7 @@ SmmVariableHandler (
   SMM_VARIABLE_COMMUNICATE_ACCESS_VARIABLE         *SmmVariableHeader;
   SMM_VARIABLE_COMMUNICATE_GET_NEXT_VARIABLE_NAME  *GetNextVariableName;
   SMM_VARIABLE_COMMUNICATE_QUERY_VARIABLE_INFO     *QueryVariableInfo;
+  SMM_VARIABLE_COMMUNICATE_GET_PAYLOAD_SIZE        *GetPayloadSize;
   VARIABLE_INFO_ENTRY                              *VariableInfo;
   SMM_VARIABLE_COMMUNICATE_LOCK_VARIABLE           *VariableToLock;
   SMM_VARIABLE_COMMUNICATE_VAR_CHECK_VARIABLE_PROPERTY *CommVariableProperty;
@@ -528,7 +492,7 @@ SmmVariableHandler (
     return EFI_SUCCESS;
   }
 
-  if (!InternalIsAddressValid ((UINTN)CommBuffer, TempCommBufferSize)) {
+  if (!SmmIsBufferOutsideSmmValid ((UINTN)CommBuffer, TempCommBufferSize)) {
     DEBUG ((EFI_D_ERROR, "SmmVariableHandler: SMM communication buffer in SMRAM or overflow!\n"));
     return EFI_SUCCESS;
   }
@@ -553,7 +517,7 @@ SmmVariableHandler (
         Status = EFI_ACCESS_DENIED;
         goto EXIT;
       }
-      InfoSize = OFFSET_OF(SMM_VARIABLE_COMMUNICATE_ACCESS_VARIABLE, Name) 
+      InfoSize = OFFSET_OF(SMM_VARIABLE_COMMUNICATE_ACCESS_VARIABLE, Name)
                  + SmmVariableHeader->DataSize + SmmVariableHeader->NameSize;
 
       //
@@ -582,7 +546,7 @@ SmmVariableHandler (
                  );
       CopyMem (SmmVariableFunctionHeader->Data, mVariableBufferPayload, CommBufferPayloadSize);
       break;
-      
+
     case SMM_VARIABLE_FUNCTION_GET_NEXT_VARIABLE_NAME:
       if (CommBufferPayloadSize < OFFSET_OF(SMM_VARIABLE_COMMUNICATE_GET_NEXT_VARIABLE_NAME, Name)) {
         DEBUG ((EFI_D_ERROR, "GetNextVariableName: SMM communication buffer size invalid!\n"));
@@ -627,7 +591,7 @@ SmmVariableHandler (
                  );
       CopyMem (SmmVariableFunctionHeader->Data, mVariableBufferPayload, CommBufferPayloadSize);
       break;
-      
+
     case SMM_VARIABLE_FUNCTION_SET_VARIABLE:
       if (CommBufferPayloadSize < OFFSET_OF(SMM_VARIABLE_COMMUNICATE_ACCESS_VARIABLE, Name)) {
         DEBUG ((EFI_D_ERROR, "SetVariable: SMM communication buffer size invalid!\n"));
@@ -675,7 +639,7 @@ SmmVariableHandler (
                  (UINT8 *)SmmVariableHeader->Name + SmmVariableHeader->NameSize
                  );
       break;
-      
+
     case SMM_VARIABLE_FUNCTION_QUERY_VARIABLE_INFO:
       if (CommBufferPayloadSize < sizeof (SMM_VARIABLE_COMMUNICATE_QUERY_VARIABLE_INFO)) {
         DEBUG ((EFI_D_ERROR, "QueryVariableInfo: SMM communication buffer size invalid!\n"));
@@ -691,16 +655,33 @@ SmmVariableHandler (
                  );
       break;
 
+    case SMM_VARIABLE_FUNCTION_GET_PAYLOAD_SIZE:
+      if (CommBufferPayloadSize < sizeof (SMM_VARIABLE_COMMUNICATE_GET_PAYLOAD_SIZE)) {
+        DEBUG ((EFI_D_ERROR, "GetPayloadSize: SMM communication buffer size invalid!\n"));
+        return EFI_SUCCESS;
+      }
+      GetPayloadSize = (SMM_VARIABLE_COMMUNICATE_GET_PAYLOAD_SIZE *) SmmVariableFunctionHeader->Data;
+      GetPayloadSize->VariablePayloadSize = mVariableBufferPayloadSize;
+      Status = EFI_SUCCESS;
+      break;
+
     case SMM_VARIABLE_FUNCTION_READY_TO_BOOT:
-      mEndOfDxe = TRUE;
       if (AtRuntime()) {
         Status = EFI_UNSUPPORTED;
         break;
       }
+      if (!mEndOfDxe) {
+        mEndOfDxe = TRUE;
+        VarCheckLibInitializeAtEndOfDxe (NULL);
+        //
+        // The initialization for variable quota.
+        //
+        InitializeVariableQuota ();
+      }
       ReclaimForOS ();
       Status = EFI_SUCCESS;
       break;
-  
+
     case SMM_VARIABLE_FUNCTION_EXIT_BOOT_SERVICE:
       mAtRuntime = TRUE;
       Status = EFI_SUCCESS;
@@ -711,15 +692,15 @@ SmmVariableHandler (
       InfoSize = TempCommBufferSize - SMM_VARIABLE_COMMUNICATE_HEADER_SIZE;
 
       //
-      // Do not need to check SmmVariableFunctionHeader->Data in SMRAM here. 
-      // It is covered by previous CommBuffer check 
+      // Do not need to check SmmVariableFunctionHeader->Data in SMRAM here.
+      // It is covered by previous CommBuffer check
       //
-     
-      if (InternalIsAddressInSmram ((EFI_PHYSICAL_ADDRESS)(UINTN)CommBufferSize, sizeof(UINTN))) {
+
+      if (!SmmIsBufferOutsideSmmValid ((EFI_PHYSICAL_ADDRESS)(UINTN)CommBufferSize, sizeof(UINTN))) {
         DEBUG ((EFI_D_ERROR, "GetStatistics: SMM communication buffer in SMRAM!\n"));
         Status = EFI_ACCESS_DENIED;
         goto EXIT;
-      }  
+      }
 
       Status = SmmVariableGetStatistics (VariableInfo, &InfoSize);
       *CommBufferSize = InfoSize + SMM_VARIABLE_COMMUNICATE_HEADER_SIZE;
@@ -822,24 +803,33 @@ SmmEndOfDxeCallback (
   IN EFI_HANDLE                           Handle
   )
 {
-  DEBUG ((EFI_D_INFO, "[Variable]END_OF_DXE is signaled\n"));
+  DEBUG ((EFI_D_INFO, "[Variable]SMM_END_OF_DXE is signaled\n"));
   mEndOfDxe = TRUE;
+  VarCheckLibInitializeAtEndOfDxe (NULL);
+  //
+  // The initialization for variable quota.
+  //
+  InitializeVariableQuota ();
+  if (PcdGetBool (PcdReclaimVariableSpaceAtEndOfDxe)) {
+    ReclaimForOS ();
+  }
+
   return EFI_SUCCESS;
 }
 
 /**
   SMM Fault Tolerant Write protocol notification event handler.
 
-  Non-Volatile variable write may needs FTW protocol to reclaim when 
+  Non-Volatile variable write may needs FTW protocol to reclaim when
   writting variable.
-  
+
   @param  Protocol   Points to the protocol's unique identifier
   @param  Interface  Points to the interface instance
   @param  Handle     The handle on which the interface was installed
 
   @retval EFI_SUCCESS   SmmEventCallback runs successfully
   @retval EFI_NOT_FOUND The Fvb protocol for variable is not found.
-  
+
  **/
 EFI_STATUS
 EFIAPI
@@ -854,7 +844,7 @@ SmmFtwNotificationEvent (
   EFI_SMM_FAULT_TOLERANT_WRITE_PROTOCOL   *FtwProtocol;
   EFI_PHYSICAL_ADDRESS                    NvStorageVariableBase;
   UINTN                                   FtwMaxBlockSize;
-  
+
   if (mVariableModuleGlobal->FvbInstance != NULL) {
     return EFI_SUCCESS;
   }
@@ -885,10 +875,12 @@ SmmFtwNotificationEvent (
   }
 
   mVariableModuleGlobal->FvbInstance = FvbProtocol;
-  
+
   Status = VariableWriteServiceInitialize ();
-  ASSERT_EFI_ERROR (Status);
- 
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "Variable write service initialization failed. Status = %r\n", Status));
+  }
+
   //
   // Notify the variable wrapper driver the variable write service is ready
   //
@@ -899,20 +891,20 @@ SmmFtwNotificationEvent (
                   NULL
                   );
   ASSERT_EFI_ERROR (Status);
-  
+
   return EFI_SUCCESS;
 }
 
 
 /**
   Variable Driver main entry point. The Variable driver places the 4 EFI
-  runtime services in the EFI System Table and installs arch protocols 
+  runtime services in the EFI System Table and installs arch protocols
   for variable read and write services being available. It also registers
   a notification function for an EVT_SIGNAL_VIRTUAL_ADDRESS_CHANGE event.
 
-  @param[in] ImageHandle    The firmware allocated handle for the EFI image.  
+  @param[in] ImageHandle    The firmware allocated handle for the EFI image.
   @param[in] SystemTable    A pointer to the EFI System Table.
-  
+
   @retval EFI_SUCCESS       Variable service successfully initialized.
 
 **/
@@ -926,8 +918,6 @@ VariableServiceInitialize (
   EFI_STATUS                              Status;
   EFI_HANDLE                              VariableHandle;
   VOID                                    *SmmFtwRegistration;
-  EFI_SMM_ACCESS2_PROTOCOL                *SmmAccess;
-  UINTN                                   Size;
   VOID                                    *SmmEndOfDxeRegistration;
 
   //
@@ -956,30 +946,8 @@ VariableServiceInitialize (
                     );
   ASSERT_EFI_ERROR (Status);
 
-  //
-  // Get SMRAM information
-  //
-  Status = gBS->LocateProtocol (&gEfiSmmAccess2ProtocolGuid, NULL, (VOID **)&SmmAccess);
-  ASSERT_EFI_ERROR (Status);
-
-  Size = 0;
-  Status = SmmAccess->GetCapabilities (SmmAccess, &Size, NULL);
-  ASSERT (Status == EFI_BUFFER_TOO_SMALL);
-
-  Status = gSmst->SmmAllocatePool (
-                    EfiRuntimeServicesData,
-                    Size,
-                    (VOID **)&mSmramRanges
-                    );
-  ASSERT_EFI_ERROR (Status);
-
-  Status = SmmAccess->GetCapabilities (SmmAccess, &Size, mSmramRanges);
-  ASSERT_EFI_ERROR (Status);
-
-  mSmramRangeCount = Size / sizeof (EFI_SMRAM_DESCRIPTOR);
-
-  mVariableBufferPayloadSize = MAX (PcdGet32 (PcdMaxVariableSize), PcdGet32 (PcdMaxHardwareErrorVariableSize)) +
-                               OFFSET_OF (SMM_VARIABLE_COMMUNICATE_VAR_CHECK_VARIABLE_PROPERTY, Name) - sizeof (VARIABLE_HEADER);
+  mVariableBufferPayloadSize = GetNonVolatileMaxVariableSize () +
+                               OFFSET_OF (SMM_VARIABLE_COMMUNICATE_VAR_CHECK_VARIABLE_PROPERTY, Name) - GetVariableHeaderSize ();
 
   Status = gSmst->SmmAllocatePool (
                     EfiRuntimeServicesData,
@@ -994,7 +962,7 @@ VariableServiceInitialize (
   VariableHandle = NULL;
   Status = gSmst->SmiHandlerRegister (SmmVariableHandler, &gEfiSmmVariableProtocolGuid, &VariableHandle);
   ASSERT_EFI_ERROR (Status);
-  
+
   //
   // Notify the variable wrapper driver the variable service is ready
   //
@@ -1005,7 +973,7 @@ VariableServiceInitialize (
                                         &gSmmVariable
                                         );
   ASSERT_EFI_ERROR (Status);
- 
+
   //
   // Register EFI_SMM_END_OF_DXE_PROTOCOL_GUID notify function.
   //
@@ -1018,7 +986,7 @@ VariableServiceInitialize (
 
   //
   // Register FtwNotificationEvent () notify function.
-  // 
+  //
   Status = gSmst->SmmRegisterProtocolNotify (
                     &gEfiSmmFaultTolerantWriteProtocolGuid,
                     SmmFtwNotificationEvent,
@@ -1027,7 +995,7 @@ VariableServiceInitialize (
   ASSERT_EFI_ERROR (Status);
 
   SmmFtwNotificationEvent (NULL, NULL, NULL);
-  
+
   return EFI_SUCCESS;
 }
 

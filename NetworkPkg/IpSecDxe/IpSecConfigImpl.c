@@ -1,7 +1,7 @@
 /** @file
   The implementation of IPSEC_CONFIG_PROTOCOL.
 
-  Copyright (c) 2009 - 2011, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2015, Intel Corporation. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -1167,9 +1167,10 @@ SetSpdEntry (
     SpdData->Name,
     sizeof (SpdData->Name)
     );
-  SpdEntry->Data->PackageFlag = SpdData->PackageFlag;
-  SpdEntry->Data->Action      = SpdData->Action;
-
+  SpdEntry->Data->PackageFlag      = SpdData->PackageFlag;
+  SpdEntry->Data->TrafficDirection = SpdData->TrafficDirection;
+  SpdEntry->Data->Action           = SpdData->Action;
+  
   //
   // Fix the address of ProcessingPolicy and copy it if need, which is continous
   // memory and close to the base structure of SAD data.
@@ -1199,13 +1200,11 @@ SetSpdEntry (
             (EFI_IPSEC_CONFIG_SELECTOR *) &SpdData->SaId[Index],
             (EFI_IPSEC_CONFIG_SELECTOR *) SadEntry->Id
             )) {
+        if (SadEntry->Data->SpdEntry != NULL) {  
+          RemoveEntryList (&SadEntry->BySpd);
+        }
         InsertTailList (&SpdEntry->Data->Sas, &SadEntry->BySpd);
-        SadEntry->Data->SpdEntry = SpdEntry;
-        DuplicateSpdSelector (
-          (EFI_IPSEC_CONFIG_SELECTOR *)SadEntry->Data->SpdSelector,
-          (EFI_IPSEC_CONFIG_SELECTOR *)SpdEntry->Selector,
-          NULL
-          );             
+        SadEntry->Data->SpdEntry = SpdEntry;             
       }
     }
   }
@@ -1687,9 +1686,10 @@ GetSpdEntry (
       //
       CopyMem (SpdData->Name, SpdEntry->Data->Name, sizeof (SpdData->Name));
 
-      SpdData->PackageFlag  = SpdEntry->Data->PackageFlag;
-      SpdData->Action       = SpdEntry->Data->Action;
-
+      SpdData->PackageFlag      = SpdEntry->Data->PackageFlag;
+      SpdData->TrafficDirection = SpdEntry->Data->TrafficDirection;
+      SpdData->Action           = SpdEntry->Data->Action;
+      
       if (SpdData->Action != EfiIPsecActionProtect) {
         SpdData->ProcessingPolicy = NULL;
       } else {

@@ -1,7 +1,8 @@
 /** @file
   TIS (TPM Interface Specification) functions used by TPM1.2.
   
-Copyright (c) 2013, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2013 - 2015, Intel Corporation. All rights reserved.<BR>
+(C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials 
 are licensed and made available under the terms and conditions of the BSD License 
 which accompanies this distribution.  The full text of the license may be found at 
@@ -217,7 +218,6 @@ Tpm12TisPcPresenceCheck (
   @retval     EFI_TIMEOUT  The register can't run into the expected status in time.
 **/
 EFI_STATUS
-EFIAPI
 Tpm12TisPcWaitRegisterBits (
   IN      UINT8                     *Register,
   IN      UINT8                     BitSet,
@@ -249,7 +249,6 @@ Tpm12TisPcWaitRegisterBits (
   @retval     EFI_TIMEOUT           BurstCount can't be got in time.
 **/
 EFI_STATUS
-EFIAPI
 Tpm12TisPcReadBurstCount (
   IN      TIS_PC_REGISTERS_PTR      TisReg,
      OUT  UINT16                    *BurstCount
@@ -293,7 +292,6 @@ Tpm12TisPcReadBurstCount (
   @retval    EFI_TIMEOUT           TPM chip can't be set to ready state in time.
 **/
 EFI_STATUS
-EFIAPI
 Tpm12TisPcPrepareCommand (
   IN      TIS_PC_REGISTERS_PTR      TisReg
   )
@@ -326,7 +324,6 @@ Tpm12TisPcPrepareCommand (
   @retval    EFI_TIMEOUT           Can't get the TPM control in time.
 **/
 EFI_STATUS
-EFIAPI
 Tpm12TisPcRequestUseTpm (
   IN      TIS_PC_REGISTERS_PTR      TisReg
   )
@@ -361,7 +358,6 @@ Tpm12TisPcRequestUseTpm (
   @param[in, out] SizeOut       Size of response data.  
  
   @retval EFI_SUCCESS           Operation completed successfully.
-  @retval EFI_TIMEOUT           The register can't run into the expected status in time.
   @retval EFI_BUFFER_TOO_SMALL  Response data buffer is too small.
   @retval EFI_DEVICE_ERROR      Unexpected device behavior.
   @retval EFI_UNSUPPORTED       Unsupported TPM version
@@ -386,29 +382,29 @@ Tpm12TisTpmCommand (
   DEBUG_CODE (
     UINTN  DebugSize;
 
-    DEBUG ((EFI_D_INFO, "Tpm12TisTpmCommand Send - "));
+    DEBUG ((EFI_D_VERBOSE, "Tpm12TisTpmCommand Send - "));
     if (SizeIn > 0x100) {
       DebugSize = 0x40;
     } else {
       DebugSize = SizeIn;
     }
     for (Index = 0; Index < DebugSize; Index++) {
-      DEBUG ((EFI_D_INFO, "%02x ", BufferIn[Index]));
+      DEBUG ((EFI_D_VERBOSE, "%02x ", BufferIn[Index]));
     }
     if (DebugSize != SizeIn) {
-      DEBUG ((EFI_D_INFO, "...... "));
+      DEBUG ((EFI_D_VERBOSE, "...... "));
       for (Index = SizeIn - 0x20; Index < SizeIn; Index++) {
-        DEBUG ((EFI_D_INFO, "%02x ", BufferIn[Index]));
+        DEBUG ((EFI_D_VERBOSE, "%02x ", BufferIn[Index]));
       }
     }
-    DEBUG ((EFI_D_INFO, "\n"));
+    DEBUG ((EFI_D_VERBOSE, "\n"));
   );
   TpmOutSize = 0;
 
   Status = Tpm12TisPcPrepareCommand (TisReg);
   if (EFI_ERROR (Status)){
     DEBUG ((DEBUG_ERROR, "Tpm12 is not ready for command!\n"));
-    return Status;
+    return EFI_DEVICE_ERROR;
   }
   //
   // Send the command data to Tpm
@@ -417,7 +413,7 @@ Tpm12TisTpmCommand (
   while (Index < SizeIn) {
     Status = Tpm12TisPcReadBurstCount (TisReg, &BurstCount);
     if (EFI_ERROR (Status)) {
-      Status = EFI_TIMEOUT;
+      Status = EFI_DEVICE_ERROR;
       goto Exit;
     }
     for (; BurstCount > 0 && Index < SizeIn; BurstCount--) {
@@ -451,7 +447,7 @@ Tpm12TisTpmCommand (
              );
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "Wait for Tpm12 response data time out!!\n"));
-    Status = EFI_TIMEOUT;
+    Status = EFI_DEVICE_ERROR;
     goto Exit;
   }
   //
@@ -462,7 +458,7 @@ Tpm12TisTpmCommand (
   while (Index < sizeof (TPM_RSP_COMMAND_HDR)) {
     Status = Tpm12TisPcReadBurstCount (TisReg, &BurstCount);
     if (EFI_ERROR (Status)) {
-      Status = EFI_TIMEOUT;
+      Status = EFI_DEVICE_ERROR;
       goto Exit;
     }
     for (; BurstCount > 0; BurstCount--) {
@@ -472,11 +468,11 @@ Tpm12TisTpmCommand (
     }
   }
   DEBUG_CODE (
-    DEBUG ((EFI_D_INFO, "Tpm12TisTpmCommand ReceiveHeader - "));
+    DEBUG ((EFI_D_VERBOSE, "Tpm12TisTpmCommand ReceiveHeader - "));
     for (Index = 0; Index < sizeof (TPM_RSP_COMMAND_HDR); Index++) {
-      DEBUG ((EFI_D_INFO, "%02x ", BufferOut[Index]));
+      DEBUG ((EFI_D_VERBOSE, "%02x ", BufferOut[Index]));
     }
-    DEBUG ((EFI_D_INFO, "\n"));
+    DEBUG ((EFI_D_VERBOSE, "\n"));
   );
   //
   // Check the reponse data header (tag,parasize and returncode )
@@ -509,17 +505,17 @@ Tpm12TisTpmCommand (
     }
     Status = Tpm12TisPcReadBurstCount (TisReg, &BurstCount);
     if (EFI_ERROR (Status)) {
-      Status = EFI_TIMEOUT;
+      Status = EFI_DEVICE_ERROR;
       goto Exit;
     }
   }
 Exit:
   DEBUG_CODE (
-    DEBUG ((EFI_D_INFO, "Tpm12TisTpmCommand Receive - "));
+    DEBUG ((EFI_D_VERBOSE, "Tpm12TisTpmCommand Receive - "));
     for (Index = 0; Index < TpmOutSize; Index++) {
-      DEBUG ((EFI_D_INFO, "%02x ", BufferOut[Index]));
+      DEBUG ((EFI_D_VERBOSE, "%02x ", BufferOut[Index]));
     }
-    DEBUG ((EFI_D_INFO, "\n"));
+    DEBUG ((EFI_D_VERBOSE, "\n"));
   );
   MmioWrite8((UINTN)&TisReg->Status, TIS_PC_STS_READY);
   return Status;

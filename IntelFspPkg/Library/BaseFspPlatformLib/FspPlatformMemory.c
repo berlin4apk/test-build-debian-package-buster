@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2014 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -14,6 +14,7 @@
 #include <PiPei.h>
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
+#include <Library/MemoryAllocationLib.h>
 #include <Library/DebugLib.h>
 #include <Library/PcdLib.h>
 #include <Library/HobLib.h>
@@ -67,7 +68,7 @@ FspGetSystemMemorySize (
 }
 
 /**
-  Migrate bootloader data before destroying CAR.
+  Migrate BootLoader data before destroying CAR.
 
 **/
 VOID
@@ -76,20 +77,25 @@ FspMigrateTemporaryMemory (
   VOID
  )
 {
-  FSP_INIT_RT_COMMON_BUFFER  *FspInitRtBuffer;
-  UINT32             BootLoaderTempRamStart;
-  UINT32             BootLoaderTempRamEnd;
-  UINT32             BootLoaderTempRamSize;
-  UINT32             OffsetGap;
-  UINT32             FspParamPtr;
-  FSP_INIT_PARAMS   *FspInitParams;
-  UINT32            *NewStackTop;
-  VOID              *BootLoaderTempRamHob;
-  VOID              *UpdDataRgnPtr;
-  VOID              *PlatformDataPtr;
+  FSP_INIT_RT_COMMON_BUFFER *FspInitRtBuffer;
+  UINT32                    BootLoaderTempRamStart;
+  UINT32                    BootLoaderTempRamEnd;
+  UINT32                    BootLoaderTempRamSize;
+  UINT32                    OffsetGap;
+  UINT32                    FspParamPtr;
+  FSP_INIT_PARAMS           *FspInitParams;
+  UINT32                    *NewStackTop;
+  VOID                      *BootLoaderTempRamHob;
+  UINT32                    UpdDataRgnPtr;
+  UINT32                    MemoryInitUpdPtr;
+  UINT32                    SiliconInitUpdPtr;
+  VOID                      *PlatformDataPtr;
+  UINT8                      ApiMode;
+    
+  ApiMode = GetFspApiCallingMode ();
 
   //
-  // Get the temporary memory range used by the bootloader
+  // Get the temporary memory range used by the BootLoader
   //
   BootLoaderTempRamStart = PcdGet32(PcdTemporaryRamBase);
   BootLoaderTempRamSize  = PcdGet32(PcdTemporaryRamSize) - PcdGet32(PcdFspTemporaryRamSize);
@@ -98,17 +104,25 @@ FspMigrateTemporaryMemory (
   //
   // Build a Boot Loader Temporary Memory GUID HOB
   //
-  BootLoaderTempRamHob = BuildGuidHob (&gFspBootLoaderTemporaryMemoryGuid, BootLoaderTempRamSize);
+  if (ApiMode == 0) {
+    BootLoaderTempRamHob = BuildGuidHob (&gFspBootLoaderTemporaryMemoryGuid, BootLoaderTempRamSize);
+  } else {
+    BootLoaderTempRamHob = (VOID *)AllocatePages (EFI_SIZE_TO_PAGES (BootLoaderTempRamSize));
+  }
+  ASSERT(BootLoaderTempRamHob != NULL);
+
   CopyMem (BootLoaderTempRamHob, (VOID *)BootLoaderTempRamStart, BootLoaderTempRamSize);
   OffsetGap = (UINT32)BootLoaderTempRamHob - BootLoaderTempRamStart;
 
   //
   // Set a new stack frame for the continuation function
   //
-  FspInitParams   = (FSP_INIT_PARAMS *)GetFspApiParameter ();
-  FspInitRtBuffer = (FSP_INIT_RT_COMMON_BUFFER *)FspInitParams->RtBufferPtr;
-  NewStackTop     = (UINT32 *)FspInitRtBuffer->StackTop - 1;
-  SetFspCoreStackPointer (NewStackTop);
+  if (ApiMode == 0) {
+    FspInitParams   = (FSP_INIT_PARAMS *)GetFspApiParameter ();
+    FspInitRtBuffer = (FSP_INIT_RT_COMMON_BUFFER *)FspInitParams->RtBufferPtr;
+    NewStackTop     = (UINT32 *)FspInitRtBuffer->StackTop - 1;
+    SetFspCoreStackPointer (NewStackTop);
+  }
 
   //
   // Fix the FspInit Parameter Pointers to the new location.
@@ -138,9 +152,20 @@ FspMigrateTemporaryMemory (
   //
   // Update UPD pointer in FSP Global Data
   //
-  UpdDataRgnPtr = ((FSP_INIT_RT_COMMON_BUFFER *)FspInitParams->RtBufferPtr)->UpdDataRgnPtr;
-  if (UpdDataRgnPtr != NULL) {
-    SetFspUpdDataPointer (UpdDataRgnPtr);
+  if (ApiMode == 0) {
+    UpdDataRgnPtr = (UINT32)((UINT32 *)GetFspUpdDataPointer ());
+    if (UpdDataRgnPtr >= BootLoaderTempRamStart && UpdDataRgnPtr < BootLoaderTempRamEnd) {
+      MemoryInitUpdPtr = (UINT32)((UINT32 *)GetFspMemoryInitUpdDataPointer ());
+      SiliconInitUpdPtr = (UINT32)((UINT32 *)GetFspSiliconInitUpdDataPointer ());
+      SetFspUpdDataPointer ((VOID *)(UpdDataRgnPtr + OffsetGap));
+      SetFspMemoryInitUpdDataPointer ((VOID *)(MemoryInitUpdPtr + OffsetGap));
+      SetFspSiliconInitUpdDataPointer ((VOID *)(SiliconInitUpdPtr + OffsetGap));
+    }
+  } else {
+    MemoryInitUpdPtr = (UINT32)((UINT32 *)GetFspMemoryInitUpdDataPointer ());
+    if (MemoryInitUpdPtr >= BootLoaderTempRamStart && MemoryInitUpdPtr < BootLoaderTempRamEnd) {
+      SetFspMemoryInitUpdDataPointer ((VOID *)(MemoryInitUpdPtr + OffsetGap));
+    }
   }
 
   //
@@ -151,5 +176,4 @@ FspMigrateTemporaryMemory (
       ((UINT32)PlatformDataPtr <  BootLoaderTempRamEnd)) {
     SetFspPlatformDataPointer ((UINT8 *)PlatformDataPtr + OffsetGap);
   }
-
 }

@@ -38,6 +38,7 @@ import c
 import re, string
 from Exception import *
 from Common.LongFilePathSupport import OpenLongFilePath as open
+from Common.MultipleWorkspace import MultipleWorkspace as mws
 
 ## Ecc
 #
@@ -70,8 +71,13 @@ class Ecc(object):
         #
         WorkspaceDir = os.path.normcase(os.path.normpath(os.environ["WORKSPACE"]))
         os.environ["WORKSPACE"] = WorkspaceDir
+        
+        # set multiple workspace
+        PackagesPath = os.getenv("PACKAGES_PATH")
+        mws.setWs(WorkspaceDir, PackagesPath)
+        
         if "ECP_SOURCE" not in os.environ:
-            os.environ["ECP_SOURCE"] = os.path.join(WorkspaceDir, GlobalData.gEdkCompatibilityPkg)
+            os.environ["ECP_SOURCE"] = mws.join(WorkspaceDir, GlobalData.gEdkCompatibilityPkg)
         if "EFI_SOURCE" not in os.environ:
             os.environ["EFI_SOURCE"] = os.environ["ECP_SOURCE"]
         if "EDK_SOURCE" not in os.environ:
@@ -251,7 +257,8 @@ class Ecc(object):
                         Filename = os.path.normpath(os.path.join(Root, File))
                         EdkLogger.quiet("Parsing %s" % Filename)
                         Op.write("%s\r" % Filename)
-                        EccGlobalData.gDb.TblFile.InsertFile(Filename, MODEL_FILE_UNI)
+                        FileID = EccGlobalData.gDb.TblFile.InsertFile(Filename, MODEL_FILE_UNI)
+                        EccGlobalData.gDb.TblReport.UpdateBelongsToItemByFile(FileID, File)
                         continue
 
         Op.close()

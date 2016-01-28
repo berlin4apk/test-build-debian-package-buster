@@ -1,8 +1,8 @@
 /** @file
   Provides string functions, linked list functions, math functions, synchronization
-  functions, and CPU architecture-specific functions.
+  functions, file path functions, and CPU architecture-specific functions.
 
-Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
 Portions copyright (c) 2008 - 2009, Apple Inc. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
@@ -211,6 +211,7 @@ StrnLenS (
 
   If Destination is not aligned on a 16-bit boundary, then ASSERT().
   If Source is not aligned on a 16-bit boundary, then ASSERT().
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Unicode string.
   @param  DestMax                  The maximum number of Destination Unicode
@@ -242,6 +243,7 @@ StrCpyS (
 
   If Length > 0 and Destination is not aligned on a 16-bit boundary, then ASSERT().
   If Length > 0 and Source is not aligned on a 16-bit boundary, then ASSERT().
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Unicode string.
   @param  DestMax                  The maximum number of Destination Unicode
@@ -275,6 +277,7 @@ StrnCpyS (
 
   If Destination is not aligned on a 16-bit boundary, then ASSERT().
   If Source is not aligned on a 16-bit boundary, then ASSERT().
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Unicode string.
   @param  DestMax                  The maximum number of Destination Unicode
@@ -309,7 +312,8 @@ StrCatS (
   set to null.
 
   If Destination is not aligned on a 16-bit boundary, then ASSERT().
-  If and Source is not aligned on a 16-bit boundary, then ASSERT().
+  If Source is not aligned on a 16-bit boundary, then ASSERT().
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Unicode string.
   @param  DestMax                  The maximum number of Destination Unicode
@@ -362,6 +366,8 @@ AsciiStrnLenS (
   Copies the string pointed to by Source (including the terminating null char)
   to the array pointed to by Destination.
 
+  If an error would be returned, then the function will also ASSERT().
+
   @param  Destination              A pointer to a Null-terminated Ascii string.
   @param  DestMax                  The maximum number of Destination Ascii
                                    char, including terminating null char.
@@ -389,6 +395,8 @@ AsciiStrCpyS (
   Copies not more than Length successive char from the string pointed to by
   Source to the array pointed to by Destination. If no null char is copied from
   Source, then Destination[Length] is always set to null.
+
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Ascii string.
   @param  DestMax                  The maximum number of Destination Ascii
@@ -419,6 +427,8 @@ AsciiStrnCpyS (
 /**
   Appends a copy of the string pointed to by Source (including the terminating
   null char) to the end of the string pointed to by Destination.
+
+  If an error would be returned, then the function will also ASSERT().
 
   @param  Destination              A pointer to a Null-terminated Ascii string.
   @param  DestMax                  The maximum number of Destination Ascii
@@ -452,6 +462,8 @@ AsciiStrCatS (
   copied from Source, then Destination[StrLen(Destination) + Length] is always
   set to null.
 
+  If an error would be returned, then the function will also ASSERT().
+
   @param  Destination              A pointer to a Null-terminated Ascii string.
   @param  DestMax                  The maximum number of Destination Ascii
                                    char, including terminating null char.
@@ -484,7 +496,7 @@ AsciiStrnCatS (
 #ifndef DISABLE_NEW_DEPRECATED_INTERFACES
 
 /**
-  [ATTENTION] This function will be deprecated for security reason.
+  [ATTENTION] This function is deprecated for security reason.
 
   Copies one Null-terminated Unicode string to another Null-terminated Unicode
   string and returns the new Unicode string.
@@ -517,7 +529,7 @@ StrCpy (
 
 
 /**
-  [ATTENTION] This function will be deprecated for security reason.
+  [ATTENTION] This function is deprecated for security reason.
 
   Copies up to a specified length from one Null-terminated Unicode string to 
   another Null-terminated Unicode string and returns the new Unicode string.
@@ -686,7 +698,7 @@ StrnCmp (
 #ifndef DISABLE_NEW_DEPRECATED_INTERFACES
 
 /**
-  [ATTENTION] This function will be deprecated for security reason.
+  [ATTENTION] This function is deprecated for security reason.
 
   Concatenates one Null-terminated Unicode string to another Null-terminated
   Unicode string, and returns the concatenated Unicode string.
@@ -728,7 +740,7 @@ StrCat (
 
 
 /**
-  [ATTENTION] This function will be deprecated for security reason.
+  [ATTENTION] This function is deprecated for security reason.
 
   Concatenates up to a specified length one Null-terminated Unicode to the end 
   of another Null-terminated Unicode string, and returns the concatenated 
@@ -1016,7 +1028,7 @@ UnicodeStrToAsciiStr (
 #ifndef DISABLE_NEW_DEPRECATED_INTERFACES
 
 /**
-  [ATTENTION] This function will be deprecated for security reason.
+  [ATTENTION] This function is deprecated for security reason.
 
   Copies one Null-terminated ASCII string to another Null-terminated ASCII
   string and returns the new ASCII string.
@@ -1047,7 +1059,7 @@ AsciiStrCpy (
 
 
 /**
-  [ATTENTION] This function will be deprecated for security reason.
+  [ATTENTION] This function is deprecated for security reason.
 
   Copies up to a specified length one Null-terminated ASCII string to another 
   Null-terminated ASCII string and returns the new ASCII string.
@@ -1245,7 +1257,7 @@ AsciiStrnCmp (
 #ifndef DISABLE_NEW_DEPRECATED_INTERFACES
 
 /**
-  [ATTENTION] This function will be deprecated for security reason.
+  [ATTENTION] This function is deprecated for security reason.
 
   Concatenates one Null-terminated ASCII string to another Null-terminated
   ASCII string, and returns the concatenated ASCII string.
@@ -1282,7 +1294,7 @@ AsciiStrCat (
 
 
 /**
-  [ATTENTION] This function will be deprecated for security reason.
+  [ATTENTION] This function is deprecated for security reason.
 
   Concatenates up to a specified length one Null-terminated ASCII string to 
   the end of another Null-terminated ASCII string, and returns the 
@@ -1591,6 +1603,43 @@ BcdToDecimal8 (
   IN      UINT8                     Value
   );
 
+//
+//  File Path Manipulation Functions
+//
+
+/**
+  Removes the last directory or file entry in a path by changing the last
+  L'\' to a CHAR_NULL.
+
+  @param[in, out] Path    The pointer to the path to modify.
+
+  @retval FALSE     Nothing was found to remove.
+  @retval TRUE      A directory or file was removed.
+**/
+BOOLEAN
+EFIAPI
+PathRemoveLastItem(
+  IN OUT CHAR16 *Path
+  );
+
+/**
+  Function to clean up paths.
+    - Single periods in the path are removed.
+    - Double periods in the path are removed along with a single parent directory.
+    - Forward slashes L'/' are converted to backward slashes L'\'.
+
+  This will be done inline and the existing buffer may be larger than required
+  upon completion.
+
+  @param[in] Path       The pointer to the string containing the path.
+
+  @return       Returns Path, otherwise returns NULL to indicate that an error has occured.
+**/
+CHAR16*
+EFIAPI
+PathCleanUpDirectories(
+  IN CHAR16 *Path
+  );
 
 //
 // Linked List Functions and Macros
@@ -7596,6 +7645,57 @@ VOID
 EFIAPI
 AsmPrepareAndThunk16 (
   IN OUT  THUNK_CONTEXT             *ThunkContext
+  );
+
+/**
+  Generates a 16-bit random number through RDRAND instruction.
+
+  if Rand is NULL, then ASSERT().
+
+  @param[out]  Rand     Buffer pointer to store the random result.
+
+  @retval TRUE          RDRAND call was successful.
+  @retval FALSE         Failed attempts to call RDRAND.
+
+ **/
+BOOLEAN
+EFIAPI
+AsmRdRand16 (
+  OUT     UINT16                    *Rand
+  );
+
+/**
+  Generates a 32-bit random number through RDRAND instruction.
+
+  if Rand is NULL, then ASSERT().
+
+  @param[out]  Rand     Buffer pointer to store the random result.
+
+  @retval TRUE          RDRAND call was successful.
+  @retval FALSE         Failed attempts to call RDRAND.
+
+**/
+BOOLEAN
+EFIAPI
+AsmRdRand32 (
+  OUT     UINT32                    *Rand
+  );
+
+/**
+  Generates a 64-bit random number through RDRAND instruction.
+
+  if Rand is NULL, then ASSERT().
+
+  @param[out]  Rand     Buffer pointer to store the random result.
+
+  @retval TRUE          RDRAND call was successful.
+  @retval FALSE         Failed attempts to call RDRAND.
+
+**/
+BOOLEAN
+EFIAPI
+AsmRdRand64  (
+  OUT     UINT64                    *Rand
   );
 
 #endif
