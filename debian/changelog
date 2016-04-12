@@ -5,6 +5,8 @@ edk2 (0~20160408.ffea0a2c-1) UNRELEASED; urgency=medium
     - d/p/no-missing-braces.diff: Refresh.
     - d/p/FatPkg-AARCH64.diff: Drop; fixed upstream in commit 04a4fdb9.
     - d/p/no-stack-protector-all-archs.diff: Refresh.
+    - d/p/arm64-mistrict-align.patch: Drop; superseded by upstream
+      commit d764d5984.
 
  -- dann frazier <dannf@debian.org>  Tue, 12 Apr 2016 13:19:27 -0500
 
