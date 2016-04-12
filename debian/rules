@@ -5,8 +5,6 @@ SHELL=/bin/bash
 # various bits that have to be pulled in to create the full source tarball
 OPENSSL_SRC= openssl-1.0.2g.tar.gz
 OPENSSL_URL= http://www.openssl.org/source/$(OPENSSL_SRC)
-FAT_SRC    = http://edk2-fatdriver2.svn.sourceforge.net/svnroot/edk2-fatdriver2/trunk/FatPkg
-FAT_REV    = 72
 SHELL_SRC  = https://efi-shell.svn.sourceforge.net/svnroot/efi-shell/trunk/Shell
 SHELL_REV  = 64
 
@@ -103,6 +101,8 @@ get-orig-source:
 	cp -a * edk2-$(ver) || true
 	rm -rf edk2-$(ver)/edk2-$(ver)
 	find edk2-$(ver) -name '*.efi' -print0 | xargs -0 rm -f
+	# Drop the non-free license text covering the removed Fat.efi binaries
+	rm -f edk2-$(ver)/FatBinPkg/License.txt
 	rm -rf edk2-$(ver)/BaseTools/Bin \
 		edk2-$(ver)/UefiCpuPkg/ResetVector/Vtf0/Bin/*.raw \
 		edk2-$(ver)/EdkCompatibilityPkg/Other \
@@ -118,8 +118,6 @@ get-orig-source:
 	tar zxvf $(OPENSSL_SRC) -C edk2-$(ver)/CryptoPkg/Library/OpensslLib
 	cd edk2-$(ver)/CryptoPkg/Library/OpensslLib/$$(basename $(OPENSSL_SRC) .tar.gz) && \
 		patch -p1 < ../EDKII_openssl-1.0.2g.patch
-	# fat.efi
-	svn export -r$(FAT_REV) $(FAT_SRC) edk2-$(ver)/FatPkg
 	# efi shell
 	svn export -r$(SHELL_REV) $(SHELL_SRC) edk2-$(ver)/Shell
 	cd edk2-$(ver)/Shell && patch -p1 < ../EdkShellPkg/ShellR$(SHELL_REV).patch 
