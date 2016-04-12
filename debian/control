@@ -1,5 +1,5 @@
 Source: edk2
-Section: non-free/misc
+Section: misc
 Priority: extra
 Maintainer: Debian QEMU Team <pkg-qemu-devel@lists.alioth.debian.org>
 Uploaders: Steve Langasek <vorlon@debian.org>, Serge Hallyn <serge.hallyn@ubuntu.com>
