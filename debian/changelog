@@ -9,6 +9,8 @@ edk2 (0~20160408.ffea0a2c-1) UNRELEASED; urgency=medium
       commit d764d5984.
   * Move out of non-free as the FAT driver.  Closes: #815618.
     Thanks to Microsoft.
+  * Add SECURE_BOOT_ENABLE flag to aarch64 build to enable support for UEFI
+    Secure Boot.  Closes: #819757. Thanks to Linn Crosetto.
 
  -- dann frazier <dannf@debian.org>  Tue, 12 Apr 2016 13:19:27 -0500
 

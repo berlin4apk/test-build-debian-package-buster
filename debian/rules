@@ -47,11 +47,11 @@ setup-build:
 	# single shell invocation
 	. ./edksetup.sh
 	QUILT_PC=.pc-post QUILT_PATCHES=debian/post-patches quilt push -a || [ $$? = 2 ]
+	cd CryptoPkg/Library/OpensslLib/ && ./Install.sh
 
 build-ovmf: EDK2_ARCH_DIR=X64
 build-ovmf:
 ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
-	cd CryptoPkg/Library/OpensslLib/ && ./Install.sh
 	cd UefiCpuPkg/ResetVector/Vtf0 && python Build.py
 	mkdir -p EdkShellBinPkg/FullShell/$(EDK2_ARCH_DIR) \
 	         FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
@@ -84,6 +84,7 @@ build-qemu-efi:
 		GCC49_AARCH64_PREFIX=$(GCC49_AARCH64_PREFIX) build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p ArmVirtPkg/ArmVirtQemu.dsc \
+			-DSECURE_BOOT_ENABLE=TRUE \
 			-DINTEL_BDS \
 			-b RELEASE
 
