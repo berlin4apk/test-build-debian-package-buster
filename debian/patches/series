@@ -1,5 +1,4 @@
 shell-efiapi.patch
 no-missing-braces.diff
-FatPkg-AARCH64.diff
 no-stack-protector-all-archs.diff
 arm64-mstrict-align.patch
