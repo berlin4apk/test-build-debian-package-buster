@@ -3,7 +3,7 @@
 SHELL=/bin/bash
 
 # various bits that have to be pulled in to create the full source tarball
-OPENSSL_SRC= openssl-1.0.2e.tar.gz
+OPENSSL_SRC= openssl-1.0.2g.tar.gz
 OPENSSL_URL= http://www.openssl.org/source/$(OPENSSL_SRC)
 FAT_SRC    = http://edk2-fatdriver2.svn.sourceforge.net/svnroot/edk2-fatdriver2/trunk/FatPkg
 FAT_REV    = 72
@@ -117,7 +117,7 @@ get-orig-source:
 	wget $(OPENSSL_URL)
 	tar zxvf $(OPENSSL_SRC) -C edk2-$(ver)/CryptoPkg/Library/OpensslLib
 	cd edk2-$(ver)/CryptoPkg/Library/OpensslLib/$$(basename $(OPENSSL_SRC) .tar.gz) && \
-		patch -p0 < ../EDKII_openssl-1.0.2e.patch
+		patch -p1 < ../EDKII_openssl-1.0.2g.patch
 	# fat.efi
 	svn export -r$(FAT_REV) $(FAT_SRC) edk2-$(ver)/FatPkg
 	# efi shell
