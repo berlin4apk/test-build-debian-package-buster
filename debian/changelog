@@ -1,6 +1,7 @@
 edk2 (0~20160408.ffea0a2c-1) UNRELEASED; urgency=medium
 
   * New upstream version.
+    - d/p/enable-nvme: Drop; superseded by upstream commit 8ae3832d.
 
  -- dann frazier <dannf@debian.org>  Tue, 12 Apr 2016 13:19:27 -0500
 
