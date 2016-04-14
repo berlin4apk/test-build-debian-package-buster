@@ -7,8 +7,8 @@ edk2 (0~20160408.ffea0a2c-1) UNRELEASED; urgency=medium
     - d/p/no-stack-protector-all-archs.diff: Refresh.
     - d/p/arm64-mistrict-align.patch: Drop; superseded by upstream
       commit d764d5984.
-  * Move out of non-free as the FAT driver.  Closes: #815618.
-    Thanks to Microsoft.
+  * Move out of non-free as the FAT driver has been replaced with a free
+    implementation, Thanks to Microsoft.  Closes: #815618, LP: #1569602.
   * Add SECURE_BOOT_ENABLE flag to aarch64 build to enable support for UEFI
     Secure Boot.  Closes: #819757. Thanks to Linn Crosetto.
 
