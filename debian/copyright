@@ -4,10 +4,6 @@ Source: git://github.com/tianocore/edk2.git, http://www.openssl.org/source/,
  and https://efi-shell.svn.sourceforge.net/svnroot/efi-shell/trunk/Shell,
  with .efi binary files removed from the source at package generation time.
  See get-orig-source in debian/rules for details.
-Disclaimer: This package is not part of Debian because it does not meet
- Debian's license standards due to the licensing on the Intel FAT driver
- (see License: Intel-Fat-Driver below).  With this exception, all other
- code in this package meets the Debian Free Software Guidelines.
 
 Files: *
 Copyright: 1999-2013, Intel Corporation
@@ -62,10 +58,6 @@ Copyright: 1996-1998 John D. Polstra
            2011-2013, ARM Limited
            2013, Red Hat, Inc.
 License: BSD-2-clause
-
-Files: FatBinPkg/* FatPkg/*
-Copyright: 2006, Intel Corporation
-License: Intel-Fat-Driver
 
 Files: ArmPkg/* ArmPlatformPkg/* BaseTools/Source/C/Common/*PeCoff*.c
        BaseTools/Source/C/GenFv/GenFvInternalLib.c
@@ -409,41 +401,3 @@ License: ISC
  PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
  ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
  SOFTWARE.
-
-License: Intel-Fat-Driver
- Redistribution and use in source and binary forms, with or without
- modification, are permitted provided that the following conditions are
- met:
- .
-   . Redistributions of source code must retain the above copyright
- notice, this list of conditions and the following disclaimer.
- .
-   . Redistributions in binary form must reproduce the above copyright
- notice, this list of conditions and the following disclaimer in the
- documentation and/or other materials provided with the distribution.
- .
-  .  Neither the name of Intel nor the names of its contributors may
- be used to endorse or promote products derived from this software
- without specific prior written permission.
- .
- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- .
- Additional terms: In addition to the forgoing, redistribution and use
- of the code is conditioned upon the FAT 32 File System Driver and all
- derivative works thereof being used for and designed only to read
- and/or write to a file system that is directly managed by Intel's
- Extensible Firmware Initiative (EFI) Specification v. 1.0 and later
- and/or the Unified Extensible Firmware Interface (UEFI) Forum's UEFI
- Specifications v.2.0 and later (together the "UEFI Specifications");
- only as necessary to emulate an implementation of the UEFI Specifications;
- and to create firmware, applications, utilities and/or drivers.
