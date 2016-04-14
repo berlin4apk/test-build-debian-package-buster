@@ -1,9 +1,13 @@
 /*++
 
-Copyright (c) 2005 - 2007, Intel Corporation. All rights reserved.<BR>
-This program and the accompanying materials
-are licensed and made available under the terms and conditions of the Software
-License Agreement which accompanies this distribution.
+Copyright (c) 2005 - 2015, Intel Corporation. All rights reserved.<BR>
+This program and the accompanying materials are licensed and made available
+under the terms and conditions of the BSD License which accompanies this
+distribution. The full text of the license may be found at
+http://opensource.org/licenses/bsd-license.php
+
+THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 
 Module Name:
@@ -63,7 +67,7 @@ Returns:
   }
 
   BufferSize = sizeof (FAT_DIRECTORY_ENTRY);
-  return FatAccessOFile (Parent, IoMode, Position, &BufferSize, Entry);
+  return FatAccessOFile (Parent, IoMode, Position, &BufferSize, Entry, NULL);
 }
 
 EFI_STATUS
@@ -112,7 +116,15 @@ Returns:
     // Write LFN directory entry
     //
     SetMem (LfnBuffer, sizeof (CHAR16) * LFN_CHAR_TOTAL * EntryCount, 0xff);
-    StrCpy (LfnBuffer, DirEnt->FileString);
+    Status = StrCpyS (
+               LfnBuffer,
+               sizeof (LfnBuffer) / sizeof (LfnBuffer[0]),
+               DirEnt->FileString
+               );
+    if (EFI_ERROR (Status)) {
+      return Status;
+    }
+
     LfnBufferPointer    = LfnBuffer;
     LfnEntry.Attributes = FAT_ATTRIBUTE_LFN;
     LfnEntry.Type       = 0;
@@ -345,7 +357,11 @@ Returns:
     // Fail to get the long file name from long file name entry,
     // get the file name from short name
     //
-    FatGetFileNameViaCaseFlag (DirEnt, LfnBuffer);
+    FatGetFileNameViaCaseFlag (
+      DirEnt,
+      LfnBuffer,
+      sizeof (LfnBuffer) / sizeof (LfnBuffer[0])
+      );
   }
 
   DirEnt->FileString = AllocateCopyPool (StrSize (LfnBuffer), LfnBuffer);

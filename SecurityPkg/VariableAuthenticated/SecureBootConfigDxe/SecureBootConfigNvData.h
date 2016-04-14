@@ -1,7 +1,7 @@
 /** @file
   Header file for NV data structure definition.
 
-Copyright (c) 2011 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2011 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -36,15 +36,9 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #define SECUREBOOT_DELETE_SIGNATURE_FROM_DB   0x0c
 #define SECUREBOOT_ENROLL_SIGNATURE_TO_DBX    0x0d
 #define SECUREBOOT_DELETE_SIGNATURE_FROM_DBX  0x0e
-#define FORM_FILE_EXPLORER_ID                 0x0f
-#define FORM_FILE_EXPLORER_ID_PK              0x10
-#define FORM_FILE_EXPLORER_ID_KEK             0x11
-#define FORM_FILE_EXPLORER_ID_DB              0x12
-#define FORM_FILE_EXPLORER_ID_DBX             0x13
 #define FORMID_SECURE_BOOT_DBT_OPTION_FORM    0x14
 #define SECUREBOOT_ENROLL_SIGNATURE_TO_DBT    0x15
 #define SECUREBOOT_DELETE_SIGNATURE_FROM_DBT  0x16
-#define FORM_FILE_EXPLORER_ID_DBT             0x17
 
 #define SECURE_BOOT_MODE_CUSTOM               0x01
 #define SECURE_BOOT_MODE_STANDARD             0x00
@@ -62,6 +56,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #define KEY_HIDE_SECURE_BOOT                  0x100c
 #define KEY_VALUE_SAVE_AND_EXIT_DBT           0x100d
 #define KEY_VALUE_NO_SAVE_AND_EXIT_DBT        0x100e
+#define KEY_TRANS_SECURE_BOOT_MODE            0x100f
 
 #define KEY_SECURE_BOOT_OPTION                0x1100
 #define KEY_SECURE_BOOT_PK_OPTION             0x1101
@@ -84,7 +79,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #define LABEL_DBT_DELETE                      0x1203
 #define LABEL_END                             0xffff
 
-#define KEY_TRANS_SECURE_BOOT_MODE            0x2000
 
 #define SECURE_BOOT_MAX_ATTEMPTS_NUM          255
 
@@ -110,10 +104,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 // Question ID 0x5000 ~ 0x5FFF is for DBT
 //
 #define OPTION_DEL_DBT_QUESTION_ID            0x5000
-
-#define FILE_OPTION_GOTO_OFFSET               0xC000
-#define FILE_OPTION_OFFSET                    0x8000
-#define FILE_OPTION_MASK                      0x3FFF
 
 #define SECURE_BOOT_GUID_SIZE                 36
 #define SECURE_BOOT_GUID_STORAGE_SIZE         37

@@ -2,7 +2,7 @@
   This library is only intended to be used by UEFI network stack modules.
   It provides basic functions for the UEFI network stack.
 
-Copyright (c) 2005 - 2012, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2005 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at<BR>
@@ -37,6 +37,8 @@ typedef UINT16          TCP_PORTNO;
 #define  EFI_IP_PROTO_ICMP     0x01
 #define  IP4_PROTO_IGMP        0x02
 #define  IP6_ICMP              58
+#define  DNS_MAX_NAME_SIZE     255
+#define  DNS_MAX_MESSAGE_SIZE  512
 
 //
 // The address classification
@@ -50,6 +52,9 @@ typedef UINT16          TCP_PORTNO;
 #define  IP4_MASK_NUM          33
 #define  IP6_PREFIX_NUM        129
 
+#define  IP4_MASK_MAX          32 
+#define  IP6_PREFIX_MAX        128
+
 #define  IP6_HOP_BY_HOP        0
 #define  IP6_DESTINATION       60
 #define  IP6_ROUTING           43
@@ -62,6 +67,33 @@ typedef UINT16          TCP_PORTNO;
 #define  IP_VERSION_6          6
 
 #define  IP6_PREFIX_LENGTH     64
+
+//
+// DNS QTYPE values
+//
+#define  DNS_TYPE_A            1
+#define  DNS_TYPE_NS           2
+#define  DNS_TYPE_CNAME        5
+#define  DNS_TYPE_SOA          6
+#define  DNS_TYPE_WKS          11
+#define  DNS_TYPE_PTR          12
+#define  DNS_TYPE_HINFO        13
+#define  DNS_TYPE_MINFO        14
+#define  DNS_TYPE_MX           15
+#define  DNS_TYPE_TXT          16
+#define  DNS_TYPE_AAAA         28
+#define  DNS_TYPE_SRV_RR       33
+#define  DNS_TYPE_AXFR         252
+#define  DNS_TYPE_MAILB        253
+#define  DNS_TYPE_ANY          255
+
+//
+// DNS QCLASS values
+//
+#define  DNS_CLASS_INET        1
+#define  DNS_CLASS_CH          3
+#define  DNS_CLASS_HS          4
+#define  DNS_CLASS_ANY         255
 
 #pragma pack(1)
 
@@ -201,7 +233,7 @@ typedef struct {
 #define IP4_IS_MULTICAST(Ip)              (((Ip) & 0xF0000000) == 0xE0000000)
 #define IP4_IS_LOCAL_BROADCAST(Ip)        ((Ip) == 0xFFFFFFFF)
 #define IP4_NET_EQUAL(Ip1, Ip2, NetMask)  (((Ip1) & (NetMask)) == ((Ip2) & (NetMask)))
-#define IP4_IS_VALID_NETMASK(Ip)          (NetGetMaskLength (Ip) != IP4_MASK_NUM)
+#define IP4_IS_VALID_NETMASK(Ip)          (NetGetMaskLength (Ip) != (IP4_MASK_MAX + 1))
 
 #define IP6_IS_MULTICAST(Ip6)             (((Ip6)->Addr[0]) == 0xFF)
 
@@ -2127,6 +2159,26 @@ EFI_STATUS
 EFIAPI
 NetLibGetSystemGuid (
   OUT EFI_GUID              *SystemGuid
+  );
+
+/**
+  Create Dns QName according the queried domain name. 
+  QName is a domain name represented as a sequence of labels, 
+  where each label consists of a length octet followed by that 
+  number of octets. The QName terminates with the zero 
+  length octet for the null label of the root. Caller should 
+  take responsibility to free the buffer in returned pointer.
+
+  @param  DomainName    The pointer to the queried domain name string.  
+
+  @retval NULL          Failed to fill QName.
+  @return               QName filled successfully.
+  
+**/ 
+CHAR8 *
+EFIAPI
+NetLibCreateDnsQName (
+  IN  CHAR16              *DomainName
   );
 
 #endif

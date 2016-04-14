@@ -1,9 +1,13 @@
 /*++
 
-Copyright (c) 2005 - 2007, Intel Corporation. All rights reserved.<BR>
-This program and the accompanying materials
-are licensed and made available under the terms and conditions of the Software
-License Agreement which accompanies this distribution.
+Copyright (c) 2005 - 2015, Intel Corporation. All rights reserved.<BR>
+This program and the accompanying materials are licensed and made available
+under the terms and conditions of the BSD License which accompanies this
+distribution. The full text of the license may be found at
+http://opensource.org/licenses/bsd-license.php
+
+THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 
 Module Name:
@@ -43,7 +47,12 @@ Returns:
 {
   UINT32  HashValue;
   CHAR16  UpCasedLongFileName[EFI_PATH_STRING_LENGTH];
-  StrCpy (UpCasedLongFileName, LongNameString);
+  StrnCpyS (
+    UpCasedLongFileName,
+    sizeof (UpCasedLongFileName) / sizeof (UpCasedLongFileName[0]),
+    LongNameString,
+    sizeof (UpCasedLongFileName) / sizeof (UpCasedLongFileName[0]) - 1
+    );
   FatStrUpr (UpCasedLongFileName);
   gBS->CalculateCrc32 (UpCasedLongFileName, StrSize (UpCasedLongFileName), &HashValue);
   return (HashValue & HASH_TABLE_MASK);

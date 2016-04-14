@@ -1,11 +1,15 @@
 /** @file
   General purpose supporting routines for FAT recovery PEIM
 
-Copyright (c) 2006 - 2010, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
 
-This program and the accompanying materials
-are licensed and made available under the terms and conditions of the Software
-License Agreement which accompanies this distribution.
+This program and the accompanying materials are licensed and made available
+under the terms and conditions of the BSD License which accompanies this
+distribution. The full text of the license may be found at
+http://opensource.org/licenses/bsd-license.php
+
+THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 **/
 
@@ -83,7 +87,17 @@ FatReadBlock (
     // Status = BlockDev->ReadFunc
     //  (PrivateData->PeiServices, BlockDev->PhysicalDevNo, Lba, BufferSize, Buffer);
     //
-    Status = BlockDev->BlockIo->ReadBlocks (
+    if (BlockDev->BlockIo2 != NULL) {
+      Status = BlockDev->BlockIo2->ReadBlocks (
+                                    (EFI_PEI_SERVICES **) GetPeiServicesTablePointer (),
+                                    BlockDev->BlockIo2,
+                                    BlockDev->PhysicalDevNo,
+                                    Lba,
+                                    BufferSize,
+                                    Buffer
+                                    );
+    } else {
+      Status = BlockDev->BlockIo->ReadBlocks (
                                   (EFI_PEI_SERVICES **) GetPeiServicesTablePointer (),
                                   BlockDev->BlockIo,
                                   BlockDev->PhysicalDevNo,
@@ -91,6 +105,7 @@ FatReadBlock (
                                   BufferSize,
                                   Buffer
                                   );
+    }
 
   } else {
     Status = FatReadDisk (
@@ -313,15 +328,16 @@ EngFatToStr (
   // No DBCS issues, just expand and add null terminate to end of string
   //
   while (*Fat != 0 && FatSize != 0) {
+    if (*Fat == ' ') {
+      break;
+    }
     *String = *Fat;
     String += 1;
     Fat += 1;
     FatSize -= 1;
-    if (*Fat == ' ') {
-      *String = 0;
-      return ;
-    }
   }
+
+  *String = 0;
 }
 
 

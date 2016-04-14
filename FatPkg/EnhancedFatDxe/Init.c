@@ -1,9 +1,13 @@
 /*++
 
-Copyright (c) 2005 - 2010, Intel Corporation. All rights reserved.<BR>
-This program and the accompanying materials
-are licensed and made available under the terms and conditions of the Software
-License Agreement which accompanies this distribution.
+Copyright (c) 2005 - 2013, Intel Corporation. All rights reserved.<BR>
+This program and the accompanying materials are licensed and made available
+under the terms and conditions of the BSD License which accompanies this
+distribution. The full text of the license may be found at
+http://opensource.org/licenses/bsd-license.php
+
+THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 
 Module Name:
@@ -22,6 +26,7 @@ EFI_STATUS
 FatAllocateVolume (
   IN  EFI_HANDLE                Handle,
   IN  EFI_DISK_IO_PROTOCOL      *DiskIo,
+  IN  EFI_DISK_IO2_PROTOCOL     *DiskIo2,
   IN  EFI_BLOCK_IO_PROTOCOL     *BlockIo
   )
 /*++
@@ -62,6 +67,7 @@ Returns:
   Volume->Signature                   = FAT_VOLUME_SIGNATURE;
   Volume->Handle                      = Handle;
   Volume->DiskIo                      = DiskIo;
+  Volume->DiskIo2                     = DiskIo2;
   Volume->BlockIo                     = BlockIo;
   Volume->MediaId                     = BlockIo->Media->MediaId;
   Volume->ReadOnly                    = BlockIo->Media->ReadOnly;
@@ -189,7 +195,7 @@ Returns:
   // FatCleanupVolume do the task.
   //
   if (LockedByMe) {
-    FatCleanupVolume (Volume, NULL, EFI_SUCCESS);
+    FatCleanupVolume (Volume, NULL, EFI_SUCCESS, NULL);
     FatReleaseLock ();
   }
 
@@ -384,7 +390,7 @@ Returns:
   if (FatType == FAT32) {
     Volume->FreeInfoPos = FatBs.FatBse.Fat32Bse.FsInfoSector * BlockSize;
     if (FatBs.FatBse.Fat32Bse.FsInfoSector != 0) {
-      FatDiskIo (Volume, READ_DISK, Volume->FreeInfoPos, sizeof (FAT_INFO_SECTOR), &Volume->FatInfoSector);
+      FatDiskIo (Volume, READ_DISK, Volume->FreeInfoPos, sizeof (FAT_INFO_SECTOR), &Volume->FatInfoSector, NULL);
       if (Volume->FatInfoSector.Signature == FAT_INFO_SIGNATURE &&
           Volume->FatInfoSector.InfoBeginSignature == FAT_INFO_BEGIN_SIGNATURE &&
           Volume->FatInfoSector.InfoEndSignature == FAT_INFO_END_SIGNATURE &&

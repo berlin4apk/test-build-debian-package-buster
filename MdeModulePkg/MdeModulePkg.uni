@@ -4,7 +4,7 @@
 // It also provides the definitions(including PPIs/PROTOCOLs/GUIDs and library classes)
 // and libraries instances, which are used for those modules.
 //
-// Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
+// Copyright (c) 2007 - 2016, Intel Corporation. All rights reserved.<BR>
 //
 // This program and the accompanying materials are licensed and made available under
 // the terms and conditions of the BSD License that accompanies this distribution.
@@ -149,7 +149,16 @@
 
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdMaxPeiPerformanceLogEntries_PROMPT  #language en-US "Maximum number of PEI performance log entries"
 
-#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdMaxPeiPerformanceLogEntries_HELP  #language en-US "Maximum number of performance log entries during PEI phase."
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdMaxPeiPerformanceLogEntries_HELP  #language en-US "Maximum number of performance log entries during PEI phase.\n"
+                                                                                                "Use PcdMaxPeiPerformanceLogEntries16 if the number of entries required is\n"
+                                                                                                "more than 255."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdMaxPeiPerformanceLogEntries16_PROMPT  #language en-US "Maximum number of PEI performance log entries"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdMaxPeiPerformanceLogEntries16_HELP  #language en-US "Maximum number of performance log entries during PEI phase.\n"
+                                                                                                  "If set to 0, then PcdMaxPeiPerformanceLogEntries determines the number of\n"
+                                                                                                  "entries. If greater than 0, then this PCD determines the number of entries,\n"
+                                                                                                  "and PcdMaxPeiPerformanceLogEntries is ignored."
 
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdRealTimeClockUpdateTimeout_PROMPT  #language en-US "RTC Update Timeout Value"
 
@@ -226,7 +235,7 @@
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiDefaultOemTableId_PROMPT  #language en-US "Default OEM Table ID for ACPI table creation"
 
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiDefaultOemTableId_HELP  #language en-US "Default OEM Table ID for ACPI table creation.<BR><BR>\n"
-                                                                                          "Accroding to ACPI specification, this field is particularly useful when\n"
+                                                                                          "According to ACPI specification, this field is particularly useful when\n"
                                                                                           "defining a definition block to distinguish definition block functions.<BR>\n"
                                                                                           "The OEM assigns each dissimilar table a new OEM Table ID.<BR>\n"
                                                                                           "This PCD is ignored for definition block.<BR>"
@@ -234,7 +243,7 @@
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiDefaultOemRevision_PROMPT  #language en-US "Default OEM Revision for ACPI table creation"
 
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiDefaultOemRevision_HELP  #language en-US "Default OEM Revision for ACPI table creation.<BR><BR>\n"
-                                                                                           "Accroding to ACPI specification, for LoadTable() opcode, the OS can also\n"
+                                                                                           "According to ACPI specification, for LoadTable() opcode, the OS can also\n"
                                                                                            "check the OEM Table ID and Revision ID against a database for a newer\n"
                                                                                            "revision Definition Block of the same OEM Table ID and load it instead.<BR>\n"
                                                                                            "This PCD is ignored for definition block.<BR>"
@@ -242,14 +251,14 @@
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiDefaultCreatorId_PROMPT  #language en-US "Default Creator ID for ACPI table creation"
 
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiDefaultCreatorId_HELP  #language en-US "Default Creator ID for ACPI table creation.<BR><BR>\n"
-                                                                                         "Accroding to ACPI specification, for tables containing Definition Blocks,\n"
+                                                                                         "According to ACPI specification, for tables containing Definition Blocks,\n"
                                                                                          "this is the ID for the ASL Compiler.<BR>\n"
                                                                                          "This PCD is ignored for definition block.<BR>"
 
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiDefaultCreatorRevision_PROMPT  #language en-US "Default Creator Revision for ACPI table creation"
 
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiDefaultCreatorRevision_HELP  #language en-US "Default Creator Revision for ACPI table creation.<BR><BR>\n"
-                                                                                               "Accroding to ACPI specification, for tables containing Definition Blocks,\n"
+                                                                                               "According to ACPI specification, for tables containing Definition Blocks,\n"
                                                                                                "this is the revision for the ASL Compiler.<BR>\n"
                                                                                                "This PCD is ignored for definition block.<BR>"
 
@@ -315,6 +324,16 @@
                                                                                   "IA32 PAE is supported and Execute Disable Bit is available.<BR>"
                                                                                   "TRUE  - to set NX for stack.<BR>"
                                                                                   "FALSE - Not to set NX for stack.<BR>"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiS3Enable_PROMPT  #language en-US "ACPI S3 Enable"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiS3Enable_HELP  #language en-US "Indicates if ACPI S3 will be enabled.<BR><BR>"
+                                                                                  "TRUE  - ACPI S3 will be enabled.<BR>"
+                                                                                  "FALSE - ACPI S3 will be disabled.<BR>"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdS3BootScriptStackSize_PROMPT  #language en-US "Reserved S3 Boot Script Stack ACPI Memory Size"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdS3BootScriptStackSize_HELP  #language en-US "Specify memory size for boot script executor stack usage in S3 phase. The default size 32K. When changing the value make sure the memory size is large enough to meet boot script executor requirement in the S3 phase."
 
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdVarCheckVfrDriverGuidArray_PROMPT  #language en-US "Driver guid array of VFR drivers for VarCheckHiiBin generation"
 
@@ -915,3 +934,22 @@
                                                                                         "equal to 8.<BR>\n"
                                                                                         "For certain UART whose register needs to be accessed in DWORD aligned address,\n"
                                                                                         "RegisterStride equals to 4.\n"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiExposedTableVersions_PROMPT  #language en-US "Exposed ACPI table versions."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiExposedTableVersions_HELP  #language en-US "Indicates which ACPI versions are targeted by the ACPI tables exposed to the OS\n"
+                                                                                             "These values are aligned with the definitions in MdePkg/Include/Protocol/AcpiSystemDescriptionTable.h\n"
+                                                                                             "BIT 1 - EFI_ACPI_TABLE_VERSION_1_0B.<BR>\n"
+                                                                                             "BIT 2 - EFI_ACPI_TABLE_VERSION_2_0.<BR>\n"
+                                                                                             "BIT 3 - EFI_ACPI_TABLE_VERSION_3_0.<BR>\n"
+                                                                                             "BIT 4 - EFI_ACPI_TABLE_VERSION_4_0.<BR>\n"
+                                                                                             "BIT 5 - EFI_ACPI_TABLE_VERSION_5_0.<BR>"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdHiiOsRuntimeSupport_PROMPT  #language en-US "Enable export HII data and configuration to be used in OS runtime."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdHiiOsRuntimeSupport_HELP  #language en-US "Indicates if HII data and configuration has been exported.<BR><BR>\n"
+                                                                                        "Add this PCD mainly consider the use case of simulator. This PCD maybe set to FALSE for\n"
+                                                                                        "simulator platform because the performance cost for this feature.\n"
+                                                                                        "TRUE  - Export HII data and configuration data.<BR>\n"
+                                                                                        "FALSE - Does not export HII data and configuration.<BR>"
+

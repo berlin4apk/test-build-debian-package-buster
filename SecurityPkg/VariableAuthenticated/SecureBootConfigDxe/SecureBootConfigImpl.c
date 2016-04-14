@@ -1,7 +1,7 @@
 /** @file
   HII Config Access protocol implementation of SecureBoot configuration module.
 
-Copyright (c) 2011 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2011 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -96,6 +96,8 @@ CHAR16* mDerEncodedSuffix[] = {
   NULL
 };
 CHAR16* mSupportX509Suffix = L"*.cer/der/crt";
+
+SECUREBOOT_CONFIG_PRIVATE_DATA  *gSecureBootPrivateData = NULL;
 
 /**
   This code checks if the FileSuffix is one of the possible DER-encoded certificate suffix.
@@ -657,7 +659,11 @@ ON_EXIT:
 
   CloseFile (Private->FileContext->FHandle);
   Private->FileContext->FHandle = NULL;
-  Private->FileContext->FileName = NULL;
+
+  if (Private->FileContext->FileName != NULL){
+    FreePool(Private->FileContext->FileName);
+    Private->FileContext->FileName = NULL;
+  }
 
   if (Private->SignatureGUID != NULL) {
     FreePool (Private->SignatureGUID);
@@ -779,7 +785,11 @@ EnrollX509ToKek (
 ON_EXIT:
 
   CloseFile (Private->FileContext->FHandle);
-  Private->FileContext->FileName = NULL;
+  if (Private->FileContext->FileName != NULL){
+    FreePool(Private->FileContext->FileName);
+    Private->FileContext->FileName = NULL;
+  }
+
   Private->FileContext->FHandle = NULL;
 
   if (Private->SignatureGUID != NULL) {
@@ -949,7 +959,11 @@ EnrollX509toSigDB (
 ON_EXIT:
 
   CloseFile (Private->FileContext->FHandle);
-  Private->FileContext->FileName = NULL;
+  if (Private->FileContext->FileName != NULL){
+    FreePool(Private->FileContext->FileName);
+    Private->FileContext->FileName = NULL;
+  }
+
   Private->FileContext->FHandle = NULL;
 
   if (Private->SignatureGUID != NULL) {
@@ -1509,7 +1523,11 @@ EnrollX509HashtoSigDB (
 
 ON_EXIT:
   CloseFile (Private->FileContext->FHandle);
-  Private->FileContext->FileName = NULL;
+  if (Private->FileContext->FileName != NULL){
+    FreePool(Private->FileContext->FileName);
+    Private->FileContext->FileName = NULL;
+  }
+
   Private->FileContext->FHandle = NULL;
 
   if (Private->SignatureGUID != NULL) {
@@ -2157,7 +2175,11 @@ ON_EXIT:
 
   CloseFile (Private->FileContext->FHandle);
   Private->FileContext->FHandle = NULL;
-  Private->FileContext->FileName = NULL;
+
+  if (Private->FileContext->FileName != NULL){
+    FreePool(Private->FileContext->FileName);
+    Private->FileContext->FileName = NULL;
+  }
 
   if (Private->SignatureGUID != NULL) {
     FreePool (Private->SignatureGUID);
@@ -3061,6 +3083,60 @@ ExtractSecureBootModeFromVariable(
 }
 
 /**
+
+  Update SecureBoot strings based on new Secure Boot Mode State. String includes STR_SECURE_BOOT_STATE_CONTENT
+ and STR_CUR_SECURE_BOOT_MODE_CONTENT.
+
+  @param[in]    PrivateData         Module's private data.
+
+  @return EFI_SUCCESS              Update secure boot strings successfully.
+  @return other                          Fail to update secure boot strings.
+
+**/
+EFI_STATUS
+UpdateSecureBootString(
+  IN SECUREBOOT_CONFIG_PRIVATE_DATA  *Private
+  )
+{
+  UINT8       CurSecureBootMode;
+  UINT8       *SecureBoot;
+
+  SecureBoot = NULL;
+
+  //
+  // Get current secure boot state.
+  //
+  GetVariable2 (EFI_SECURE_BOOT_MODE_NAME, &gEfiGlobalVariableGuid, (VOID**)&SecureBoot, NULL);
+  if (SecureBoot == NULL) {
+    return EFI_NOT_FOUND;
+  }
+
+  if (*SecureBoot == SECURE_BOOT_MODE_ENABLE) {
+    HiiSetString (Private->HiiHandle, STRING_TOKEN (STR_SECURE_BOOT_STATE_CONTENT), L"Enabled", NULL);
+  } else {
+    HiiSetString (Private->HiiHandle, STRING_TOKEN (STR_SECURE_BOOT_STATE_CONTENT), L"Disabled", NULL);
+  }
+  //
+  // Get current secure boot mode.
+  //
+  ExtractSecureBootModeFromVariable(&CurSecureBootMode);
+  
+  if (CurSecureBootMode == SECURE_BOOT_MODE_USER_MODE) {
+    HiiSetString (Private->HiiHandle, STRING_TOKEN (STR_CUR_SECURE_BOOT_MODE_CONTENT), L"UserMode", NULL);
+  } else if (CurSecureBootMode == SECURE_BOOT_MODE_SETUP_MODE) {
+    HiiSetString (Private->HiiHandle, STRING_TOKEN (STR_CUR_SECURE_BOOT_MODE_CONTENT), L"SetupMode", NULL);
+  } else if (CurSecureBootMode == SECURE_BOOT_MODE_AUDIT_MODE) {
+    HiiSetString (Private->HiiHandle, STRING_TOKEN (STR_CUR_SECURE_BOOT_MODE_CONTENT), L"AuditMode", NULL);
+  } else if (CurSecureBootMode == SECURE_BOOT_MODE_DEPLOYED_MODE) {
+    HiiSetString (Private->HiiHandle, STRING_TOKEN (STR_CUR_SECURE_BOOT_MODE_CONTENT), L"DeployedMode", NULL);
+  }
+
+  FreePool(SecureBoot);
+
+  return EFI_SUCCESS;
+}
+
+/**
   This function extracts configuration from variable.
 
   @param[in, out]  ConfigData   Point to SecureBoot configuration private data.
@@ -3191,7 +3267,6 @@ SecureBootExtractConfig (
   EFI_STRING                        ConfigRequestHdr;
   SECUREBOOT_CONFIG_PRIVATE_DATA    *PrivateData;
   BOOLEAN                           AllocatedRequest;
-  UINT8                             *SecureBoot;
 
   if (Progress == NULL || Results == NULL) {
     return EFI_INVALID_PARAMETER;
@@ -3201,7 +3276,6 @@ SecureBootExtractConfig (
   ConfigRequestHdr = NULL;
   ConfigRequest    = NULL;
   Size             = 0;
-  SecureBoot       = NULL;
 
   ZeroMem (&Configuration, sizeof (Configuration));
   PrivateData      = SECUREBOOT_CONFIG_PRIVATE_FROM_THIS (This);
@@ -3215,31 +3289,6 @@ SecureBootExtractConfig (
   // Get Configuration from Variable.
   //
   SecureBootExtractConfigFromVariable (&Configuration);
-
-  //
-  // Get current secure boot state.
-  //
-  GetVariable2 (EFI_SECURE_BOOT_MODE_NAME, &gEfiGlobalVariableGuid, (VOID**)&SecureBoot, NULL);
-
-  if (SecureBoot != NULL && *SecureBoot == SECURE_BOOT_MODE_ENABLE) {
-    HiiSetString (PrivateData->HiiHandle, STRING_TOKEN (STR_SECURE_BOOT_STATE_CONTENT), L"Enabled", NULL);
-  } else {
-    HiiSetString (PrivateData->HiiHandle, STRING_TOKEN (STR_SECURE_BOOT_STATE_CONTENT), L"Disabled", NULL);
-  }
-
-  //
-  // Get current secure boot mode
-  //
-  DEBUG((EFI_D_INFO, "Configuration.CurSecureBootMode %d\n", Configuration.CurSecureBootMode));
-  if (Configuration.CurSecureBootMode == SECURE_BOOT_MODE_USER_MODE) {
-    HiiSetString (PrivateData->HiiHandle, STRING_TOKEN (STR_CUR_SECURE_BOOT_MODE_CONTENT), L"UserMode", NULL);
-  } else if (Configuration.CurSecureBootMode == SECURE_BOOT_MODE_SETUP_MODE) {
-    HiiSetString (PrivateData->HiiHandle, STRING_TOKEN (STR_CUR_SECURE_BOOT_MODE_CONTENT), L"SetupMode", NULL);
-  } else if (Configuration.CurSecureBootMode == SECURE_BOOT_MODE_AUDIT_MODE) {
-    HiiSetString (PrivateData->HiiHandle, STRING_TOKEN (STR_CUR_SECURE_BOOT_MODE_CONTENT), L"AuditMode", NULL);
-  } else if (Configuration.CurSecureBootMode == SECURE_BOOT_MODE_DEPLOYED_MODE) {
-    HiiSetString (PrivateData->HiiHandle, STRING_TOKEN (STR_CUR_SECURE_BOOT_MODE_CONTENT), L"DeployedMode", NULL);
-  }
 
   BufferSize = sizeof (SECUREBOOT_CONFIGURATION);
   ConfigRequest = Request;
@@ -3283,10 +3332,6 @@ SecureBootExtractConfig (
     *Progress = NULL;
   } else if (StrStr (Request, L"OFFSET") == NULL) {
     *Progress = Request + StrLen (Request);
-  }
-
-  if (SecureBoot != NULL) {
-    FreePool (SecureBoot);
   }
 
   return Status;
@@ -3412,15 +3457,19 @@ SecureBootCallback (
   UINT8                           *SecureBootMode;
   CHAR16                          PromptString[100];
   UINT8                           CurSecureBootMode;
+  EFI_DEVICE_PATH_PROTOCOL        *File;
 
   Status           = EFI_SUCCESS;
   SecureBootEnable = NULL;
   SecureBootMode   = NULL;
+  File             = NULL;
 
   if ((This == NULL) || (Value == NULL) || (ActionRequest == NULL)) {
     return EFI_INVALID_PARAMETER;
   }
   Private = SECUREBOOT_CONFIG_PRIVATE_FROM_THIS (This);
+
+  gSecureBootPrivateData = Private;
 
   //
   // Retrieve uncommitted data from Browser
@@ -3435,10 +3484,15 @@ SecureBootCallback (
 
   if (Action == EFI_BROWSER_ACTION_FORM_OPEN) {
     if (QuestionId == KEY_SECURE_BOOT_MODE) {
+      //
+      // Update secure boot strings when opening this form
+      //
+      Status = UpdateSecureBootString(Private);
+      SecureBootExtractConfigFromVariable (IfrNvData);
       mIsEnterSecureBootForm = TRUE;
     } else if (QuestionId == KEY_TRANS_SECURE_BOOT_MODE){
       //
-      // Secure Boot Policy variable changes after tranistion. Re-sync CurSecureBootMode
+      // Secure Boot Policy variable changes after transition. Re-sync CurSecureBootMode
       //
       ExtractSecureBootModeFromVariable(&IfrNvData->CurSecureBootMode);
       mIsSelectedSecureBootModeForm = TRUE;
@@ -3497,11 +3551,6 @@ SecureBootCallback (
       }
       break;
 
-    case KEY_SECURE_BOOT_OPTION:
-      FreeMenu (&DirectoryMenu);
-      FreeMenu (&FsOptionMenu);
-      break;
-
     case KEY_SECURE_BOOT_KEK_OPTION:
     case KEY_SECURE_BOOT_DB_OPTION:
     case KEY_SECURE_BOOT_DBX_OPTION:
@@ -3532,28 +3581,32 @@ SecureBootCallback (
       //
       CleanUpPage (LabelId, Private);
       break;
+    case KEY_SECURE_BOOT_PK_OPTION:
+      LabelId = FORMID_ENROLL_PK_FORM;
+      //
+      // Refresh selected file.
+      //
+      CleanUpPage (LabelId, Private);
+      break;
 
-    case SECUREBOOT_ADD_PK_FILE_FORM_ID:
+    case FORMID_ENROLL_PK_FORM:
+      ChooseFile (NULL, NULL, UpdatePKFromFile, &File);
+      break;
+
     case FORMID_ENROLL_KEK_FORM:
-    case SECUREBOOT_ENROLL_SIGNATURE_TO_DB:
-    case SECUREBOOT_ENROLL_SIGNATURE_TO_DBX:
-    case SECUREBOOT_ENROLL_SIGNATURE_TO_DBT:
-      if (QuestionId == SECUREBOOT_ADD_PK_FILE_FORM_ID) {
-        Private->FeCurrentState = FileExplorerStateEnrollPkFile;
-      } else if (QuestionId == FORMID_ENROLL_KEK_FORM) {
-        Private->FeCurrentState = FileExplorerStateEnrollKekFile;
-      } else if (QuestionId == SECUREBOOT_ENROLL_SIGNATURE_TO_DB) {
-        Private->FeCurrentState = FileExplorerStateEnrollSignatureFileToDb;
-      } else if (QuestionId == SECUREBOOT_ENROLL_SIGNATURE_TO_DBX) {
-        Private->FeCurrentState = FileExplorerStateEnrollSignatureFileToDbx;
-        IfrNvData->CertificateFormat = HASHALG_SHA256;
-      } else {
-        Private->FeCurrentState = FileExplorerStateEnrollSignatureFileToDbt;
-      }
+      ChooseFile (NULL, NULL, UpdateKEKFromFile, &File);
+      break;
 
-      Private->FeDisplayContext = FileExplorerDisplayUnknown;
-      CleanUpPage (FORM_FILE_EXPLORER_ID, Private);
-      UpdateFileExplorer (Private, 0);
+    case SECUREBOOT_ENROLL_SIGNATURE_TO_DB:
+      ChooseFile (NULL, NULL, UpdateDBFromFile, &File);
+      break;
+
+    case SECUREBOOT_ENROLL_SIGNATURE_TO_DBX:
+      ChooseFile (NULL, NULL, UpdateDBXFromFile, &File);
+      break;
+
+    case SECUREBOOT_ENROLL_SIGNATURE_TO_DBT:
+      ChooseFile (NULL, NULL, UpdateDBTFromFile, &File);
       break;
 
     case KEY_SECURE_BOOT_DELETE_PK:
@@ -3696,6 +3749,24 @@ SecureBootCallback (
           );
       }
       break;
+    case KEY_VALUE_SAVE_AND_EXIT_PK:
+      Status = EnrollPlatformKey (Private);
+      if (EFI_ERROR (Status)) {
+        UnicodeSPrint (
+          PromptString,
+          sizeof (PromptString),
+          L"Only DER encoded certificate file (%s) is supported.",
+          mSupportX509Suffix
+          );
+        CreatePopUp (
+          EFI_LIGHTGRAY | EFI_BACKGROUND_BLUE,
+          &Key,
+          L"ERROR: Unsupported file type!",
+          PromptString,
+          NULL
+          );
+      }
+      break;
     case KEY_TRANS_SECURE_BOOT_MODE:
       //
       // Pop up to alert user want to change secure boot mode 
@@ -3727,7 +3798,7 @@ SecureBootCallback (
         CreatePopUp (
           EFI_LIGHTGRAY | EFI_BACKGROUND_BLUE,
           &Key,
-          L"Secure boot mode tranistion requires PK change",
+          L"Secure boot mode transition requires PK change",
           L"Please go to link below to update PK",
           NULL
           );
@@ -3738,29 +3809,17 @@ SecureBootCallback (
 
       Status = SecureBootModeTransition(IfrNvData->CurSecureBootMode, Value->u8);
       //
-      // Secure Boot Policy variable may change after tranistion. Re-sync CurSecureBootMode
+      // Secure Boot Policy variable may change after transition. Re-sync CurSecureBootMode
       //
       ExtractSecureBootModeFromVariable(&CurSecureBootMode);
       if (IfrNvData->CurSecureBootMode != CurSecureBootMode) {
         IfrNvData->CurSecureBootMode = CurSecureBootMode;
         mIsSecureBootModeChanged = TRUE;
-
-        if (IfrNvData->CurSecureBootMode == SECURE_BOOT_MODE_USER_MODE) {
-          HiiSetString (Private->HiiHandle, STRING_TOKEN (STR_CUR_SECURE_BOOT_MODE_CONTENT), L"UserMode", NULL);
-        } else if (IfrNvData->CurSecureBootMode == SECURE_BOOT_MODE_SETUP_MODE) {
-          HiiSetString (Private->HiiHandle, STRING_TOKEN (STR_CUR_SECURE_BOOT_MODE_CONTENT), L"SetupMode", NULL);
-        } else if (IfrNvData->CurSecureBootMode == SECURE_BOOT_MODE_AUDIT_MODE) {
-          HiiSetString (Private->HiiHandle, STRING_TOKEN (STR_CUR_SECURE_BOOT_MODE_CONTENT), L"AuditMode", NULL);
-        } else if (IfrNvData->CurSecureBootMode == SECURE_BOOT_MODE_DEPLOYED_MODE) {
-          HiiSetString (Private->HiiHandle, STRING_TOKEN (STR_CUR_SECURE_BOOT_MODE_CONTENT), L"DeployedMode", NULL);
-        }
       }
       break;
 
     default:
-      if (QuestionId >= FILE_OPTION_GOTO_OFFSET) {
-        UpdateFileExplorer (Private, QuestionId);
-      } else if ((QuestionId >= OPTION_DEL_KEK_QUESTION_ID) &&
+      if ((QuestionId >= OPTION_DEL_KEK_QUESTION_ID) &&
                  (QuestionId < (OPTION_DEL_KEK_QUESTION_ID + OPTION_CONFIG_RANGE))) {
         DeleteKeyExchangeKey (Private, QuestionId);
       } else if ((QuestionId >= OPTION_DEL_DB_QUESTION_ID) &&
@@ -3798,32 +3857,6 @@ SecureBootCallback (
           );
       }
       break;
-    }
-  } else if (Action == EFI_BROWSER_ACTION_CHANGED) {
-    switch (QuestionId) {
-    case KEY_SECURE_BOOT_ENABLE:
-      *ActionRequest = EFI_BROWSER_ACTION_REQUEST_FORM_APPLY;
-      break;
-    case KEY_VALUE_SAVE_AND_EXIT_PK:
-      Status = EnrollPlatformKey (Private);
-      if (EFI_ERROR (Status)) {
-        UnicodeSPrint (
-          PromptString,
-          sizeof (PromptString),
-          L"Only DER encoded certificate file (%s) is supported.",
-          mSupportX509Suffix
-          );
-        CreatePopUp (
-          EFI_LIGHTGRAY | EFI_BACKGROUND_BLUE,
-          &Key,
-          L"ERROR: Unsupported file type!",
-          PromptString,
-          NULL
-          );
-      } else {
-        *ActionRequest = EFI_BROWSER_ACTION_REQUEST_RESET;
-      }
-      break;
 
     case KEY_VALUE_NO_SAVE_AND_EXIT_PK:
     case KEY_VALUE_NO_SAVE_AND_EXIT_KEK:
@@ -3833,16 +3866,23 @@ SecureBootCallback (
       if (Private->FileContext->FHandle != NULL) {
         CloseFile (Private->FileContext->FHandle);
         Private->FileContext->FHandle = NULL;
-        Private->FileContext->FileName = NULL;
+        if (Private->FileContext->FileName!= NULL){
+          FreePool(Private->FileContext->FileName);
+          Private->FileContext->FileName = NULL;
+        }
       }
 
       if (Private->SignatureGUID != NULL) {
         FreePool (Private->SignatureGUID);
         Private->SignatureGUID = NULL;
       }
-      *ActionRequest = EFI_BROWSER_ACTION_REQUEST_EXIT;
       break;
-
+    }
+  } else if (Action == EFI_BROWSER_ACTION_CHANGED) {
+    switch (QuestionId) {
+    case KEY_SECURE_BOOT_ENABLE:
+      *ActionRequest = EFI_BROWSER_ACTION_REQUEST_FORM_APPLY;
+      break;
     case KEY_SECURE_BOOT_MODE:
       mIsEnterSecureBootForm = FALSE;
       break;
@@ -3882,11 +3922,6 @@ SecureBootCallback (
       }
       break;
     default:
-      if (QuestionId >= FILE_OPTION_OFFSET && QuestionId < FILE_OPTION_GOTO_OFFSET) {
-        if (UpdateFileExplorer (Private, QuestionId)) {
-          *ActionRequest = EFI_BROWSER_ACTION_REQUEST_EXIT;
-        }
-      }
       break;
     }
   } else if (Action == EFI_BROWSER_ACTION_DEFAULT_STANDARD) {
@@ -3922,6 +3957,11 @@ EXIT:
   }
 
   FreePool (IfrNvData);
+
+  if (File != NULL){
+    FreePool(File);
+    File = NULL;
+  }
 
   return EFI_SUCCESS;
 }
@@ -3987,18 +4027,11 @@ InstallSecureBootConfigForm (
   PrivateData->HiiHandle = HiiHandle;
 
   PrivateData->FileContext = AllocateZeroPool (sizeof (SECUREBOOT_FILE_CONTEXT));
-  PrivateData->MenuEntry   = AllocateZeroPool (sizeof (SECUREBOOT_MENU_ENTRY));
 
-  if (PrivateData->FileContext == NULL || PrivateData->MenuEntry == NULL) {
+  if (PrivateData->FileContext == NULL) {
     UninstallSecureBootConfigForm (PrivateData);
     return EFI_OUT_OF_RESOURCES;
   }
-
-  PrivateData->FeCurrentState = FileExplorerStateInActive;
-  PrivateData->FeDisplayContext = FileExplorerDisplayUnknown;
-
-  InitializeListHead (&FsOptionMenu.Head);
-  InitializeListHead (&DirectoryMenu.Head);
 
   //
   // Init OpCode Handle and Allocate space for creation of Buffer
@@ -4079,18 +4112,11 @@ UninstallSecureBootConfigForm (
     FreePool (PrivateData->SignatureGUID);
   }
 
-  if (PrivateData->MenuEntry != NULL) {
-    FreePool (PrivateData->MenuEntry);
-  }
-
   if (PrivateData->FileContext != NULL) {
     FreePool (PrivateData->FileContext);
   }
 
   FreePool (PrivateData);
-
-  FreeMenu (&DirectoryMenu);
-  FreeMenu (&FsOptionMenu);
 
   if (mStartOpCodeHandle != NULL) {
     HiiFreeOpCodeHandle (mStartOpCodeHandle);
