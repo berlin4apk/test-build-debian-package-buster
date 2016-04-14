@@ -1,8 +1,8 @@
 /** @file
   Load option library functions which relate with creating and processing load options.
 
-Copyright (c) 2011 - 2015, Intel Corporation. All rights reserved.<BR>
-(C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
+Copyright (c) 2011 - 2016, Intel Corporation. All rights reserved.<BR>
+(C) Copyright 2015-2016 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -564,7 +564,6 @@ EfiBootManagerDeleteLoadOptionVariable (
 {
   UINT16                            *OptionOrder;
   UINTN                             OptionOrderSize;
-  EFI_STATUS                        Status;
   UINTN                             Index;
   CHAR16                            OptionName[BM_OPTION_NAME_LEN];
 
@@ -572,11 +571,10 @@ EfiBootManagerDeleteLoadOptionVariable (
     return EFI_INVALID_PARAMETER;
   }
 
-  Status = EFI_NOT_FOUND;
-
   if (OptionType == LoadOptionTypeDriver || OptionType == LoadOptionTypeSysPrep || OptionType == LoadOptionTypeBoot) {
     //
-    // If the associated *Order exists, just remove the reference in *Order.
+    // If the associated *Order exists, firstly remove the reference in *Order for
+    //  Driver####, SysPrep#### and Boot####.
     //
     GetEfiGlobalVariable2 (mBmLoadOptionOrderName[OptionType], (VOID **) &OptionOrder, &OptionOrderSize);
     ASSERT ((OptionOrder != NULL && OptionOrderSize != 0) || (OptionOrder == NULL && OptionOrderSize == 0));
@@ -585,34 +583,32 @@ EfiBootManagerDeleteLoadOptionVariable (
       if (OptionOrder[Index] == OptionNumber) {
         OptionOrderSize -= sizeof (UINT16);
         CopyMem (&OptionOrder[Index], &OptionOrder[Index + 1], OptionOrderSize - Index * sizeof (UINT16));
-        Status = gRT->SetVariable (
-          mBmLoadOptionOrderName[OptionType],
-          &gEfiGlobalVariableGuid,
-          EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS | EFI_VARIABLE_NON_VOLATILE,
-          OptionOrderSize,
-          OptionOrder
-          );
+        gRT->SetVariable (
+               mBmLoadOptionOrderName[OptionType],
+               &gEfiGlobalVariableGuid,
+               EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS | EFI_VARIABLE_NON_VOLATILE,
+               OptionOrderSize,
+               OptionOrder
+               );
         break;
       }
     }
     if (OptionOrder != NULL) {
       FreePool (OptionOrder);
     }
-  } else if (OptionType == LoadOptionTypePlatformRecovery) {
-    //
-    // PlatformRecovery#### doesn't have assiciated PlatformRecoveryOrder, remove the PlatformRecovery#### itself.
-    //
-    UnicodeSPrint (OptionName, sizeof (OptionName), L"%s%04x", mBmLoadOptionName[OptionType], OptionNumber);
-    Status = gRT->SetVariable (
-                    OptionName,
-                    &gEfiGlobalVariableGuid,
-                    0,
-                    0,
-                    NULL
-                    );
   }
 
-  return Status;
+  //
+  // Remove the Driver####, SysPrep####, Boot#### or PlatformRecovery#### itself.
+  //
+  UnicodeSPrint (OptionName, sizeof (OptionName), L"%s%04x", mBmLoadOptionName[OptionType], OptionNumber);
+  return gRT->SetVariable (
+                OptionName,
+                &gEfiGlobalVariableGuid,
+                0,
+                0,
+                NULL
+                );
 }
 
 /**
@@ -779,15 +775,20 @@ BmValidateOption (
   @retval FALSE The variable name is NOT valid.
 **/
 BOOLEAN
-BmIsValidLoadOptionVariableName (
+EFIAPI
+EfiBootManagerIsValidLoadOptionVariableName (
   IN CHAR16                             *VariableName,
-  OUT EFI_BOOT_MANAGER_LOAD_OPTION_TYPE *OptionType,
-  OUT UINT16                            *OptionNumber
+  OUT EFI_BOOT_MANAGER_LOAD_OPTION_TYPE *OptionType   OPTIONAL,
+  OUT UINT16                            *OptionNumber OPTIONAL
   )
 {
   UINTN                             VariableNameLen;
   UINTN                             Index;
   UINTN                             Uint;
+
+  if (VariableName == NULL) {
+    return FALSE;
+  }
 
   VariableNameLen = StrLen (VariableName);
 
@@ -807,14 +808,19 @@ BmIsValidLoadOptionVariableName (
     return FALSE;
   }
 
-  *OptionType = (EFI_BOOT_MANAGER_LOAD_OPTION_TYPE) Index;
-  *OptionNumber = 0;
-  for (Index = VariableNameLen - 4; Index < VariableNameLen; Index++) {
-    Uint = BmCharToUint (VariableName[Index]);
-    if (Uint == -1) {
-      break;
-    } else {
-      *OptionNumber = (UINT16) Uint + *OptionNumber * 0x10;
+  if (OptionType != NULL) {
+    *OptionType = (EFI_BOOT_MANAGER_LOAD_OPTION_TYPE) Index;
+  }
+
+  if (OptionNumber != NULL) {
+    *OptionNumber = 0;
+    for (Index = VariableNameLen - 4; Index < VariableNameLen; Index++) {
+      Uint = BmCharToUint (VariableName[Index]);
+      if (Uint == -1) {
+        break;
+      } else {
+        *OptionNumber = (UINT16) Uint + *OptionNumber * 0x10;
+      }
     }
   }
 
@@ -857,7 +863,7 @@ EfiBootManagerVariableToLoadOptionEx (
     return EFI_INVALID_PARAMETER;
   }
 
-  if (!BmIsValidLoadOptionVariableName (VariableName, &OptionType, &OptionNumber)) {
+  if (!EfiBootManagerIsValidLoadOptionVariableName (VariableName, &OptionType, &OptionNumber)) {
     return EFI_INVALID_PARAMETER;
   }
 
@@ -983,7 +989,7 @@ BmCollectLoadOptions (
 
   if (CompareGuid (Guid, Param->Guid) && (
       Param->OptionType == LoadOptionTypePlatformRecovery &&
-      BmIsValidLoadOptionVariableName (Name, &OptionType, &OptionNumber) &&
+      EfiBootManagerIsValidLoadOptionVariableName (Name, &OptionType, &OptionNumber) &&
       OptionType == LoadOptionTypePlatformRecovery
      )) {
     Status = EfiBootManagerVariableToLoadOptionEx (Name, Guid, &Option);

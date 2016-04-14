@@ -1,7 +1,7 @@
 /** @file
 DnsDxe support functions implementation.
   
-Copyright (c) 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -618,11 +618,35 @@ Dns6GetMapping (
   while (!EFI_ERROR (gBS->CheckEvent (Service->TimerToGetMap))) {
     Udp->Poll (Udp);
 
-    if (!EFI_ERROR (Udp->GetModeData (Udp, NULL, &Ip6Mode, NULL, NULL)) &&
-        Ip6Mode.IsConfigured) {
+    if (!EFI_ERROR (Udp->GetModeData (Udp, NULL, &Ip6Mode, NULL, NULL))) {
+      if (Ip6Mode.AddressList != NULL) {
+        FreePool (Ip6Mode.AddressList);
+      }
 
-      Udp->Configure (Udp, NULL);
-      return (BOOLEAN) (Udp->Configure (Udp, UdpCfgData) == EFI_SUCCESS);
+      if (Ip6Mode.GroupTable != NULL) {
+        FreePool (Ip6Mode.GroupTable);
+      }
+
+      if (Ip6Mode.RouteTable != NULL) {
+        FreePool (Ip6Mode.RouteTable);
+      }
+
+      if (Ip6Mode.NeighborCache != NULL) {
+        FreePool (Ip6Mode.NeighborCache);
+      }
+
+      if (Ip6Mode.PrefixTable != NULL) {
+        FreePool (Ip6Mode.PrefixTable);
+      }
+
+      if (Ip6Mode.IcmpTypeList != NULL) {
+        FreePool (Ip6Mode.IcmpTypeList);
+      }
+
+      if (Ip6Mode.IsConfigured) {
+        Udp->Configure (Udp, NULL);
+        return (BOOLEAN) (Udp->Configure (Udp, UdpCfgData) == EFI_SUCCESS);
+      }
     }
   }
 
@@ -1014,61 +1038,6 @@ AddDns6ServerIp (
 }
 
 /**
-  Fill QName for IP querying. QName is a domain name represented as 
-  a sequence of labels, where each label consists of a length octet 
-  followed by that number of octets. The domain name terminates with 
-  the zero length octet for the null label of the root. Caller should 
-  take responsibility to the buffer in QName.
-
-  @param  HostName          Queried HostName    
-
-  @retval NULL      Failed to fill QName.
-  @return           QName filled successfully.
-  
-**/ 
-UINT8 *
-EFIAPI
-DnsFillinQNameForQueryIp (
-  IN  CHAR16              *HostName
-  )
-{
-  CHAR8                 *QueryName;
-  CHAR8                 *Header;
-  CHAR8                 *Tail;
-  UINTN                 Len;
-  UINTN                 Index;
-
-  QueryName  = NULL;
-  Header     = NULL;
-  Tail       = NULL;
-
-  QueryName = AllocateZeroPool (DNS_DEFAULT_BLKSIZE);
-  if (QueryName == NULL) {
-    return NULL;
-  }
-  
-  Header = QueryName;
-  Tail = Header + 1;
-  Len = 0;
-  for (Index = 0; HostName[Index] != 0; Index++) {
-    *Tail = (CHAR8) HostName[Index];
-    if (*Tail == '.') {
-      *Header = (CHAR8) Len;
-      Header = Tail;
-      Tail ++;
-      Len = 0;
-    } else {
-      Tail++;
-      Len++;
-    }
-  }
-  *Header = (CHAR8) Len;
-  *Tail = 0;
-
-  return QueryName;
-}
-
-/**
   Find out whether the response is valid or invalid.
 
   @param  TokensMap       All DNS transmittal Tokens entry.  
@@ -1360,8 +1329,6 @@ ParseDnsResponse (
     // Check whether it's the GeneralLookUp querying.
     //
     if (Instance->Service->IpVersion == IP_VERSION_4 && Dns4TokenEntry->GeneralLookUp) {
-      ASSERT (Dns4TokenEntry != NULL);
-      
       Dns4RR = Dns4TokenEntry->Token->RspData.GLookupData->RRList;
       AnswerData = (UINT8 *) AnswerSection + sizeof (*AnswerSection);
 
@@ -1387,8 +1354,6 @@ ParseDnsResponse (
       
       RRCount ++;
     } else if (Instance->Service->IpVersion == IP_VERSION_6 && Dns6TokenEntry->GeneralLookUp) {
-      ASSERT (Dns6TokenEntry != NULL);
-      
       Dns6RR = Dns6TokenEntry->Token->RspData.GLookupData->RRList;
       AnswerData = (UINT8 *) AnswerSection + sizeof (*AnswerSection);
 
@@ -1650,6 +1615,10 @@ DnsOnPacketReceived (
   }
 
   ASSERT (Packet != NULL);
+
+  if (Packet->TotalSize <= sizeof (DNS_HEADER)) {
+    goto ON_EXIT;
+  }
   
   RcvString = NetbufGetByte (Packet, 0, NULL);
   ASSERT (RcvString != NULL);
@@ -1659,15 +1628,15 @@ DnsOnPacketReceived (
   //
   ParseDnsResponse (Instance, RcvString, &Completed);
 
-  ON_EXIT:
+ON_EXIT:
 
-    if (Packet != NULL) {
-      NetbufFree (Packet);
-    }
+  if (Packet != NULL) {
+    NetbufFree (Packet);
+  }
 
-    if (!Completed) {
-      UdpIoRecvDatagram (Instance->UdpIo, DnsOnPacketReceived, Instance, 0);
-    }
+  if (!Completed) {
+    UdpIoRecvDatagram (Instance->UdpIo, DnsOnPacketReceived, Instance, 0);
+  }
 }
 
 /**
@@ -1786,8 +1755,12 @@ ConstructDNSQuery (
   NET_FRAGMENT        Frag;
   DNS_HEADER          *DnsHeader;
   DNS_QUERY_SECTION   *DnsQuery;
-  
-  Frag.Bulk = AllocatePool (DNS_DEFAULT_BLKSIZE * sizeof (UINT8));
+
+  //
+  // Messages carried by UDP are restricted to 512 bytes (not counting the IP
+  // or UDP headers).
+  //
+  Frag.Bulk = AllocatePool (DNS_MAX_MESSAGE_SIZE * sizeof (UINT8));
   if (Frag.Bulk == NULL) {
     return EFI_OUT_OF_RESOURCES;
   }

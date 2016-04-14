@@ -324,7 +324,8 @@ SynchronousRequest (
   //
   // virtio-blk's only virtqueue is #0, called "requestq" (see Appendix D).
   //
-  if (VirtioFlush (Dev->VirtIo, 0, &Dev->Ring, &Indices) == EFI_SUCCESS &&
+  if (VirtioFlush (Dev->VirtIo, 0, &Dev->Ring, &Indices,
+        NULL) == EFI_SUCCESS &&
       HostStatus == VIRTIO_BLK_S_OK) {
     return EFI_SUCCESS;
   }
@@ -592,7 +593,7 @@ VirtioBlkInit (
   UINT8      NextDevStat;
   EFI_STATUS Status;
 
-  UINT32     Features;
+  UINT64     Features;
   UINT64     NumSectors;
   UINT32     BlockSize;
   UINT8      PhysicalBlockExp;
@@ -691,6 +692,20 @@ VirtioBlkInit (
     }
   }
 
+  Features &= VIRTIO_BLK_F_BLK_SIZE | VIRTIO_BLK_F_TOPOLOGY | VIRTIO_BLK_F_RO |
+              VIRTIO_BLK_F_FLUSH | VIRTIO_F_VERSION_1;
+
+  //
+  // In virtio-1.0, feature negotiation is expected to complete before queue
+  // discovery, and the device can also reject the selected set of features.
+  //
+  if (Dev->VirtIo->Revision >= VIRTIO_SPEC_REVISION (1, 0, 0)) {
+    Status = Virtio10WriteFeatures (Dev->VirtIo, Features, &NextDevStat);
+    if (EFI_ERROR (Status)) {
+      goto Failed;
+    }
+  }
+
   //
   // step 4b -- allocate virtqueue
   //
@@ -729,22 +744,21 @@ VirtioBlkInit (
   //
   // step 4c -- Report GPFN (guest-physical frame number) of queue.
   //
-  Status = Dev->VirtIo->SetQueueAddress (Dev->VirtIo,
-      (UINT32) ((UINTN) Dev->Ring.Base >> EFI_PAGE_SHIFT));
+  Status = Dev->VirtIo->SetQueueAddress (Dev->VirtIo, &Dev->Ring);
   if (EFI_ERROR (Status)) {
     goto ReleaseQueue;
   }
 
 
   //
-  // step 5 -- Report understood features. There are no virtio-blk specific
-  // features to negotiate in virtio-0.9.5, plus we do not want any of the
-  // device-independent (known or unknown) VIRTIO_F_* capabilities (see
-  // Appendix B).
+  // step 5 -- Report understood features.
   //
-  Status = Dev->VirtIo->SetGuestFeatures (Dev->VirtIo, 0);
-  if (EFI_ERROR (Status)) {
-    goto ReleaseQueue;
+  if (Dev->VirtIo->Revision < VIRTIO_SPEC_REVISION (1, 0, 0)) {
+    Features &= ~(UINT64)VIRTIO_F_VERSION_1;
+    Status = Dev->VirtIo->SetGuestFeatures (Dev->VirtIo, Features);
+    if (EFI_ERROR (Status)) {
+      goto ReleaseQueue;
+    }
   }
 
   //

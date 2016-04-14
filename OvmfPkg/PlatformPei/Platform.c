@@ -1,7 +1,7 @@
 /**@file
   Platform PEI driver
 
-  Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
   Copyright (c) 2011, Andrei Warkentin <andreiw@motorola.com>
 
   This program and the accompanying materials
@@ -201,8 +201,8 @@ MemMapInitialization (
     EFI_RESOURCE_IO,
     EFI_RESOURCE_ATTRIBUTE_PRESENT     |
     EFI_RESOURCE_ATTRIBUTE_INITIALIZED,
-    0xC000,
-    0x4000
+    PcdGet64 (PcdPciIoBase),
+    PcdGet64 (PcdPciIoSize)
     );
 
   //
@@ -212,17 +212,21 @@ MemMapInitialization (
 
   if (!mXen) {
     UINT32  TopOfLowRam;
+    UINT64  PciExBarBase;
     UINT32  PciBase;
+    UINT32  PciSize;
 
     TopOfLowRam = GetSystemMemorySizeBelow4gb ();
+    PciExBarBase = 0;
     if (mHostBridgeDevId == INTEL_Q35_MCH_DEVICE_ID) {
       //
-      // A 3GB base will always fall into Q35's 32-bit PCI host aperture,
-      // regardless of the Q35 MMCONFIG BAR. Correspondingly, QEMU never lets
-      // the RAM below 4 GB exceed it.
+      // The MMCONFIG area is expected to fall between the top of low RAM and
+      // the base of the 32-bit PCI host aperture.
       //
-      PciBase = BASE_2GB + BASE_1GB;
-      ASSERT (TopOfLowRam <= PciBase);
+      PciExBarBase = FixedPcdGet64 (PcdPciExpressBaseAddress);
+      ASSERT (TopOfLowRam <= PciExBarBase);
+      ASSERT (PciExBarBase <= MAX_UINT32 - SIZE_256MB);
+      PciBase = (UINT32)(PciExBarBase + SIZE_256MB);
     } else {
       PciBase = (TopOfLowRam < BASE_2GB) ? BASE_2GB : TopOfLowRam;
     }
@@ -240,11 +244,38 @@ MemMapInitialization (
     // 0xFED20000    gap                          896 KB
     // 0xFEE00000    LAPIC                          1 MB
     //
-    AddIoMemoryRangeHob (PciBase, 0xFC000000);
+    PciSize = 0xFC000000 - PciBase;
+    AddIoMemoryBaseSizeHob (PciBase, PciSize);
+    PcdSet64 (PcdPciMmio32Base, PciBase);
+    PcdSet64 (PcdPciMmio32Size, PciSize);
     AddIoMemoryBaseSizeHob (0xFEC00000, SIZE_4KB);
     AddIoMemoryBaseSizeHob (0xFED00000, SIZE_1KB);
     if (mHostBridgeDevId == INTEL_Q35_MCH_DEVICE_ID) {
       AddIoMemoryBaseSizeHob (ICH9_ROOT_COMPLEX_BASE, SIZE_16KB);
+      //
+      // Note: there should be an
+      //
+      //   AddIoMemoryBaseSizeHob (PciExBarBase, SIZE_256MB);
+      //
+      // call below, just like the one above for RCBA. However, Linux insists
+      // that the MMCONFIG area be marked in the E820 or UEFI memory map as
+      // "reserved memory" -- Linux does not content itself with a simple gap
+      // in the memory map wherever the MCFG ACPI table points to.
+      //
+      // This appears to be a safety measure. The PCI Firmware Specification
+      // (rev 3.1) says in 4.1.2. "MCFG Table Description": "The resources can
+      // *optionally* be returned in [...] EFIGetMemoryMap as reserved memory
+      // [...]". (Emphasis added here.)
+      //
+      // Normally we add memory resource descriptor HOBs in
+      // QemuInitializeRam(), and pre-allocate from those with memory
+      // allocation HOBs in InitializeRamRegions(). However, the MMCONFIG area
+      // is most definitely not RAM; so, as an exception, cover it with
+      // uncacheable reserved memory right here.
+      //
+      AddReservedMemoryBaseSizeHob (PciExBarBase, SIZE_256MB, FALSE);
+      BuildMemoryAllocationHob (PciExBarBase, SIZE_256MB,
+        EfiReservedMemoryType);
     }
     AddIoMemoryBaseSizeHob (PcdGet32(PcdCpuLocalApicBaseAddress), SIZE_1MB);
   }
@@ -311,6 +342,47 @@ NoexecDxeInitialization (
 {
   UPDATE_BOOLEAN_PCD_FROM_FW_CFG (PcdPropertiesTableEnable);
   UPDATE_BOOLEAN_PCD_FROM_FW_CFG (PcdSetNxForStack);
+}
+
+VOID
+PciExBarInitialization (
+  VOID
+  )
+{
+  union {
+    UINT64 Uint64;
+    UINT32 Uint32[2];
+  } PciExBarBase;
+
+  //
+  // We only support the 256MB size for the MMCONFIG area:
+  // 256 buses * 32 devices * 8 functions * 4096 bytes config space.
+  //
+  // The masks used below enforce the Q35 requirements that the MMCONFIG area
+  // be (a) correctly aligned -- here at 256 MB --, (b) located under 64 GB.
+  //
+  // Note that (b) also ensures that the minimum address width we have
+  // determined in AddressWidthInitialization(), i.e., 36 bits, will suffice
+  // for DXE's page tables to cover the MMCONFIG area.
+  //
+  PciExBarBase.Uint64 = FixedPcdGet64 (PcdPciExpressBaseAddress);
+  ASSERT ((PciExBarBase.Uint32[1] & MCH_PCIEXBAR_HIGHMASK) == 0);
+  ASSERT ((PciExBarBase.Uint32[0] & MCH_PCIEXBAR_LOWMASK) == 0);
+
+  //
+  // Clear the PCIEXBAREN bit first, before programming the high register.
+  //
+  PciWrite32 (DRAMC_REGISTER_Q35 (MCH_PCIEXBAR_LOW), 0);
+
+  //
+  // Program the high register. Then program the low register, setting the
+  // MMCONFIG area size and enabling decoding at once.
+  //
+  PciWrite32 (DRAMC_REGISTER_Q35 (MCH_PCIEXBAR_HIGH), PciExBarBase.Uint32[1]);
+  PciWrite32 (
+    DRAMC_REGISTER_Q35 (MCH_PCIEXBAR_LOW),
+    PciExBarBase.Uint32[0] | MCH_PCIEXBAR_BUS_FF | MCH_PCIEXBAR_EN
+    );
 }
 
 VOID
@@ -390,6 +462,11 @@ MiscInitialization (
       POWER_MGMT_REGISTER_Q35 (ICH9_RCBA),
       ICH9_ROOT_COMPLEX_BASE | ICH9_RCBA_EN
       );
+
+    //
+    // Set PCI Express Register Range Base Address
+    //
+    PciExBarInitialization ();
   }
 }
 
@@ -499,6 +576,8 @@ InitializePlatform (
   IN CONST EFI_PEI_SERVICES     **PeiServices
   )
 {
+  EFI_STATUS    Status;
+
   DEBUG ((EFI_D_ERROR, "Platform PEIM Loaded\n"));
 
   DebugDumpCmos ();
@@ -508,6 +587,8 @@ InitializePlatform (
   if (QemuFwCfgS3Enabled ()) {
     DEBUG ((EFI_D_INFO, "S3 support was detected on QEMU\n"));
     mS3Supported = TRUE;
+    Status = PcdSetBoolS (PcdAcpiS3Enable, TRUE);
+    ASSERT_EFI_ERROR (Status);
   }
 
   S3Verification ();

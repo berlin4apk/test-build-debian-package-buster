@@ -1,7 +1,7 @@
 /** @file
   This module implements TrEE Protocol.
   
-Copyright (c) 2013 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2013 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials 
 are licensed and made available under the terms and conditions of the BSD License 
 which accompanies this distribution.  The full text of the license may be found at 
@@ -54,8 +54,6 @@ typedef struct {
   CHAR16                                 *VariableName;
   EFI_GUID                               *VendorGuid;
 } VARIABLE_TYPE;
-
-#define  EFI_TCG_LOG_AREA_SIZE        0x10000
 
 #define  TREE_DEFAULT_MAX_COMMAND_SIZE        0x1000
 #define  TREE_DEFAULT_MAX_RESPONSE_SIZE       0x1000
@@ -949,19 +947,19 @@ SetupEventLog (
       Status = gBS->AllocatePages (
                       AllocateMaxAddress,
                       EfiACPIMemoryNVS,
-                      EFI_SIZE_TO_PAGES (EFI_TCG_LOG_AREA_SIZE),
+                      EFI_SIZE_TO_PAGES (PcdGet32 (PcdTcgLogAreaMinLen)),
                       &Lasa
                       );
       if (EFI_ERROR (Status)) {
         return Status;
       }
       mTcgDxeData.EventLogAreaStruct[Index].Lasa = Lasa;
-      mTcgDxeData.EventLogAreaStruct[Index].Laml = EFI_TCG_LOG_AREA_SIZE;
+      mTcgDxeData.EventLogAreaStruct[Index].Laml = PcdGet32 (PcdTcgLogAreaMinLen);
       //
       // To initialize them as 0xFF is recommended 
       // because the OS can know the last entry for that.
       //
-      SetMem ((VOID *)(UINTN)Lasa, EFI_TCG_LOG_AREA_SIZE, 0xFF);
+      SetMem ((VOID *)(UINTN)Lasa, PcdGet32 (PcdTcgLogAreaMinLen), 0xFF);
   }
 
   //
@@ -969,10 +967,10 @@ SetupEventLog (
   //
     if (PcdGet8 (PcdTpmPlatformClass) == TCG_PLATFORM_TYPE_CLIENT) {
       mTcgClientAcpiTemplate.Lasa = mTcgDxeData.EventLogAreaStruct[0].Lasa;
-      mTcgClientAcpiTemplate.Laml = EFI_TCG_LOG_AREA_SIZE;
+      mTcgClientAcpiTemplate.Laml = PcdGet32 (PcdTcgLogAreaMinLen);
     } else {
       mTcgServerAcpiTemplate.Lasa = mTcgDxeData.EventLogAreaStruct[0].Lasa;
-      mTcgServerAcpiTemplate.Laml = EFI_TCG_LOG_AREA_SIZE;
+      mTcgServerAcpiTemplate.Laml = PcdGet32 (PcdTcgLogAreaMinLen);
     }
 
   //
@@ -1525,7 +1523,7 @@ OnReadyToBoot (
                EFI_CALLING_EFI_APPLICATION
                );
     if (EFI_ERROR (Status)) {
-      DEBUG ((EFI_D_ERROR, "%s not Measured. Error!\n", EFI_CALLING_EFI_APPLICATION));
+      DEBUG ((EFI_D_ERROR, "%a not Measured. Error!\n", EFI_CALLING_EFI_APPLICATION));
     }
 
     //
@@ -1558,7 +1556,7 @@ OnReadyToBoot (
                EFI_RETURNING_FROM_EFI_APPLICATOIN
                );
     if (EFI_ERROR (Status)) {
-      DEBUG ((EFI_D_ERROR, "%s not Measured. Error!\n", EFI_RETURNING_FROM_EFI_APPLICATOIN));
+      DEBUG ((EFI_D_ERROR, "%a not Measured. Error!\n", EFI_RETURNING_FROM_EFI_APPLICATOIN));
     }
   }
 
@@ -1671,7 +1669,7 @@ OnExitBootServices (
              EFI_EXIT_BOOT_SERVICES_INVOCATION
              );
   if (EFI_ERROR (Status)) {
-    DEBUG ((EFI_D_ERROR, "%s not Measured. Error!\n", EFI_EXIT_BOOT_SERVICES_INVOCATION));
+    DEBUG ((EFI_D_ERROR, "%a not Measured. Error!\n", EFI_EXIT_BOOT_SERVICES_INVOCATION));
   }
 
   //
@@ -1681,7 +1679,7 @@ OnExitBootServices (
              EFI_EXIT_BOOT_SERVICES_SUCCEEDED
              );
   if (EFI_ERROR (Status)) {
-    DEBUG ((EFI_D_ERROR, "%s not Measured. Error!\n", EFI_EXIT_BOOT_SERVICES_SUCCEEDED));
+    DEBUG ((EFI_D_ERROR, "%a not Measured. Error!\n", EFI_EXIT_BOOT_SERVICES_SUCCEEDED));
   }
 }
 
@@ -1710,7 +1708,7 @@ OnExitBootServicesFailed (
              EFI_EXIT_BOOT_SERVICES_FAILED
              );
   if (EFI_ERROR (Status)) {
-    DEBUG ((EFI_D_ERROR, "%s not Measured. Error!\n", EFI_EXIT_BOOT_SERVICES_FAILED));
+    DEBUG ((EFI_D_ERROR, "%a not Measured. Error!\n", EFI_EXIT_BOOT_SERVICES_FAILED));
   }
 
 }

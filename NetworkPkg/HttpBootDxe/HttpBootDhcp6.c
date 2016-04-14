@@ -1,7 +1,7 @@
 /** @file
   Functions implementation related with DHCPv6 for HTTP boot driver.
 
-Copyright (c) 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials are licensed and made available under 
 the terms and conditions of the BSD License that accompanies this distribution.  
 The full text of the license may be found at
@@ -251,8 +251,8 @@ HttpBootParseDhcp6Packet (
   Option = Options[HTTP_BOOT_DHCP6_IDX_VENDOR_CLASS];
 
   if (Option != NULL &&
-      NTOHS(Option->OpLen) >= 10 &&
-      CompareMem (Option->Data, DEFAULT_CLASS_ID_DATA, 10) == 0) {
+      NTOHS(Option->OpLen) >= 16 &&
+      CompareMem ((Option->Data + 6), DEFAULT_CLASS_ID_DATA, 10) == 0) {
       IsHttpOffer = TRUE;
   }
 
@@ -298,7 +298,11 @@ HttpBootParseDhcp6Packet (
   //
   if (IsHttpOffer) {
     if (IpExpressedUri) {
-      OfferType = IsProxyOffer ? HttpOfferTypeProxyIpUri : HttpOfferTypeDhcpIpUri;
+      if (IsProxyOffer) {
+        OfferType = HttpOfferTypeProxyIpUri;
+      } else {
+        OfferType = IsDnsOffer ? HttpOfferTypeDhcpIpUriDns : HttpOfferTypeDhcpIpUri;
+      }
     } else {
       if (!IsProxyOffer) {
         OfferType = IsDnsOffer ? HttpOfferTypeDhcpNameUriDns : HttpOfferTypeDhcpNameUri;
@@ -974,8 +978,13 @@ ON_EXIT:
     Dhcp6->Configure (Dhcp6, NULL);
   } else {
     ZeroMem (&Config, sizeof (EFI_DHCP6_CONFIG_DATA));
-    ZeroMem (&Mode, sizeof (EFI_DHCP6_MODE_DATA));
     Dhcp6->Configure (Dhcp6, &Config);
+    if (Mode.ClientId != NULL) {
+      FreePool (Mode.ClientId);
+    }
+    if (Mode.Ia != NULL) {
+      FreePool (Mode.Ia);
+    }
   }
 
   return Status; 

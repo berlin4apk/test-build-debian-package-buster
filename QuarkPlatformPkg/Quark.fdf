@@ -2,7 +2,7 @@
 # FDF file of Clanton Peak CRB platform with 32-bit DXE
 #
 # This package provides QuarkNcSocId platform specific modules.
-# Copyright (c) 2013 - 2015 Intel Corporation.
+# Copyright (c) 2013 - 2016 Intel Corporation.
 #
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
@@ -342,6 +342,10 @@ INF  MdeModulePkg/Universal/PcatSingleSegmentPciCfg2Pei/PcatSingleSegmentPciCfg2
 INF  MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf
 INF  UefiCpuPkg/PiSmmCommunication/PiSmmCommunicationPei.inf
 INF  UefiCpuPkg/Universal/Acpi/S3Resume2Pei/S3Resume2Pei.inf
+!if $(MEASURED_BOOT_ENABLE)
+INF  SecurityPkg/Tcg/TrEEConfig/TrEEConfigPei.inf
+INF  SecurityPkg/Tcg/TcgPei/TcgPei.inf
+!endif
 
 FILE FV_IMAGE = 1E9D7604-EF45-46a0-BD8A-71AC78C17AC1 {
   SECTION PEI_DEPEX_EXP = {gEfiPeiMemoryDiscoveredPpiGuid AND gEfiPeiBootInRecoveryModePpiGuid}
@@ -566,6 +570,15 @@ INF  MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
 INF  FatPkg/EnhancedFatDxe/Fat.inf
 !endif
 
+#
+# Trusted Platform Module
+#
+!if $(MEASURED_BOOT_ENABLE)
+INF  SecurityPkg/Tcg/MemoryOverwriteControl/TcgMor.inf
+INF  SecurityPkg/Tcg/TcgDxe/TcgDxe.inf
+INF  RuleOverride = DRIVER_ACPITABLE SecurityPkg/Tcg/TcgSmm/TcgSmm.inf
+!endif
+
 ################################################################################
 #
 # FV Section
@@ -709,6 +722,16 @@ INF  RuleOverride = TIANOCOMPRESSED PerformancePkg/Dp_App/Dp.inf
   FILE SMM = $(NAMED_GUID) {
     SMM_DEPEX SMM_DEPEX Optional       $(INF_OUTPUT)/$(MODULE_NAME).depex
     PE32      PE32                     $(INF_OUTPUT)/$(MODULE_NAME).efi
+    UI        STRING="$(MODULE_NAME)" Optional
+    VERSION   STRING="$(INF_VERSION)" Optional BUILD_NUM=$(BUILD_NUMBER)
+  }
+
+[Rule.Common.DXE_SMM_DRIVER.DRIVER_ACPITABLE]
+  FILE SMM = $(NAMED_GUID) {
+    DXE_DEPEX DXE_DEPEX Optional       $(INF_OUTPUT)/$(MODULE_NAME).depex
+    PE32      PE32                     $(INF_OUTPUT)/$(MODULE_NAME).efi
+    RAW ACPI  Optional                |.acpi
+    RAW ASL   Optional                |.aml
     UI        STRING="$(MODULE_NAME)" Optional
     VERSION   STRING="$(INF_VERSION)" Optional BUILD_NUM=$(BUILD_NUMBER)
   }

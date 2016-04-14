@@ -2,7 +2,7 @@
 # Clanton Peak CRB platform with 32-bit DXE for 4MB/8MB flash devices.
 #
 # This package provides Clanton Peak CRB platform specific modules.
-# Copyright (c) 2013 - 2014 Intel Corporation.
+# Copyright (c) 2013 - 2016 Intel Corporation.
 #
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
@@ -34,11 +34,21 @@
   #
   # Platform On/Off features are defined here
   #
-  DEFINE GALILEO             = GEN2
-  DEFINE SECURE_BOOT_ENABLE  = FALSE
-  DEFINE SOURCE_DEBUG_ENABLE = FALSE
-  DEFINE PERFORMANCE_ENABLE  = FALSE
-  DEFINE LOGGING             = FALSE
+  DEFINE SECURE_BOOT_ENABLE   = FALSE
+  DEFINE MEASURED_BOOT_ENABLE = FALSE
+  DEFINE SOURCE_DEBUG_ENABLE  = FALSE
+  DEFINE PERFORMANCE_ENABLE   = FALSE
+  DEFINE LOGGING              = FALSE
+
+  #
+  # Galileo board.  Options are [GEN1, GEN2]
+  #
+  DEFINE GALILEO              = GEN2
+
+  #
+  # TPM 1.2 Hardware.  Options are [NONE, LPC, ATMEL_I2C, INFINEON_I2C]
+  #
+  DEFINE TPM_12_HARDWARE      = NONE
 
   !if $(TARGET) == "DEBUG"
     DEFINE LOGGING = TRUE
@@ -148,17 +158,37 @@
 !else
   PerformanceLib|MdePkg/Library/BasePerformanceLibNull/BasePerformanceLibNull.inf
 !endif
-!if $(SECURE_BOOT_ENABLE)
-  BaseCryptLib|CryptoPkg/Library/BaseCryptLib/BaseCryptLib.inf
-  PlatformSecureLib|QuarkPlatformPkg/Library/PlatformSecureLib/PlatformSecureLib.inf
-  IntrinsicLib|CryptoPkg/Library/IntrinsicLib/IntrinsicLib.inf
+
+!if $(SECURE_BOOT_ENABLE) || $(MEASURED_BOOT_ENABLE)
   OpensslLib|CryptoPkg/Library/OpensslLib/OpensslLib.inf
-  TpmMeasurementLib|SecurityPkg/Library/DxeTpmMeasurementLib/DxeTpmMeasurementLib.inf
+  IntrinsicLib|CryptoPkg/Library/IntrinsicLib/IntrinsicLib.inf
+  BaseCryptLib|CryptoPkg/Library/BaseCryptLib/BaseCryptLib.inf
+!endif
+
+!if $(SECURE_BOOT_ENABLE)
+  PlatformSecureLib|QuarkPlatformPkg/Library/PlatformSecureLib/PlatformSecureLib.inf
   AuthVariableLib|SecurityPkg/Library/AuthVariableLib/AuthVariableLib.inf
 !else
-  TpmMeasurementLib|MdeModulePkg/Library/TpmMeasurementLibNull/TpmMeasurementLibNull.inf
   AuthVariableLib|MdeModulePkg/Library/AuthVariableLibNull/AuthVariableLibNull.inf
 !endif
+
+!if $(MEASURED_BOOT_ENABLE)
+  TpmMeasurementLib|SecurityPkg/Library/DxeTpmMeasurementLib/DxeTpmMeasurementLib.inf
+  Tpm12CommandLib|SecurityPkg/Library/Tpm12CommandLib/Tpm12CommandLib.inf
+!if $(TPM_12_HARDWARE) == LPC
+  Tpm12DeviceLib|SecurityPkg/Library/Tpm12DeviceLibDTpm/Tpm12DeviceLibDTpm.inf
+!endif
+!if $(TPM_12_HARDWARE) == ATMEL_I2C
+  Tpm12DeviceLib|QuarkPlatformPkg/Library/Tpm12DeviceLibAtmelI2c/Tpm12DeviceLibAtmelI2c.inf
+!endif
+!if $(TPM_12_HARDWARE) == INFINEON_I2C
+  Tpm12DeviceLib|QuarkPlatformPkg/Library/Tpm12DeviceLibInfineonI2c/Tpm12DeviceLibInfineonI2c.inf
+!endif
+  TcgPpVendorLib|SecurityPkg/Library/TcgPpVendorLibNull/TcgPpVendorLibNull.inf
+!else
+  TpmMeasurementLib|MdeModulePkg/Library/TpmMeasurementLibNull/TpmMeasurementLibNull.inf
+!endif
+
   FileExplorerLib|MdeModulePkg/Library/FileExplorerLib/FileExplorerLib.inf
 
   #
@@ -218,7 +248,7 @@
   TimerLib|PcAtChipsetPkg/Library/AcpiTimerLib/BaseAcpiTimerLib.inf
   PlatformHelperLib|QuarkPlatformPkg/Library/PlatformHelperLib/PeiPlatformHelperLib.inf
   CpuExceptionHandlerLib|UefiCpuPkg/Library/CpuExceptionHandlerLib/SecPeiCpuExceptionHandlerLib.inf
-!if $(SECURE_BOOT_ENABLE)
+!if $(SECURE_BOOT_ENABLE) || $(MEASURED_BOOT_ENABLE)
   BaseCryptLib|CryptoPkg/Library/BaseCryptLib/PeiCryptLib.inf
 !endif
 !if $(PERFORMANCE_ENABLE)
@@ -241,7 +271,7 @@
   PciLib|MdePkg/Library/BasePciLibCf8/BasePciLibCf8.inf
   CpuExceptionHandlerLib|UefiCpuPkg/Library/CpuExceptionHandlerLib/SmmCpuExceptionHandlerLib.inf
   SmmMemLib|MdePkg/Library/SmmMemLib/SmmMemLib.inf
-!if $(SECURE_BOOT_ENABLE)
+!if $(SECURE_BOOT_ENABLE) || $(MEASURED_BOOT_ENABLE)
   BaseCryptLib|CryptoPkg/Library/BaseCryptLib/SmmCryptLib.inf
 !endif
 !if $(PERFORMANCE_ENABLE)
@@ -254,7 +284,7 @@
   MemoryAllocationLib|MdeModulePkg/Library/PiSmmCoreMemoryAllocationLib/PiSmmCoreMemoryAllocationLib.inf
   PciLib|MdePkg/Library/BasePciLibCf8/BasePciLibCf8.inf
   SmmMemLib|MdePkg/Library/SmmMemLib/SmmMemLib.inf
-!if $(SECURE_BOOT_ENABLE)
+!if $(SECURE_BOOT_ENABLE) || $(MEASURED_BOOT_ENABLE)
   BaseCryptLib|CryptoPkg/Library/BaseCryptLib/SmmCryptLib.inf
 !endif
 !if $(PERFORMANCE_ENABLE)
@@ -265,7 +295,7 @@
   ReportStatusCodeLib|MdeModulePkg/Library/RuntimeDxeReportStatusCodeLib/RuntimeDxeReportStatusCodeLib.inf
   QNCAccessLib|QuarkSocPkg/QuarkNorthCluster/Library/QNCAccessLib/RuntimeQNCAccessLib.inf
   PciLib|MdePkg/Library/BasePciLibCf8/BasePciLibCf8.inf
-!if $(SECURE_BOOT_ENABLE)
+!if $(SECURE_BOOT_ENABLE) || $(MEASURED_BOOT_ENABLE)
   BaseCryptLib|CryptoPkg/Library/BaseCryptLib/RuntimeCryptLib.inf
 !endif
 
@@ -417,6 +447,16 @@
   gQuarkPlatformTokenSpaceGuid.PcdUserIsPhysicallyPresent|FALSE
   gQuarkPlatformTokenSpaceGuid.PcdSpiFlashDeviceSize|0
 
+!if $(MEASURED_BOOT_ENABLE)
+  #
+  # TPM1.2      { 0x8b01e5b6, 0x4f19, 0x46e8, { 0xab, 0x93, 0x1c, 0x53, 0x67, 0x1b, 0x90, 0xcc } }
+  # TPM2.0 DTPM { 0x286bf25a, 0xc2c3, 0x408c, { 0xb3, 0xb4, 0x25, 0xe6, 0x75, 0x8b, 0x73, 0x17 } }
+  #
+  gEfiSecurityPkgTokenSpaceGuid.PcdTpmInstanceGuid|{0xb6, 0xe5, 0x01, 0x8b, 0x19, 0x4f, 0xe8, 0x46, 0xab, 0x93, 0x1c, 0x53, 0x67, 0x1b, 0x90, 0xcc}
+  gEfiSecurityPkgTokenSpaceGuid.PcdTpmInitializationPolicy|1
+  gEfiSecurityPkgTokenSpaceGuid.PcdTpmScrtmPolicy|1
+!endif
+
 [PcdsDynamicExVpd]
   gEfiMdeModulePkgTokenSpaceGuid.PcdFirmwareVendor|*|32|L"EDK II"
   gEfiMdeModulePkgTokenSpaceGuid.PcdFirmwareRevision|*|0x01000400
@@ -542,6 +582,14 @@
   UefiCpuPkg/Universal/Acpi/S3Resume2Pei/S3Resume2Pei.inf
 
   #
+  # Trusted Platform Module
+  #
+!if $(MEASURED_BOOT_ENABLE)
+  SecurityPkg/Tcg/TrEEConfig/TrEEConfigPei.inf
+  SecurityPkg/Tcg/TcgPei/TcgPei.inf
+!endif
+
+  #
   # Recovery
   #
   QuarkSocPkg/QuarkSouthCluster/Usb/Common/Pei/UsbPei.inf
@@ -628,9 +676,9 @@
   }
   MdeModulePkg/Application/UiApp/UiApp.inf {
     <LibraryClasses>
-      NULL|MdeModulePkg/Library/DeviceManagerLib/DeviceManagerLib.inf
-      NULL|MdeModulePkg/Library/BootManagerLib/BootManagerLib.inf
-      NULL|MdeModulePkg/Library/BootMaintenanceManagerLib/BootMaintenanceManagerLib.inf
+      NULL|MdeModulePkg/Library/DeviceManagerUiLib/DeviceManagerUiLib.inf
+      NULL|MdeModulePkg/Library/BootManagerUiLib/BootManagerUiLib.inf
+      NULL|MdeModulePkg/Library/BootMaintenanceManagerUiLib/BootMaintenanceManagerUiLib.inf
 
       UefiBootManagerLib|MdeModulePkg/Library/UefiBootManagerLib/UefiBootManagerLib.inf
       PcdLib|MdePkg/Library/DxePcdLib/DxePcdLib.inf
@@ -791,6 +839,15 @@
   #
   IntelFrameworkModulePkg/Universal/FirmwareVolume/FwVolDxe/FwVolDxe.inf
   IntelFrameworkModulePkg/Universal/FirmwareVolume/UpdateDriverDxe/UpdateDriverDxe.inf
+
+  #
+  # Trusted Platform Module
+  #
+!if $(MEASURED_BOOT_ENABLE)
+  SecurityPkg/Tcg/MemoryOverwriteControl/TcgMor.inf
+  SecurityPkg/Tcg/TcgDxe/TcgDxe.inf
+  SecurityPkg/Tcg/TcgSmm/TcgSmm.inf
+!endif
 
   #
   # Performance Application

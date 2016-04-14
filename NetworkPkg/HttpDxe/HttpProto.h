@@ -1,7 +1,8 @@
 /** @file
   The header files of miscellaneous routines for HttpDxe driver.
 
-Copyright (c) 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
+(C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -89,6 +90,8 @@ typedef struct _HTTP_PROTOCOL {
   LIST_ENTRY                    Link;   // Link to all HTTP instance from the service.
   BOOLEAN                       InDestroy;
   INTN                          State;
+
+  UINTN                         StatusCode;
 
   EFI_HANDLE                    Tcp4ChildHandle;
   EFI_TCP4_PROTOCOL             *Tcp4;
@@ -397,20 +400,6 @@ HttpTransmitTcp (
   );
 
 /**
-  Translate the status code in HTTP message to EFI_HTTP_STATUS_CODE defined 
-  in UEFI 2.5 specification.
-
-  @param[in]  StatusCode         The status code value in HTTP message.
-
-  @return                        Value defined in EFI_HTTP_STATUS_CODE .
-
-**/
-EFI_HTTP_STATUS_CODE
-HttpMappingToStatusCode (
-  IN UINTN                  StatusCode
-  );
-
-/**
   Check whether the user's token or event has already
   been enqueue on HTTP Tx or Rx Token list.
 
@@ -552,24 +541,6 @@ HttpTcpReceiveBody (
 VOID
 HttpTcpTokenCleanup (
   IN  HTTP_TOKEN_WRAP      *Wrap
-  );
-
-/**
-  Generate HTTP request string.
-
-  @param[in]  HttpInstance       Pointer to HTTP_PROTOCOL structure.
-  @param[in]  Message            Pointer to storage containing HTTP message data.
-  @param[in]  Url                The URL of a remote host.
-
-  @return     Pointer to the created HTTP request string.
-  @return     NULL if any error occured.
-
-**/
-CHAR8 *
-HttpGenRequestString (
-  IN  HTTP_PROTOCOL        *HttpInstance,
-  IN  EFI_HTTP_MESSAGE     *Message,
-  IN  CHAR8                *Url
   );
 
 /**

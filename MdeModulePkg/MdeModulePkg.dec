@@ -3,7 +3,9 @@
 # It also provides the definitions(including PPIs/PROTOCOLs/GUIDs and library classes)
 # and libraries instances, which are used for those modules.
 #
-# Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2016, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2016, Linaro Ltd. All rights reserved.<BR>
+# (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 # This program and the accompanying materials are licensed and made available under
 # the terms and conditions of the BSD License that accompanies this distribution.
 # The full text of the license may be found at
@@ -146,6 +148,10 @@
   ## @libraryclass  Provides interfaces about Ipmi submit generic commond.
   #
   IpmiLib|Include/Library/IpmiLib.h
+
+  ## @libraryclass  Provides interfaces for platform to return root bridge information to PciHostBridgeDxe driver.
+  #
+  PciHostBridgeLib|Include/Library/PciHostBridgeLib.h
 
 [Guids]
   ## MdeModule package token space guid
@@ -338,6 +344,9 @@
 
   gEfiIfrFrontPageGuid        = { 0xe58809f8, 0xfbc1, 0x48e2, { 0x88, 0x3a, 0xa3, 0x0f, 0xdc, 0x4b, 0x44, 0x1e } }
 
+  ## Include/Guid/RamDiskHii.h
+  gRamDiskFormSetGuid            = { 0x2a46715f, 0x3581, 0x4a55, { 0x8e, 0x73, 0x2b, 0x76, 0x9a, 0xaa, 0x30, 0xc5 }}
+
 
 [Ppis]
   ## Include/Ppi/AtaController.h
@@ -378,6 +387,9 @@
 
   ## Include/Ppi/IpmiPpi.h
   gPeiIpmiPpiGuid               =  { 0xa9731431, 0xd968, 0x4277, { 0xb7, 0x52, 0xa3, 0xa9, 0xa6, 0xae, 0x18, 0x98 }}
+
+  ## Include/Ppi/SdMmcHostController.h
+  gEdkiiPeiSdMmcHostControllerPpiGuid = { 0xb30dfeed, 0x947f, 0x4396, { 0xb1, 0x5a, 0xdf, 0xbd, 0xb9, 0x16, 0xdc, 0x24 }}
 
 [Protocols]
   ## Load File protocol provides capability to load and unload EFI image into memory and execute it.
@@ -480,6 +492,10 @@
   ## Include/Protocol/IpmiProtocol.h
   gIpmiProtocolGuid    = { 0xdbc6381f, 0x5554, 0x4d14, { 0x8f, 0xfd, 0x76, 0xd7, 0x87, 0xb8, 0xac, 0xbf } }
   gSmmIpmiProtocolGuid = { 0x5169af60, 0x8c5a, 0x4243, { 0xb3, 0xe9, 0x56, 0xc5, 0x6d, 0x18, 0xee, 0x26 } }
+
+  ## PS/2 policy protocol abstracts the specific platform initialization and setting.
+  #  Include/Protocol/Ps2Policy.h
+  gEfiPs2PolicyProtocolGuid = { 0x4DF19259, 0xDC71, 0x4D46, { 0xBE, 0xF1, 0x35, 0x7B, 0xB5, 0x78, 0xC4, 0x18 } }
 
 #
 # [Error.gEfiMdeModulePkgTokenSpaceGuid]
@@ -697,11 +713,34 @@
   # @Prompt Enable S3 performance data support.
   gEfiMdeModulePkgTokenSpaceGuid.PcdFirmwarePerformanceDataTableS3Support|TRUE|BOOLEAN|0x00010064
 
+  ## Indicates if PS2 keyboard does a extended verification during start.
+  #  Add this PCD mainly consider the use case of simulator. This PCD maybe set to FALSE for
+  #  Extended verification will take some performance. It can be set to FALSE for boot performance.<BR><BR>
+  #   TRUE  - Turn on PS2 keyboard extended verification.<BR>
+  #   FALSE - Turn off PS2 keyboard extended verification.<BR>
+  # @Prompt Turn on PS2 Keyboard Extended Verification
+  gEfiMdeModulePkgTokenSpaceGuid.PcdPs2KbdExtendedVerification|TRUE|BOOLEAN|0x00010072
+
   ## Indicates if Serial device uses half hand shake.<BR><BR>
   #   TRUE  - Serial device uses half hand shake.<BR>
   #   FALSE - Serial device doesn't use half hand shake.<BR>
   # @Prompt Enable Serial device Half Hand Shake
   gEfiMdeModulePkgTokenSpaceGuid.PcdSerialUseHalfHandshake|FALSE|BOOLEAN|0x00010073
+
+  ## Indicates if HII data and configuration has been exported.<BR><BR>
+  #  Add this PCD mainly consider the use case of simulator. This PCD maybe set to FALSE for
+  #  simulator platform because the performance cost for this feature.
+  #   TRUE  - Export HII data and configuration data.<BR>
+  #   FALSE - Does not export HII data and configuration.<BR>
+  # @Prompt Enable export HII data and configuration to be used in OS runtime.
+  gEfiMdeModulePkgTokenSpaceGuid.PcdHiiOsRuntimeSupport|TRUE|BOOLEAN|0x00010074
+
+  ## Indicates if PS2 mouse does a extended verification during start.
+  #  Extended verification will take some performance. It can be set to FALSE for boot performance.<BR><BR>
+  #   TRUE  - Turn on PS2 mouse extended verification. <BR>
+  #   FALSE - Turn off PS2 mouse extended verification. <BR>
+  # @Prompt Turn on PS2 Mouse Extended Verification
+  gEfiMdeModulePkgTokenSpaceGuid.PcdPs2MouseExtendedVerification|TRUE|BOOLEAN|0x00010075
 
 [PcdsFeatureFlag.IA32, PcdsFeatureFlag.X64]
   ## Indicates if DxeIpl should switch to long mode to enter DXE phase.
@@ -853,8 +892,17 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdCapsuleCoalesceFile|{ 0xA6, 0xE4, 0xFD, 0xF7, 0x4C, 0x29, 0x3c, 0x49, 0xB5, 0x0F, 0x97, 0x34, 0x55, 0x3B, 0xB7, 0x57 }|VOID*|0x30000017
 
   ## Maximum number of performance log entries during PEI phase.
+  # Use PcdMaxPeiPerformanceLogEntries16 if the number of entries required is
+  # more than 255.
   # @Prompt Maximum number of PEI performance log entries.
   gEfiMdeModulePkgTokenSpaceGuid.PcdMaxPeiPerformanceLogEntries|40|UINT8|0x0001002f
+
+  ## Maximum number of performance log entries during PEI phase.
+  # If set to 0, then PcdMaxPeiPerformanceLogEntries determines the number of
+  # entries. If greater than 0, then this PCD determines the number of entries,
+  # and PcdMaxPeiPerformanceLogEntries is ignored.
+  # @Prompt Maximum number of PEI performance log entries.
+  gEfiMdeModulePkgTokenSpaceGuid.PcdMaxPeiPerformanceLogEntries16|0|UINT16|0x00010035
 
   ## RTC Update Timeout Value(microsecond).
   # @Prompt RTC Update Timeout Value.
@@ -1044,6 +1092,16 @@
   # If it is set to an all FFs GUID, it means all modules in all FVs will be parsed for VarCheckHiiBin generation.<BR>
   # @Prompt Driver guid array of VFR drivers for VarCheckHiiBin generation.
   gEfiMdeModulePkgTokenSpaceGuid.PcdVarCheckVfrDriverGuidArray|{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }|VOID*|0x3000103A
+
+  ## Indicates which ACPI versions are targeted by the ACPI tables exposed to the OS
+  #  These values are aligned with the definitions in MdePkg/Include/Protocol/AcpiSystemDescriptionTable.h
+  #   BIT 1 - EFI_ACPI_TABLE_VERSION_1_0B.<BR>
+  #   BIT 2 - EFI_ACPI_TABLE_VERSION_2_0.<BR>
+  #   BIT 3 - EFI_ACPI_TABLE_VERSION_3_0.<BR>
+  #   BIT 4 - EFI_ACPI_TABLE_VERSION_4_0.<BR>
+  #   BIT 5 - EFI_ACPI_TABLE_VERSION_5_0.<BR>
+  # @Prompt Exposed ACPI table versions.
+  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiExposedTableVersions|0x3E|UINT32|0x0001004c
 
 [PcdsPatchableInModule, PcdsDynamic, PcdsDynamicEx]
   ## This PCD defines the Console output row. The default value is 25 according to UEFI spec.
@@ -1411,15 +1469,17 @@
   # this PCD to be TURE if and only if all runtime driver has seperated Code/Data
   # section. If PE code/data sections are merged, the result is unpredictable.
   #
+  # UEFI 2.6 specification does not recommend to use this BIT0 attribute.
+  #
   # @Prompt Publish UEFI PropertiesTable.
-  gEfiMdeModulePkgTokenSpaceGuid.PcdPropertiesTableEnable|TRUE|BOOLEAN|0x0000006e
+  gEfiMdeModulePkgTokenSpaceGuid.PcdPropertiesTableEnable|FALSE|BOOLEAN|0x0000006e
 
   ## Default OEM ID for ACPI table creation, its length must be 0x6 bytes to follow ACPI specification.
   # @Prompt Default OEM ID for ACPI table creation.
   gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemId|"INTEL "|VOID*|0x30001034
 
   ## Default OEM Table ID for ACPI table creation, it is "EDK2    ".
-  #  Accroding to ACPI specification, this field is particularly useful when
+  #  According to ACPI specification, this field is particularly useful when
   #  defining a definition block to distinguish definition block functions.
   #  The OEM assigns each dissimilar table a new OEM Table ID.
   #  This PCD is ignored for definition block.
@@ -1427,7 +1487,7 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemTableId|0x20202020324B4445|UINT64|0x30001035
 
   ## Default OEM Revision for ACPI table creation.
-  #  Accroding to ACPI specification, for LoadTable() opcode, the OS can also
+  #  According to ACPI specification, for LoadTable() opcode, the OS can also
   #  check the OEM Table ID and Revision ID against a database for a newer
   #  revision Definition Block of the same OEM Table ID and load it instead.
   #  This PCD is ignored for definition block.
@@ -1435,14 +1495,14 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemRevision|0x00000002|UINT32|0x30001036
 
   ## Default Creator ID for ACPI table creation.
-  #  Accroding to ACPI specification, for tables containing Definition Blocks,
+  #  According to ACPI specification, for tables containing Definition Blocks,
   #  this is the ID for the ASL Compiler.
   #  This PCD is ignored for definition block.
   # @Prompt Default Creator ID for ACPI table creation.
   gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultCreatorId|0x20202020|UINT32|0x30001037
 
   ## Default Creator Revision for ACPI table creation.
-  #  Accroding to ACPI specification, for tables containing Definition Blocks,
+  #  According to ACPI specification, for tables containing Definition Blocks,
   #  this is the revision for the ASL Compiler.
   #  This PCD is ignored for definition block.
   # @Prompt Default Creator Revision for ACPI table creation.
@@ -1456,6 +1516,31 @@
   #   FALSE - Not to set NX for stack.<BR>
   # @Prompt Set NX for stack.
   gEfiMdeModulePkgTokenSpaceGuid.PcdSetNxForStack|FALSE|BOOLEAN|0x0001006f
+
+  ## This PCD specifies the PCI-based SD/MMC host controller mmio base address.
+  # Define the mmio base address of the pci-based SD/MMC host controller. If there are multiple SD/MMC
+  # host controllers, their mmio base addresses are calculated one by one from this base address.
+  # @Prompt Mmio base address of pci-based SD/MMC host controller.
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSdMmcPciHostControllerMmioBase|0xd0000000|UINT32|0x30001043
+
+  ## Indicates if ACPI S3 will be enabled.<BR><BR>
+  #   TRUE  - ACPI S3 will be enabled.<BR>
+  #   FALSE - ACPI S3 will be disabled.<BR>
+  # @Prompt ACPI S3 Enable.
+  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiS3Enable|TRUE|BOOLEAN|0x01100000
+
+  ## Specify memory size for boot script executor stack usage in S3 phase.
+  #  The default size 32K. When changing the value make sure the memory size is large enough 
+  #  to meet boot script executor requirement in the S3 phase.
+  # @Prompt Reserved S3 Boot Script Stack ACPI Memory Size
+  gEfiMdeModulePkgTokenSpaceGuid.PcdS3BootScriptStackSize|0x8000|UINT32|0x02000000
+
+  ## Indicates if to use the optimized timing for best PS2 detection performance.
+  #  Note this PCD could be set to TRUE for best boot performance and set to FALSE for best device compatibility.<BR><BR>
+  #   TRUE  - Use the optimized timing for best PS2 detection performance.<BR>
+  #   FALSE - Use the normal timing to detect PS2.<BR>
+  # @Prompt Enable fast PS2 detection
+  gEfiMdeModulePkgTokenSpaceGuid.PcdFastPS2Detection|FALSE|BOOLEAN|0x30001044
 
 [PcdsPatchableInModule]
   ## Specify memory size with page number for PEI code when

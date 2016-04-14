@@ -1,7 +1,7 @@
 ## @file
 # Routines for generating AutoGen.h and AutoGen.c
 #
-# Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2016, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -766,6 +766,13 @@ def GetPcdSize(Pcd):
 def CreateModulePcdCode(Info, AutoGenC, AutoGenH, Pcd):
     TokenSpaceGuidValue = Pcd.TokenSpaceGuidValue   #Info.GuidList[Pcd.TokenSpaceGuidCName]
     PcdTokenNumber = Info.PlatformInfo.PcdTokenNumber
+
+    if GlobalData.BuildOptionPcd:
+        for PcdItem in GlobalData.BuildOptionPcd:
+            if (Pcd.TokenSpaceGuidCName, Pcd.TokenCName) == (PcdItem[0], PcdItem[1]):
+                Pcd.DefaultValue = PcdItem[2]
+                break
+
     #
     # Write PCDs
     #
@@ -1054,7 +1061,13 @@ def CreateLibraryPcdCode(Info, AutoGenC, AutoGenH, Pcd):
     FixPcdSizeTokenName = '_PCD_SIZE_' + Pcd.TokenCName
     PatchPcdSizeTokenName = '_PCD_PATCHABLE_' + Pcd.TokenCName +'_SIZE'
     PatchPcdSizeVariableName = '_gPcd_BinaryPatch_Size_' + Pcd.TokenCName
-    
+
+    if GlobalData.BuildOptionPcd:
+        for PcdItem in GlobalData.BuildOptionPcd:
+            if (Pcd.TokenSpaceGuidCName, Pcd.TokenCName) == (PcdItem[0], PcdItem[1]):
+                Pcd.DefaultValue = PcdItem[2]
+                break
+
     #
     # Write PCDs
     #
@@ -1099,7 +1112,8 @@ def CreateLibraryPcdCode(Info, AutoGenC, AutoGenH, Pcd):
     Type = ''
     Array = ''
     if Pcd.DatumType == 'VOID*':
-        Type = '(VOID *)'
+        if Pcd.DefaultValue[0]== '{':
+            Type = '(VOID *)'
         Array = '[]'
     PcdItemType = Pcd.Type
     PcdExCNameList  = []
@@ -1161,7 +1175,15 @@ def CreateLibraryPcdCode(Info, AutoGenC, AutoGenH, Pcd):
                 AutoGenH.Append('#define %s(Value)  LibPcdSet%sS(%s, (Value))\n' % (SetModeStatusName, DatumSizeLib, PcdTokenName))
     if PcdItemType == TAB_PCDS_PATCHABLE_IN_MODULE:
         PcdVariableName = '_gPcd_' + gItemTypeStringDatabase[TAB_PCDS_PATCHABLE_IN_MODULE] + '_' + TokenCName
-        AutoGenH.Append('extern volatile %s _gPcd_BinaryPatch_%s%s;\n' %(DatumType, TokenCName, Array) )
+        if DatumType == 'VOID*':
+            ArraySize = int(Pcd.MaxDatumSize, 0)
+            if Pcd.DefaultValue[0] == 'L':
+                ArraySize = ArraySize / 2
+            Array = '[%d]' % ArraySize
+            DatumType = ['UINT8', 'UINT16'][Pcd.DefaultValue[0] == 'L']
+            AutoGenH.Append('extern %s _gPcd_BinaryPatch_%s%s;\n' %(DatumType, TokenCName, Array))
+        else:
+            AutoGenH.Append('extern volatile  %s  %s%s;\n' % (DatumType, PcdVariableName, Array))
         AutoGenH.Append('#define %s  %s_gPcd_BinaryPatch_%s\n' %(GetModeName, Type, TokenCName))
         if Pcd.DatumType == 'VOID*':
             AutoGenH.Append('#define %s(SizeOfBuffer, Buffer)  LibPatchPcdSetPtrAndSize((VOID *)_gPcd_BinaryPatch_%s, &_gPcd_BinaryPatch_Size_%s, (UINTN)_PCD_PATCHABLE_%s_SIZE, (SizeOfBuffer), (Buffer))\n' % (SetModeName, Pcd.TokenCName, Pcd.TokenCName, Pcd.TokenCName))

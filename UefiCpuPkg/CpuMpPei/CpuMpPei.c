@@ -1,7 +1,7 @@
 /** @file
   CPU PEI Module installs CPU Multiple Processor PPI.
 
-  Copyright (c) 2015, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -355,10 +355,6 @@ ApCFunction (
       }
     }
     ApStartupSignalBuffer = PeiCpuMpData->CpuData[ProcessorNumber].StartupApSignal;
-    //
-    // Clear AP start-up signal
-    //
-    *ApStartupSignalBuffer = 0;
     while (TRUE) {
       DisableInterrupts ();
       if (PeiCpuMpData->ApLoopMode == ApInMwaitLoop) {
@@ -387,9 +383,41 @@ ApCFunction (
       // otherwise place AP in loop again
       //
       if (*ApStartupSignalBuffer == WAKEUP_AP_SIGNAL) {
+        //
+        // Clear AP start-up signal when AP waken up
+        //
+        InterlockedCompareExchange32 (
+          (UINT32 *)ApStartupSignalBuffer,
+          WAKEUP_AP_SIGNAL,
+          0
+        );
         break;
       }
     }
+  }
+}
+
+/**
+  Write AP start-up signal to wakeup AP.
+
+  @param ApStartupSignalBuffer  Pointer to AP wakeup signal
+**/
+VOID
+WriteStartupSignal (
+  IN volatile UINT32        *ApStartupSignalBuffer
+  )
+{
+  *ApStartupSignalBuffer = WAKEUP_AP_SIGNAL;
+  //
+  // If AP is waken up, StartupApSignal should be cleared.
+  // Otherwise, write StartupApSignal again till AP waken up.
+  //
+  while (InterlockedCompareExchange32 (
+          (UINT32 *)ApStartupSignalBuffer,
+          WAKEUP_AP_SIGNAL,
+          WAKEUP_AP_SIGNAL
+          ) != 0) {
+    CpuPause ();
   }
 }
 
@@ -462,11 +490,11 @@ WakeUpAP (
     if (Broadcast) {
       for (Index = 0; Index < PeiCpuMpData->CpuCount; Index++) {
         if (Index != PeiCpuMpData->BspNumber) {
-          *(PeiCpuMpData->CpuData[Index].StartupApSignal) = WAKEUP_AP_SIGNAL;
+          WriteStartupSignal (PeiCpuMpData->CpuData[Index].StartupApSignal);
         }
       }
     } else {
-      *(PeiCpuMpData->CpuData[ProcessorNumber].StartupApSignal) = WAKEUP_AP_SIGNAL;
+      WriteStartupSignal (PeiCpuMpData->CpuData[ProcessorNumber].StartupApSignal);
     }
   } else {
     ASSERT (FALSE);
@@ -826,7 +854,6 @@ CpuMpPeimInit (
 {
   EFI_STATUS           Status;
   PEI_CPU_MP_DATA      *PeiCpuMpData;
-  UINT32               ProcessorCount;
 
   //
   // Load new GDT table on BSP
@@ -839,7 +866,7 @@ CpuMpPeimInit (
   //
   // Count processor number and collect processor information
   //
-  ProcessorCount = CountProcessorNumber (PeiCpuMpData);
+  CountProcessorNumber (PeiCpuMpData);
   //
   // Build location of PEI CPU MP DATA buffer in HOB
   //

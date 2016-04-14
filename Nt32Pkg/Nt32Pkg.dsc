@@ -4,8 +4,9 @@
 # The Emulation Platform can be used to debug individual modules, prior to creating
 #    a real platform. This also provides an example for how an DSC is created.
 #
+# Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
 # Copyright (c) 2015, Hewlett-Packard Development Company, L.P.<BR>
-# Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
+# (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 #
 #    This program and the accompanying materials
 #    are licensed and made available under the terms and conditions of the BSD License
@@ -29,7 +30,7 @@
   DSC_SPECIFICATION              = 0x00010005
   OUTPUT_DIRECTORY               = Build/NT32$(ARCH)
   SUPPORTED_ARCHITECTURES        = IA32|X64
-  BUILD_TARGETS                  = DEBUG|RELEASE
+  BUILD_TARGETS                  = DEBUG|RELEASE|NOOPT
   SKUID_IDENTIFIER               = DEFAULT
   FLASH_DEFINITION               = Nt32Pkg/Nt32Pkg.fdf
   #
@@ -127,7 +128,7 @@
   #
   # Misc
   #
-  DebugLib|IntelFrameworkModulePkg/Library/PeiDxeDebugLibReportStatusCode/PeiDxeDebugLibReportStatusCode.inf
+  DebugLib|MdeModulePkg/Library/PeiDxeDebugLibReportStatusCode/PeiDxeDebugLibReportStatusCode.inf
   DebugPrintErrorLevelLib|MdeModulePkg/Library/DxeDebugPrintErrorLevelLib/DxeDebugPrintErrorLevelLib.inf
   PerformanceLib|MdePkg/Library/BasePerformanceLibNull/BasePerformanceLibNull.inf
   DebugAgentLib|MdeModulePkg/Library/DebugAgentLibNull/DebugAgentLibNull.inf
@@ -235,7 +236,6 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdMaxSizeNonPopulateCapsule|0x0
   gEfiMdeModulePkgTokenSpaceGuid.PcdMaxSizePopulateCapsule|0x0
   gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80000040
-  gEfiNt32PkgTokenSpaceGuid.PcdWinNtFirmwareFdSize|0x2a0000
   gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask|0x1f
   gEfiNt32PkgTokenSpaceGuid.PcdWinNtFirmwareVolume|L"..\\Fv\\Nt32.fd"
   gEfiNt32PkgTokenSpaceGuid.PcdWinNtFirmwareBlockSize|0x10000
@@ -276,6 +276,9 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageFtwSpareBase|0
   gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageFtwWorkingBase|0
   gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageVariableBase|0
+  gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageFtwSpareBase64|0
+  gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageFtwWorkingBase64|0
+  gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageVariableBase64|0
 
 [PcdsDynamicDefault.Ia32]
   gEfiNt32PkgTokenSpaceGuid.PcdWinNtFileSystem|L".!..\..\..\..\EdkShellBinPkg\Bin\Ia32\Apps"|VOID*|106
@@ -406,6 +409,7 @@
   MdeModulePkg/Universal/Disk/DiskIoDxe/DiskIoDxe.inf
   MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
   MdeModulePkg/Universal/Disk/UnicodeCollation/EnglishDxe/EnglishDxe.inf
+  FatPkg/EnhancedFatDxe/Fat.inf
   MdeModulePkg/Bus/Pci/PciBusDxe/PciBusDxe.inf
   MdeModulePkg/Bus/Scsi/ScsiBusDxe/ScsiBusDxe.inf     ##This driver follows UEFI specification definition
   MdeModulePkg/Bus/Scsi/ScsiDiskDxe/ScsiDiskDxe.inf    ##This driver follows UEFI specification definition
@@ -449,9 +453,9 @@
   }
   MdeModulePkg/Application/UiApp/UiApp.inf{
     <LibraryClasses>
-      NULL|MdeModulePkg/Library/DeviceManagerLib/DeviceManagerLib.inf
-      NULL|MdeModulePkg/Library/BootManagerLib/BootManagerLib.inf
-      NULL|MdeModulePkg/Library/BootMaintenanceManagerLib/BootMaintenanceManagerLib.inf
+      NULL|MdeModulePkg/Library/DeviceManagerUiLib/DeviceManagerUiLib.inf
+      NULL|MdeModulePkg/Library/BootManagerUiLib/BootManagerUiLib.inf
+      NULL|MdeModulePkg/Library/BootMaintenanceManagerUiLib/BootMaintenanceManagerUiLib.inf
   }
   MdeModulePkg/Universal/DriverHealthManagerDxe/DriverHealthManagerDxe.inf
   MdeModulePkg/Universal/HiiDatabaseDxe/HiiDatabaseDxe.inf
@@ -477,6 +481,7 @@
 ###################################################################################################
 [BuildOptions]
   DEBUG_*_*_DLINK_FLAGS = /EXPORT:InitializeDriver=$(IMAGE_ENTRY_POINT) /BASE:0x10000 /ALIGN:4096 /FILEALIGN:4096 /SUBSYSTEM:CONSOLE
+  NOOPT_*_*_DLINK_FLAGS = /EXPORT:InitializeDriver=$(IMAGE_ENTRY_POINT) /BASE:0x10000 /ALIGN:4096 /FILEALIGN:4096 /SUBSYSTEM:CONSOLE
   RELEASE_*_*_DLINK_FLAGS = /ALIGN:4096 /FILEALIGN:4096
 
 #############################################################################################################

@@ -2,7 +2,7 @@
 #  Platform PEI driver
 #
 #  This module provides platform specific function to detect boot mode.
-#  Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
 #
 #  This program and the accompanying materials
 #  are licensed and made available under the terms and conditions of the BSD License
@@ -75,6 +75,12 @@
   gUefiOvmfPkgTokenSpaceGuid.PcdOvmfLockBoxStorageSize
   gUefiOvmfPkgTokenSpaceGuid.PcdGuidedExtractHandlerTableSize
   gUefiOvmfPkgTokenSpaceGuid.PcdOvmfHostBridgePciDevId
+  gUefiOvmfPkgTokenSpaceGuid.PcdPciIoBase
+  gUefiOvmfPkgTokenSpaceGuid.PcdPciIoSize
+  gUefiOvmfPkgTokenSpaceGuid.PcdPciMmio32Base
+  gUefiOvmfPkgTokenSpaceGuid.PcdPciMmio32Size
+  gUefiOvmfPkgTokenSpaceGuid.PcdPciMmio64Base
+  gUefiOvmfPkgTokenSpaceGuid.PcdPciMmio64Size
   gUefiOvmfPkgTokenSpaceGuid.PcdOvmfDecompressionScratchEnd
   gUefiOvmfPkgTokenSpaceGuid.PcdQ35TsegMbytes
   gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdS3AcpiReservedMemorySize
@@ -88,7 +94,11 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdUse1GPageTable
   gEfiMdeModulePkgTokenSpaceGuid.PcdSetNxForStack
   gEfiMdeModulePkgTokenSpaceGuid.PcdPropertiesTableEnable
+  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiS3Enable
   gUefiCpuPkgTokenSpaceGuid.PcdCpuLocalApicBaseAddress
+
+[FixedPcd]
+  gEfiMdePkgTokenSpaceGuid.PcdPciExpressBaseAddress
 
 [FeaturePcd]
   gUefiOvmfPkgTokenSpaceGuid.PcdSmmSmramRequire

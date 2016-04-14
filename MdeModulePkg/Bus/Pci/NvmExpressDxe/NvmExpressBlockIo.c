@@ -2,7 +2,7 @@
   NvmExpressDxe driver is used to manage non-volatile memory subsystem which follows
   NVM Express specification.
 
-  Copyright (c) 2013 - 2015, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2013 - 2016, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -63,7 +63,7 @@ ReadSectors (
   CommandPacket.QueueType      = NVME_IO_QUEUE;
 
   CommandPacket.NvmeCmd->Cdw10 = (UINT32)Lba;
-  CommandPacket.NvmeCmd->Cdw11 = (UINT32)(Lba >> 32);
+  CommandPacket.NvmeCmd->Cdw11 = (UINT32)RShiftU64(Lba, 32);
   CommandPacket.NvmeCmd->Cdw12 = (Blocks - 1) & 0xFFFF;
 
   CommandPacket.NvmeCmd->Flags = CDW10_VALID | CDW11_VALID | CDW12_VALID;
@@ -126,7 +126,7 @@ WriteSectors (
   CommandPacket.QueueType      = NVME_IO_QUEUE;
 
   CommandPacket.NvmeCmd->Cdw10 = (UINT32)Lba;
-  CommandPacket.NvmeCmd->Cdw11 = (UINT32)(Lba >> 32);
+  CommandPacket.NvmeCmd->Cdw11 = (UINT32)RShiftU64(Lba, 32);
   CommandPacket.NvmeCmd->Cdw12 = (Blocks - 1) & 0xFFFF;
 
   CommandPacket.MetadataBuffer = NULL;
@@ -198,7 +198,9 @@ NvmeRead (
     }
   }
 
-  DEBUG ((EFI_D_INFO, "NvmeRead()  Lba = 0x%08x, Original = 0x%08x, Remaining = 0x%08x, BlockSize = 0x%x Status = %r\n", Lba, OrginalBlocks, Blocks, BlockSize, Status));
+  DEBUG ((EFI_D_VERBOSE, "%a: Lba = 0x%08Lx, Original = 0x%08Lx, "
+    "Remaining = 0x%08Lx, BlockSize = 0x%x, Status = %r\n", __FUNCTION__, Lba,
+    (UINT64)OrginalBlocks, (UINT64)Blocks, BlockSize, Status));
 
   return Status;
 }
@@ -257,7 +259,9 @@ NvmeWrite (
     }
   }
 
-  DEBUG ((EFI_D_INFO, "NvmeWrite() Lba = 0x%08x, Original = 0x%08x, Remaining = 0x%08x, BlockSize = 0x%x Status = %r\n", Lba, OrginalBlocks, Blocks, BlockSize, Status));
+  DEBUG ((EFI_D_VERBOSE, "%a: Lba = 0x%08Lx, Original = 0x%08Lx, "
+    "Remaining = 0x%08Lx, BlockSize = 0x%x, Status = %r\n", __FUNCTION__, Lba,
+    (UINT64)OrginalBlocks, (UINT64)Blocks, BlockSize, Status));
 
   return Status;
 }

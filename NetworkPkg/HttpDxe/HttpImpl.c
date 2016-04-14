@@ -1,8 +1,8 @@
 /** @file
   Implementation of EFI_HTTP_PROTOCOL protocol interfaces.
 
-  Copyright (c) 2015, Intel Corporation. All rights reserved.<BR>
-  (C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
+  Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
+  (C) Copyright 2015-2016 Hewlett Packard Enterprise Development LP<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -39,9 +39,11 @@ EFI_HTTP_PROTOCOL  mEfiHttpTemplate = {
   @retval EFI_INVALID_PARAMETER   One or more of the following conditions is TRUE:
                                   This is NULL.
                                   HttpConfigData is NULL.
-                                  HttpConfigData->AccessPoint is NULL.
-  @retval EFI_OUT_OF_RESOURCES    Could not allocate enough system resources.
-  @retval EFI_NOT_STARTED         The HTTP instance is not configured.
+                                  HttpInstance->LocalAddressIsIPv6 is FALSE and
+                                  HttpConfigData->IPv4Node is NULL.
+                                  HttpInstance->LocalAddressIsIPv6 is TRUE and
+                                  HttpConfigData->IPv6Node is NULL.
+  @retval EFI_NOT_STARTED         This EFI HTTP Protocol instance has not been started.
 
 **/
 EFI_STATUS
@@ -52,16 +54,22 @@ EfiHttpGetModeData (
   )
 {
   HTTP_PROTOCOL                 *HttpInstance;
-  EFI_HTTPv4_ACCESS_POINT       *Http4AccessPoint;
-  EFI_HTTPv6_ACCESS_POINT       *Http6AccessPoint;
 
+  //
+  // Check input parameters.
+  //
   if ((This == NULL) || (HttpConfigData == NULL)) {
     return EFI_INVALID_PARAMETER;
   }
-  
+
   HttpInstance = HTTP_INSTANCE_FROM_PROTOCOL (This);
   ASSERT (HttpInstance != NULL);
-  
+
+  if ((HttpInstance->LocalAddressIsIPv6 && HttpConfigData->AccessPoint.IPv6Node == NULL) ||
+      (!HttpInstance->LocalAddressIsIPv6 && HttpConfigData->AccessPoint.IPv4Node == NULL)) {
+    return EFI_INVALID_PARAMETER;
+  }
+
   if (HttpInstance->State < HTTP_STATE_HTTP_CONFIGED) {
     return EFI_NOT_STARTED;
   }
@@ -71,27 +79,17 @@ EfiHttpGetModeData (
   HttpConfigData->LocalAddressIsIPv6 = HttpInstance->LocalAddressIsIPv6;
 
   if (HttpInstance->LocalAddressIsIPv6) {
-    Http6AccessPoint = AllocateZeroPool (sizeof (EFI_HTTPv6_ACCESS_POINT));
-    if (Http6AccessPoint == NULL) {
-      return EFI_OUT_OF_RESOURCES;
-    }
     CopyMem (
-      Http6AccessPoint,
+      HttpConfigData->AccessPoint.IPv6Node,
       &HttpInstance->Ipv6Node,
       sizeof (HttpInstance->Ipv6Node)
     );
-    HttpConfigData->AccessPoint.IPv6Node = Http6AccessPoint;
   } else {
-    Http4AccessPoint = AllocateZeroPool (sizeof (EFI_HTTPv4_ACCESS_POINT));
-    if (Http4AccessPoint == NULL) {
-      return EFI_OUT_OF_RESOURCES;
-    }
     CopyMem (
-      Http4AccessPoint,
+      HttpConfigData->AccessPoint.IPv4Node,
       &HttpInstance->IPv4Node,
       sizeof (HttpInstance->IPv4Node)
       );
-    HttpConfigData->AccessPoint.IPv4Node = Http4AccessPoint;
   }
 
   return EFI_SUCCESS;
@@ -107,8 +105,8 @@ EfiHttpGetModeData (
   connections with remote hosts, canceling all asynchronous tokens, and flush request
   and response buffers without informing the appropriate hosts.
 
-  Except for GetModeData() and Configure(), No other EFI HTTP function can be executed
-  by this instance until the Configure() function is executed and returns successfully.
+  No other EFI HTTP function can be executed by this instance until the Configure()
+  function is executed and returns successfully.
 
   @param[in]  This                Pointer to EFI_HTTP_PROTOCOL instance.
   @param[in]  HttpConfigData      Pointer to the configure data to configure the instance.
@@ -116,6 +114,7 @@ EfiHttpGetModeData (
   @retval EFI_SUCCESS             Operation succeeded.
   @retval EFI_INVALID_PARAMETER   One or more of the following conditions is TRUE:
                                   This is NULL.
+                                  HttpConfigData is NULL.
                                   HttpConfigData->LocalAddressIsIPv6 is FALSE and
                                   HttpConfigData->IPv4Node is NULL.
                                   HttpConfigData->LocalAddressIsIPv6 is TRUE and
@@ -141,9 +140,10 @@ EfiHttpConfigure (
   //
   // Check input parameters.
   //
-  if (This == NULL || 
-     (HttpConfigData != NULL && ((HttpConfigData->LocalAddressIsIPv6 && HttpConfigData->AccessPoint.IPv6Node == NULL) ||
-                                 (!HttpConfigData->LocalAddressIsIPv6 && HttpConfigData->AccessPoint.IPv4Node == NULL)))) {
+  if (This == NULL ||
+      HttpConfigData == NULL ||
+     ((HttpConfigData->LocalAddressIsIPv6 && HttpConfigData->AccessPoint.IPv6Node == NULL) ||
+     (!HttpConfigData->LocalAddressIsIPv6 && HttpConfigData->AccessPoint.IPv4Node == NULL))) {
     return EFI_INVALID_PARAMETER;
   }
 
@@ -217,6 +217,7 @@ EfiHttpConfigure (
                                   implementation.
   @retval EFI_INVALID_PARAMETER   One or more of the following conditions is TRUE:
                                   This is NULL.
+                                  Token is NULL.
                                   Token->Message is NULL.
                                   Token->Message->Body is not NULL,
                                   Token->Message->BodyLength is non-zero, and
@@ -496,9 +497,10 @@ EfiHttpRequest (
       goto Error3;
     }
   }
-  RequestStr = HttpGenRequestString (HttpInstance, HttpMsg, FileUrl);
-  if (RequestStr == NULL) {
-    Status = EFI_OUT_OF_RESOURCES;
+
+  Status = HttpGenRequestString (HttpMsg, FileUrl, &RequestStr);
+
+  if (EFI_ERROR (Status)) {
     goto Error3;
   }
 
@@ -723,8 +725,6 @@ HttpCancel (
   @retval EFI_SUCCESS             Request and Response queues are successfully flushed.
   @retval EFI_INVALID_PARAMETER   This is NULL.
   @retval EFI_NOT_STARTED         This instance hasn't been configured.
-  @retval EFI_NO_MAPPING          When using the default address, configuration (DHCP,
-                                  BOOTP, RARP, etc.) hasn't finished yet.
   @retval EFI_NOT_FOUND           The asynchronous request or response token is not
                                   found.
   @retval EFI_UNSUPPORTED         The implementation does not support this function.
@@ -977,7 +977,7 @@ HttpResponseWorker (
     HttpHeaders = NULL;
     
     HttpMsg->Data.Response->StatusCode = HttpMappingToStatusCode (StatusCode);
-
+    HttpInstance->StatusCode = StatusCode;
     //
     // Init message-body parser by header information.  
     //
@@ -1112,7 +1112,13 @@ Exit:
   if (Item != NULL) {
     NetMapRemoveItem (&Wrap->HttpInstance->RxTokens, Item, NULL);
   }
-  Token->Status = Status;
+
+  if (HttpInstance->StatusCode >= HTTP_ERROR_OR_NOT_SUPPORT_STATUS_CODE) {
+    Token->Status = EFI_HTTP_ERROR;
+  } else {
+    Token->Status = Status;
+  }
+
   gBS->SignalEvent (Token->Event);
   HttpCloseTcpRxEvent (Wrap);
   FreePool (Wrap);
@@ -1137,7 +1143,12 @@ Error:
     HttpInstance->CacheBody = NULL;
   }
 
-  Token->Status = Status;
+  if (HttpInstance->StatusCode >= HTTP_ERROR_OR_NOT_SUPPORT_STATUS_CODE) {
+    Token->Status = EFI_HTTP_ERROR;
+  } else {
+    Token->Status = Status;
+  }
+
   gBS->SignalEvent (Token->Event);
 
   return Status;  
@@ -1147,7 +1158,7 @@ Error:
 
 /**
   The Response() function queues an HTTP response to this HTTP instance, similar to
-  Receive() function in the EFI TCP driver. When the HTTP request is sent successfully,
+  Receive() function in the EFI TCP driver. When the HTTP response is received successfully,
   or if there is an error, Status in token will be updated and Event will be signaled.
 
   The HTTP driver will queue a receive token to the underlying TCP instance. When data

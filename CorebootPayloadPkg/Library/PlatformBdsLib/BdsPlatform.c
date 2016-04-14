@@ -106,7 +106,6 @@ Returns:
 {
   EFI_STATUS                Status;
   EFI_DEVICE_PATH_PROTOCOL  *DevicePath;
-  EFI_DEVICE_PATH_PROTOCOL  *TempDevicePath;
   CHAR16                    *DevPathStr;
 
   DevicePath = NULL;
@@ -118,12 +117,11 @@ Returns:
   if (EFI_ERROR (Status)) {
     return Status;
   }
-  TempDevicePath = DevicePath;
 
   //
   // Register COM1
   //    
-  DevicePath = AppendDevicePathNode ((EFI_DEVICE_PATH_PROTOCOL *)NULL, (EFI_DEVICE_PATH_PROTOCOL *)&gUartDeviceVenderNode);
+  DevicePath = AppendDevicePathNode ((EFI_DEVICE_PATH_PROTOCOL *)NULL, (EFI_DEVICE_PATH_PROTOCOL *)&gUartDeviceVendorNode);
   DevicePath = AppendDevicePathNode (DevicePath, (EFI_DEVICE_PATH_PROTOCOL *)&gUartDeviceNode);
   DevicePath = AppendDevicePathNode (DevicePath, (EFI_DEVICE_PATH_PROTOCOL *)&gTerminalTypeDeviceNode);
 

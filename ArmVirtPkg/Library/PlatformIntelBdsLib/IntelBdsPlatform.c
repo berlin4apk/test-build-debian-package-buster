@@ -25,6 +25,7 @@
 #include <Protocol/PciIo.h>
 #include <Protocol/PciRootBridgeIo.h>
 #include <Guid/EventGroup.h>
+#include <Guid/RootBridgesConnectedEventGroup.h>
 
 #include "IntelBdsPlatform.h"
 
@@ -121,24 +122,6 @@ STATIC PLATFORM_USB_KEYBOARD mUsbKeyboard = {
   }
 };
 
-/**
-  An empty function to pass error checking of CreateEventEx ().
-
-  @param  Event                 Event whose notification function is being invoked.
-  @param  Context               Pointer to the notification function's context,
-                                which is implementation-dependent.
-
-**/
-STATIC
-VOID
-EFIAPI
-EmptyCallbackFunction (
-  IN EFI_EVENT                Event,
-  IN VOID                     *Context
-  )
-{
-}
-
 //
 // BDS Platform Functions
 //
@@ -153,24 +136,10 @@ PlatformBdsInit (
   VOID
   )
 {
-  EFI_EVENT           EndOfDxeEvent;
-  EFI_STATUS          Status;
-
   //
   // Signal EndOfDxe PI Event
   //
-  Status = gBS->CreateEventEx (
-                  EVT_NOTIFY_SIGNAL,
-                  TPL_CALLBACK,
-                  EmptyCallbackFunction,
-                  NULL,
-                  &gEfiEndOfDxeEventGroupGuid,
-                  &EndOfDxeEvent
-                  );
-  if (!EFI_ERROR (Status)) {
-    gBS->SignalEvent (EndOfDxeEvent);
-    gBS->CloseEvent (EndOfDxeEvent);
-  }
+  EfiEventGroupSignal (&gEfiEndOfDxeEventGroupGuid);
 }
 
 
@@ -400,6 +369,11 @@ PlatformBdsPolicyBehavior (
   // them.
   //
   FilterAndProcess (&gEfiPciRootBridgeIoProtocolGuid, NULL, Connect);
+
+  //
+  // Signal the ACPI platform driver that it can download QEMU ACPI tables.
+  //
+  EfiEventGroupSignal (&gRootBridgesConnectedEventGroupGuid);
 
   //
   // Find all display class PCI devices (using the handles from the previous

@@ -2,7 +2,7 @@
 # EFI/PI Reference Module Package for All Architectures
 #
 # (C) Copyright 2014 Hewlett-Packard Development Company, L.P.<BR>
-# Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2016, Intel Corporation. All rights reserved.<BR>
 #
 #    This program and the accompanying materials
 #    are licensed and made available under the terms and conditions of the BSD License
@@ -21,7 +21,7 @@
   DSC_SPECIFICATION              = 0x00010005
   OUTPUT_DIRECTORY               = Build/MdeModule
   SUPPORTED_ARCHITECTURES        = IA32|IPF|X64|EBC|ARM|AARCH64
-  BUILD_TARGETS                  = DEBUG|RELEASE
+  BUILD_TARGETS                  = DEBUG|RELEASE|NOOPT
   SKUID_IDENTIFIER               = DEFAULT
 
 [LibraryClasses]
@@ -43,6 +43,7 @@
   IoLib|MdePkg/Library/BaseIoLibIntrinsic/BaseIoLibIntrinsic.inf
   PciLib|MdePkg/Library/BasePciLibCf8/BasePciLibCf8.inf
   PciCf8Lib|MdePkg/Library/BasePciCf8Lib/BasePciCf8Lib.inf
+  PciSegmentLib|MdePkg/Library/BasePciSegmentLibPci/BasePciSegmentLibPci.inf
   CacheMaintenanceLib|MdePkg/Library/BaseCacheMaintenanceLib/BaseCacheMaintenanceLib.inf
   PeCoffLib|MdePkg/Library/BasePeCoffLib/BasePeCoffLib.inf
   PeCoffGetEntryPointLib|MdePkg/Library/BasePeCoffGetEntryPointLib/BasePeCoffGetEntryPointLib.inf
@@ -96,6 +97,7 @@
   S3BootScriptLib|MdeModulePkg/Library/PiDxeS3BootScriptLib/DxeS3BootScriptLib.inf
   CpuExceptionHandlerLib|MdeModulePkg/Library/CpuExceptionHandlerLibNull/CpuExceptionHandlerLibNull.inf
   PlatformBootManagerLib|MdeModulePkg/Library/PlatformBootManagerLibNull/PlatformBootManagerLibNull.inf
+  PciHostBridgeLib|MdeModulePkg/Library/PciHostBridgeLibNull/PciHostBridgeLibNull.inf
   TpmMeasurementLib|MdeModulePkg/Library/TpmMeasurementLibNull/TpmMeasurementLibNull.inf
   AuthVariableLib|MdeModulePkg/Library/AuthVariableLibNull/AuthVariableLibNull.inf
   VarCheckLib|MdeModulePkg/Library/VarCheckLib/VarCheckLib.inf
@@ -208,10 +210,17 @@
   MdeModulePkg/Application/HelloWorld/HelloWorld.inf
   MdeModulePkg/Application/MemoryProfileInfo/MemoryProfileInfo.inf
 
+  MdeModulePkg/Bus/Pci/PciHostBridgeDxe/PciHostBridgeDxe.inf
   MdeModulePkg/Bus/Pci/PciSioSerialDxe/PciSioSerialDxe.inf
   MdeModulePkg/Bus/Pci/PciBusDxe/PciBusDxe.inf
   MdeModulePkg/Bus/Pci/IncompatiblePciDeviceSupportDxe/IncompatiblePciDeviceSupportDxe.inf
   MdeModulePkg/Bus/Pci/NvmExpressDxe/NvmExpressDxe.inf
+  MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdMmcPciHcDxe.inf
+  MdeModulePkg/Bus/Pci/SdMmcPciHcPei/SdMmcPciHcPei.inf
+  MdeModulePkg/Bus/Sd/EmmcBlockIoPei/EmmcBlockIoPei.inf
+  MdeModulePkg/Bus/Sd/SdBlockIoPei/SdBlockIoPei.inf
+  MdeModulePkg/Bus/Sd/EmmcDxe/EmmcDxe.inf
+  MdeModulePkg/Bus/Sd/SdDxe/SdDxe.inf
   MdeModulePkg/Bus/Pci/UfsPciHcDxe/UfsPciHcDxe.inf
   MdeModulePkg/Bus/Ufs/UfsPassThruDxe/UfsPassThruDxe.inf
   MdeModulePkg/Bus/Pci/UfsPciHcPei/UfsPciHcPei.inf
@@ -238,6 +247,8 @@
   MdeModulePkg/Bus/I2c/I2cDxe/I2cHostDxe.inf
   MdeModulePkg/Bus/I2c/I2cDxe/I2cDxe.inf
   MdeModulePkg/Bus/Isa/IsaBusDxe/IsaBusDxe.inf
+  MdeModulePkg/Bus/Isa/Ps2KeyboardDxe/Ps2KeyboardDxe.inf
+  MdeModulePkg/Bus/Isa/Ps2MouseDxe/Ps2MouseDxe.inf
 
   MdeModulePkg/Core/Dxe/DxeMain.inf {
     <LibraryClasses>
@@ -300,9 +311,9 @@
   MdeModulePkg/Application/BootManagerMenuApp/BootManagerMenuApp.inf
   MdeModulePkg/Application/UiApp/UiApp.inf{
     <LibraryClasses>
-      NULL|MdeModulePkg/Library/DeviceManagerLib/DeviceManagerLib.inf
-      NULL|MdeModulePkg/Library/BootManagerLib/BootManagerLib.inf
-      NULL|MdeModulePkg/Library/BootMaintenanceManagerLib/BootMaintenanceManagerLib.inf
+      NULL|MdeModulePkg/Library/DeviceManagerUiLib/DeviceManagerUiLib.inf
+      NULL|MdeModulePkg/Library/BootManagerUiLib/BootManagerUiLib.inf
+      NULL|MdeModulePkg/Library/BootMaintenanceManagerUiLib/BootMaintenanceManagerUiLib.inf
   }
   MdeModulePkg/Universal/DriverHealthManagerDxe/DriverHealthManagerDxe.inf
   MdeModulePkg/Universal/BootManagerPolicyDxe/BootManagerPolicyDxe.inf
@@ -319,6 +330,7 @@
   MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
   MdeModulePkg/Universal/Disk/UnicodeCollation/EnglishDxe/EnglishDxe.inf
   MdeModulePkg/Universal/Disk/CdExpressPei/CdExpressPei.inf
+  MdeModulePkg/Universal/Disk/RamDiskDxe/RamDiskDxe.inf
   MdeModulePkg/Universal/DriverSampleDxe/DriverSampleDxe.inf
   MdeModulePkg/Universal/HiiDatabaseDxe/HiiDatabaseDxe.inf
   MdeModulePkg/Universal/MemoryTest/GenericMemoryTestDxe/GenericMemoryTestDxe.inf
