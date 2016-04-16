@@ -1,11 +1,11 @@
-edk2 (0~20160408.ffea0a2c-2) UNRELEASED; urgency=medium
+edk2 (0~20160408.ffea0a2c-2) unstable; urgency=medium
 
   * Provide split AAVMF_{CODE,VARS}.fd for arm64 in the qemu-efi package,
     for VM-friendly nvram persistence in the same style as Fedora et al.
     and by analogy with the OVMF_{CODE,VARS}.fd on x86.  Thanks to
     William Grant <wgrant@ubuntu.com> for the patch.
 
- -- Steve Langasek <vorlon@debian.org>  Fri, 15 Apr 2016 16:44:24 -0700
+ -- Steve Langasek <vorlon@debian.org>  Sat, 16 Apr 2016 00:30:50 +0000
 
 edk2 (0~20160408.ffea0a2c-1) unstable; urgency=medium
 
