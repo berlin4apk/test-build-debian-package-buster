@@ -1,16 +1,16 @@
 ## @file
 # Coreboot Payload Package
 #
-# Provides drivers and definitions to create uefi payload for coreboot. 
+# Provides drivers and definitions to create uefi payload for coreboot.
 #
 # Copyright (c) 2014 - 2016, Intel Corporation. All rights reserved.<BR>
-# This program and the accompanying materials are licensed and made available under 
-# the terms and conditions of the BSD License that accompanies this distribution.  
+# This program and the accompanying materials are licensed and made available under
+# the terms and conditions of the BSD License that accompanies this distribution.
 # The full text of the license may be found at
-# http://opensource.org/licenses/bsd-license.php.                                                                          
-# 
-# THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,                     
-# WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.  
+# http://opensource.org/licenses/bsd-license.php.
+#
+# THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+# WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #
 ##
 
@@ -86,32 +86,33 @@ INF IntelFrameworkModulePkg/Universal/StatusCode/RuntimeDxe/StatusCodeRuntimeDxe
 
 INF MdeModulePkg/Universal/SecurityStubDxe/SecurityStubDxe.inf
 INF UefiCpuPkg/CpuDxe/CpuDxe.inf
-INF IntelFrameworkModulePkg/Universal/BdsDxe/BdsDxe.inf
+INF MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
+INF MdeModulePkg/Application/UiApp/UiApp.inf
 INF PcAtChipsetPkg/8254TimerDxe/8254Timer.inf
 INF MdeModulePkg/Universal/Metronome/Metronome.inf
 INF MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
 INF MdeModulePkg/Core/RuntimeDxe/RuntimeDxe.inf
 INF MdeModulePkg/Universal/CapsuleRuntimeDxe/CapsuleRuntimeDxe.inf
 INF MdeModulePkg/Universal/MonotonicCounterRuntimeDxe/MonotonicCounterRuntimeDxe.inf
-INF MdeModulePkg/Universal/ResetSystemRuntimeDxe/ResetSystemRuntimeDxe.inf  
-INF PcAtChipsetPkg/PcatRealTimeClockRuntimeDxe/PcatRealTimeClockRuntimeDxe.inf 
+INF MdeModulePkg/Universal/ResetSystemRuntimeDxe/ResetSystemRuntimeDxe.inf
+INF PcAtChipsetPkg/PcatRealTimeClockRuntimeDxe/PcatRealTimeClockRuntimeDxe.inf
 INF MdeModulePkg/Universal/Variable/EmuRuntimeDxe/EmuVariableRuntimeDxe.inf
 
 INF UefiCpuPkg/CpuIo2Dxe/CpuIo2Dxe.inf
 INF MdeModulePkg/Universal/DevicePathDxe/DevicePathDxe.inf
 INF MdeModulePkg/Universal/MemoryTest/NullMemoryTestDxe/NullMemoryTestDxe.inf
-INF PcAtChipsetPkg/8259InterruptControllerDxe/8259.inf 
+INF PcAtChipsetPkg/8259InterruptControllerDxe/8259.inf
 INF MdeModulePkg/Universal/HiiDatabaseDxe/HiiDatabaseDxe.inf
-INF MdeModulePkg/Universal/SetupBrowserDxe/SetupBrowserDxe.inf 
+INF MdeModulePkg/Universal/SetupBrowserDxe/SetupBrowserDxe.inf
 INF MdeModulePkg/Universal/DisplayEngineDxe/DisplayEngineDxe.inf
-INF CorebootModulePkg/CbSupportDxe/CbSupportDxe.inf 
+INF CorebootModulePkg/CbSupportDxe/CbSupportDxe.inf
 
 INF MdeModulePkg/Universal/SmbiosDxe/SmbiosDxe.inf
 #
 # PCI Support
 #
-INF DuetPkg/PciRootBridgeNoEnumerationDxe/PciRootBridgeNoEnumeration.inf
-INF DuetPkg/PciBusNoEnumerationDxe/PciBusNoEnumeration.inf 
+INF MdeModulePkg/Bus/Pci/PciBusDxe/PciBusDxe.inf
+INF MdeModulePkg/Bus/Pci/PciHostBridgeDxe/PciHostBridgeDxe.inf
 
 #
 # ISA Support
@@ -132,13 +133,20 @@ INF MdeModulePkg/Universal/Console/TerminalDxe/TerminalDxe.inf
 INF MdeModulePkg/Universal/Disk/DiskIoDxe/DiskIoDxe.inf
 INF MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
 INF MdeModulePkg/Universal/Disk/UnicodeCollation/EnglishDxe/EnglishDxe.inf
-INF DuetPkg/SataControllerDxe/SataControllerDxe.inf  
+INF CorebootModulePkg/SataControllerDxe/SataControllerDxe.inf
 INF MdeModulePkg/Bus/Ata/AtaBusDxe/AtaBusDxe.inf
 INF MdeModulePkg/Bus/Ata/AtaAtapiPassThru/AtaAtapiPassThru.inf
 INF MdeModulePkg/Bus/Scsi/ScsiBusDxe/ScsiBusDxe.inf
 INF MdeModulePkg/Bus/Scsi/ScsiDiskDxe/ScsiDiskDxe.inf
 
 INF FatPkg/EnhancedFatDxe/Fat.inf
+
+#
+# SD/eMMC Support
+#
+INF MdeModulePkg/Bus/Pci/SdMmcPciHcDxe/SdMmcPciHcDxe.inf
+INF MdeModulePkg/Bus/Sd/EmmcDxe/EmmcDxe.inf
+INF MdeModulePkg/Bus/Sd/SdDxe/SdDxe.inf
 
 #
 # Usb Support
@@ -151,18 +159,39 @@ INF MdeModulePkg/Bus/Usb/UsbKbDxe/UsbKbDxe.inf
 INF MdeModulePkg/Bus/Usb/UsbMassStorageDxe/UsbMassStorageDxe.inf
 
 #
+# OHCI Support
+#
+INF QuarkSocPkg/QuarkSouthCluster/Usb/Ohci/Dxe/OhciDxe.inf
+
+#
 # Shell
 #
-#!if $(ARCH) == IA32
-#INF  RuleOverride = BINARY USE = IA32 ShellBinPkg/UefiShell/UefiShell.inf
-#!else
-#INF  RuleOverride = BINARY USE = X64 ShellBinPkg/UefiShell/UefiShell.inf
-#!endif
-#
+!if $(SHELL_TYPE) == BUILD_SHELL
+INF ShellPkg/Application/Shell/Shell.inf
+!endif
+
+!if $(SHELL_TYPE) == FULL_BIN
 !if $(ARCH) == IA32
 INF  RuleOverride = BINARY USE = IA32 EdkShellBinPkg/FullShell/FullShell.inf
 !else
 INF  RuleOverride = BINARY USE = X64 EdkShellBinPkg/FullShell/FullShell.inf
+!endif
+!endif
+
+!if $(SHELL_TYPE) == MIN_BIN
+!if $(ARCH) == IA32
+INF  RuleOverride = BINARY USE = IA32 ShellBinPkg/MinUefiShell/MinUefiShell.inf
+!else
+INF  RuleOverride = BINARY USE = X64 ShellBinPkg/MinUefiShell/MinUefiShell.inf
+!endif
+!endif
+
+!if $(SHELL_TYPE) == UEFI_BIN
+!if $(ARCH) == IA32
+INF  RuleOverride = BINARY USE = IA32 ShellBinPkg/UefiShell/UefiShell.inf
+!else
+INF  RuleOverride = BINARY USE = X64 ShellBinPkg/UefiShell/UefiShell.inf
+!endif
 !endif
 
 FILE FREEFORM    = PCD(gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdLogoFile) {
@@ -170,7 +199,7 @@ FILE FREEFORM    = PCD(gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdLogoFile) {
 }
 
 #
-# Framebuffer Gop 
+# Framebuffer Gop
 #
 INF CorebootPayloadPkg/FbGop/FbGop.inf
 
@@ -271,4 +300,3 @@ INF CorebootPayloadPkg/FbGop/FbGop.inf
   FILE RAW = $(NAMED_GUID) {
     RAW RAW                |.raw
   }
-

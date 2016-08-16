@@ -207,13 +207,10 @@ BmWriteBootToOsPerformanceData (
 
   @param Boot               TRUE if current boot option belongs to boot
                             category instead of application category.
-  @param RamDiskSizeInPages Reserved memory size in pages occupied by
-                            RAM Disk.
 **/
 VOID
 BmSetMemoryTypeInformationVariable (
-  IN BOOLEAN                    Boot,
-  IN UINTN                      RamDiskSizeInPages
+  IN BOOLEAN                    Boot
   );
 
 /**
@@ -308,25 +305,6 @@ BmSetVariableAndReportStatusCodeOnError (
   IN UINT32     Attributes,
   IN UINTN      DataSize,
   IN VOID       *Data
-  );
-
-/**
-  Get the load option by its device path.
-
-  @param FilePath  The device path pointing to a load option.
-                   It could be a short-form device path.
-  @param FullPath  Return the full device path of the load option after
-                   short-form device path expanding.
-                   Caller is responsible to free it.
-  @param FileSize  Return the load option size.
-
-  @return The load option buffer. Caller is responsible to free the memory.
-**/
-VOID *
-BmGetLoadOptionBuffer (
-  IN  EFI_DEVICE_PATH_PROTOCOL          *FilePath,
-  OUT EFI_DEVICE_PATH_PROTOCOL          **FullPath,
-  OUT UINTN                             *FileSize
   );
 
 /**

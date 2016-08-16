@@ -393,6 +393,15 @@ Ip4CleanService (
 {
   EFI_STATUS                Status;
 
+  IpSb->State     = IP4_SERVICE_DESTROY;
+
+  if (IpSb->Timer != NULL) {
+    gBS->SetTimer (IpSb->Timer, TimerCancel, 0);
+    gBS->CloseEvent (IpSb->Timer);
+
+    IpSb->Timer = NULL;
+  }
+
   if (IpSb->DefaultInterface != NULL) {
     Status = Ip4FreeInterface (IpSb->DefaultInterface, NULL);
 
@@ -430,13 +439,6 @@ Ip4CleanService (
       );
 
     IpSb->MnpChildHandle = NULL;
-  }
-
-  if (IpSb->Timer != NULL) {
-    gBS->SetTimer (IpSb->Timer, TimerCancel, 0);
-    gBS->CloseEvent (IpSb->Timer);
-
-    IpSb->Timer = NULL;
   }
 
   if (IpSb->ReconfigEvent != NULL) {
@@ -596,6 +598,10 @@ Ip4DriverBindingStart (
       if (EFI_ERROR(Status)) {
         goto UNINSTALL_PROTOCOL;
       }
+      
+      if (Index == Ip4Config2DataTypePolicy && (*(DataItem->Data.Policy) == Ip4Config2PolicyDhcp)) {
+        break;
+      } 
     }
   }
  
@@ -750,8 +756,6 @@ Ip4DriverBindingStop (
 
   } else if (IsListEmpty (&IpSb->Children)) {
     State           = IpSb->State;
-    IpSb->State     = IP4_SERVICE_DESTROY;
-
     //
     // OK, clean other resources then uninstall the service binding protocol.
     //
@@ -796,7 +800,7 @@ ON_ERROR:
 
   @retval EFI_SUCCES            The protocol was added to ChildHandle.
   @retval EFI_INVALID_PARAMETER ChildHandle is NULL.
-  @retval EFI_OUT_OF_RESOURCES  There are not enough resources availabe to create
+  @retval EFI_OUT_OF_RESOURCES  There are not enough resources available to create
                                 the child
   @retval other                 The child handle was not created
 

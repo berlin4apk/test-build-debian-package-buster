@@ -24,10 +24,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 OPAL_DRIVER mOpalDriver;
 
-// flag to track hii installation
-BOOLEAN gHiiInstalled = FALSE;
-
-
 #define MAX_PASSWORD_SIZE        32
 #define MAX_PASSWORD_TRY_COUNT   5
 
@@ -243,7 +239,7 @@ OpalDriverPopUpHddPassword (
     return NULL;
   }
 
-  UnicodeStrToAsciiStr(Unicode, Ascii);
+  UnicodeStrToAsciiStrS (Unicode, Ascii, MAX_PASSWORD_SIZE + 1);
 
   return Ascii;
 }
@@ -267,6 +263,7 @@ OpalDriverRequestPassword (
   EFI_INPUT_KEY       Key;
   OPAL_SESSION        Session;
   BOOLEAN             PressEsc;
+  BOOLEAN             Locked;
 
   if (Dev == NULL) {
     return;
@@ -281,33 +278,61 @@ OpalDriverRequestPassword (
     Session.MediaId = Dev->OpalDisk.MediaId;
     Session.OpalBaseComId = Dev->OpalDisk.OpalBaseComId;
 
+    Locked = OpalDeviceLocked (&Dev->OpalDisk.SupportedAttributes, &Dev->OpalDisk.LockingFeature);
+
     while (Count < MAX_PASSWORD_TRY_COUNT) {
       Password = OpalDriverPopUpHddPassword (Dev, &PressEsc);
       if (PressEsc) {
-        //
-        // User not input password and press ESC, keep device in lock status and continue boot.
-        //
-        do {
-          CreatePopUp (
-                  EFI_LIGHTGRAY | EFI_BACKGROUND_BLUE,
-                  &Key,
-                  L"Confirm: Not unlock device and continue boot?.",
-                  L"Press ENTER to confirm, Press Esc to input password",
-                  NULL
-                  );
-        } while ((Key.ScanCode != SCAN_ESC) && (Key.UnicodeChar != CHAR_CARRIAGE_RETURN));
+        if (Locked) {
+          //
+          // Current device in the lock status and
+          // User not input password and press ESC,
+          // keep device in lock status and continue boot.
+          //
+          do {
+            CreatePopUp (
+                    EFI_LIGHTGRAY | EFI_BACKGROUND_BLUE,
+                    &Key,
+                    L"Press ENTER to skip password, Press ESC to input password",
+                    NULL
+                    );
+          } while ((Key.ScanCode != SCAN_ESC) && (Key.UnicodeChar != CHAR_CARRIAGE_RETURN));
 
-        if (Key.UnicodeChar == CHAR_CARRIAGE_RETURN) {
-          gST->ConOut->ClearScreen(gST->ConOut);
-          //
-          // Keep lock and continue boot.
-          //
-          return;
+          if (Key.UnicodeChar == CHAR_CARRIAGE_RETURN) {
+            gST->ConOut->ClearScreen(gST->ConOut);
+            //
+            // Keep lock and continue boot.
+            //
+            return;
+          } else {
+            //
+            // Let user input password again.
+            //
+            continue;
+          }
         } else {
           //
-          // Let user input password again.
+          // Current device in the unlock status and
+          // User not input password and press ESC,
+          // Shutdown the device.
           //
-          continue;
+          do {
+            CreatePopUp (
+                    EFI_LIGHTGRAY | EFI_BACKGROUND_BLUE,
+                    &Key,
+                    L"Press ENTER to shutdown, Press ESC to input password",
+                    NULL
+                    );
+          } while ((Key.ScanCode != SCAN_ESC) && (Key.UnicodeChar != CHAR_CARRIAGE_RETURN));
+
+          if (Key.UnicodeChar == CHAR_CARRIAGE_RETURN) {
+            gRT->ResetSystem (EfiResetShutdown, EFI_SUCCESS, 0, NULL);
+          } else {
+            //
+            // Let user input password again.
+            //
+            continue;
+          }
         }
       }
 
@@ -317,7 +342,7 @@ OpalDriverRequestPassword (
       }
       PasswordLen = (UINT32) AsciiStrLen(Password);
 
-      if (OpalDeviceLocked (&Dev->OpalDisk.SupportedAttributes, &Dev->OpalDisk.LockingFeature)) {
+      if (Locked) {
         Ret = OpalSupportUnlock(&Session, Password, PasswordLen, Dev->OpalDevicePath);
       } else {
         Ret = OpalSupportLock(&Session, Password, PasswordLen, Dev->OpalDevicePath);
@@ -353,12 +378,13 @@ OpalDriverRequestPassword (
         CreatePopUp (
                 EFI_LIGHTGRAY | EFI_BACKGROUND_BLUE,
                 &Key,
-                L"Opal password retry count is expired. Keep lock and continue boot.",
-                L"Press ENTER to continue",
+                L"Opal password retry count exceeds the limit. Must shutdown!",
+                L"Press ENTER to shutdown",
                 NULL
                 );
       } while (Key.UnicodeChar != CHAR_CARRIAGE_RETURN);
-      gST->ConOut->ClearScreen(gST->ConOut);
+
+      gRT->ResetSystem (EfiResetShutdown, EFI_SUCCESS, 0, NULL);
     }
   }
 }
@@ -392,13 +418,10 @@ ReadyToBootCallback (
 {
   EFI_STATUS          Status;
   OPAL_DRIVER_DEVICE* Itr;
-  UINT8               Count;
   TCG_RESULT          Result;
   OPAL_EXTRA_INFO_VAR OpalExtraInfo;
   UINTN               DataSize;
   OPAL_SESSION        Session;
-
-  Count = 0;
 
   gBS->CloseEvent (Event);
 
@@ -419,21 +442,21 @@ ReadyToBootCallback (
     // Send BlockSID command to each Opal disk
     //
     Itr = mOpalDriver.DeviceList;
-    Count = 0;
     while (Itr != NULL) {
-      ZeroMem(&Session, sizeof(Session));
-      Session.Sscp = Itr->OpalDisk.Sscp;
-      Session.MediaId = Itr->OpalDisk.MediaId;
-      Session.OpalBaseComId = Itr->OpalDisk.OpalBaseComId;
+      if (Itr->OpalDisk.SupportedAttributes.BlockSid) {
+        ZeroMem(&Session, sizeof(Session));
+        Session.Sscp = Itr->OpalDisk.Sscp;
+        Session.MediaId = Itr->OpalDisk.MediaId;
+        Session.OpalBaseComId = Itr->OpalDisk.OpalBaseComId;
 
-      Result = OpalBlockSid (&Session, TRUE);  // HardwareReset must always be TRUE
-      if (Result != TcgResultSuccess) {
-        DEBUG ((DEBUG_ERROR, "OpalBlockSid fail\n"));
-        break;
+        Result = OpalBlockSid (&Session, TRUE);  // HardwareReset must always be TRUE
+        if (Result != TcgResultSuccess) {
+          DEBUG ((DEBUG_ERROR, "OpalBlockSid fail\n"));
+          break;
+        }
       }
 
       Itr = Itr->Next;
-      Count++;
     }
   }
 }
@@ -593,7 +616,7 @@ OpalDriverGetDeviceNameByProtocol(
         ASSERT (Dev->Name16 != NULL);
         StrCpyS (Dev->Name16, StrLength, DevName);
         Dev->NameZ = (CHAR8*)AllocateZeroPool(StrLength);
-        UnicodeStrToAsciiStr(DevName, Dev->NameZ);
+        UnicodeStrToAsciiStrS (DevName, Dev->NameZ, StrLength);
 
         //
         // Retrieve bridge BDF info and port number or namespace depending on type
@@ -731,6 +754,11 @@ EfiDriverEntryPoint(
                   (VOID *) &ImageHandle,
                   &ReadyToBootEvent
                   );
+
+  //
+  // Install Hii packages.
+  //
+  HiiInstall();
 
   return Status;
 }
@@ -964,14 +992,6 @@ OpalEfiDriverBindingStart(
   }
 
   AddDeviceToTail(Dev);
-
-  //
-  // Install Hii if it hasn't already been installed
-  //
-  if (!gHiiInstalled) {
-    HiiInstall();
-    gHiiInstalled = TRUE;
-  }
 
   //
   // check if device is locked and prompt for password

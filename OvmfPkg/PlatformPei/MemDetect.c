@@ -1,7 +1,7 @@
 /**@file
   Memory Detection for Virtual Machines.
 
-  Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -38,6 +38,9 @@ Module Name:
 #include "Cmos.h"
 
 UINT8 mPhysMemAddressWidth;
+
+STATIC UINT32 mS3AcpiReservedMemoryBase;
+STATIC UINT32 mS3AcpiReservedMemorySize;
 
 UINT32
 GetSystemMemorySizeBelow4gb (
@@ -332,21 +335,34 @@ PublishPeiMemory (
   EFI_STATUS                  Status;
   EFI_PHYSICAL_ADDRESS        MemoryBase;
   UINT64                      MemorySize;
-  UINT64                      LowerMemorySize;
+  UINT32                      LowerMemorySize;
   UINT32                      PeiMemoryCap;
 
-  if (mBootMode == BOOT_ON_S3_RESUME) {
-    MemoryBase = PcdGet32 (PcdS3AcpiReservedMemoryBase);
-    MemorySize = PcdGet32 (PcdS3AcpiReservedMemorySize);
-  } else {
-    LowerMemorySize = GetSystemMemorySizeBelow4gb ();
-    if (FeaturePcdGet (PcdSmmSmramRequire)) {
-      //
-      // TSEG is chipped from the end of low RAM
-      //
-      LowerMemorySize -= FixedPcdGet8 (PcdQ35TsegMbytes) * SIZE_1MB;
-    }
+  LowerMemorySize = GetSystemMemorySizeBelow4gb ();
+  if (FeaturePcdGet (PcdSmmSmramRequire)) {
+    //
+    // TSEG is chipped from the end of low RAM
+    //
+    LowerMemorySize -= FixedPcdGet8 (PcdQ35TsegMbytes) * SIZE_1MB;
+  }
 
+  //
+  // If S3 is supported, then the S3 permanent PEI memory is placed next,
+  // downwards. Its size is primarily dictated by CpuMpPei. The formula below
+  // is an approximation.
+  //
+  if (mS3Supported) {
+    mS3AcpiReservedMemorySize = SIZE_512KB +
+      PcdGet32 (PcdCpuMaxLogicalProcessorNumber) *
+      PcdGet32 (PcdCpuApStackSize);
+    mS3AcpiReservedMemoryBase = LowerMemorySize - mS3AcpiReservedMemorySize;
+    LowerMemorySize = mS3AcpiReservedMemoryBase;
+  }
+
+  if (mBootMode == BOOT_ON_S3_RESUME) {
+    MemoryBase = mS3AcpiReservedMemoryBase;
+    MemorySize = mS3AcpiReservedMemorySize;
+  } else {
     PeiMemoryCap = GetPeiMemoryCap ();
     DEBUG ((EFI_D_INFO, "%a: mPhysMemAddressWidth=%d PeiMemoryCap=%u KB\n",
       __FUNCTION__, mPhysMemAddressWidth, PeiMemoryCap >> 10));
@@ -404,7 +420,29 @@ QemuInitializeRam (
   LowerMemorySize = GetSystemMemorySizeBelow4gb ();
   UpperMemorySize = GetSystemMemorySizeAbove4gb ();
 
-  if (mBootMode != BOOT_ON_S3_RESUME) {
+  if (mBootMode == BOOT_ON_S3_RESUME) {
+    //
+    // Create the following memory HOB as an exception on the S3 boot path.
+    //
+    // Normally we'd create memory HOBs only on the normal boot path. However,
+    // CpuMpPei specifically needs such a low-memory HOB on the S3 path as
+    // well, for "borrowing" a subset of it temporarily, for the AP startup
+    // vector.
+    //
+    // CpuMpPei saves the original contents of the borrowed area in permanent
+    // PEI RAM, in a backup buffer allocated with the normal PEI services.
+    // CpuMpPei restores the original contents ("returns" the borrowed area) at
+    // End-of-PEI. End-of-PEI in turn is emitted by S3Resume2Pei before
+    // transfering control to the OS's wakeup vector in the FACS.
+    //
+    // We expect any other PEIMs that "borrow" memory similarly to CpuMpPei to
+    // restore the original contents. Furthermore, we expect all such PEIMs
+    // (CpuMpPei included) to claim the borrowed areas by producing memory
+    // allocation HOBs, and to honor preexistent memory allocation HOBs when
+    // looking for an area to borrow.
+    //
+    AddMemoryRangeHob (0, BASE_512KB + BASE_128KB);
+  } else {
     //
     // Create memory HOBs
     //
@@ -422,7 +460,7 @@ QemuInitializeRam (
     }
 
     if (UpperMemorySize != 0) {
-      AddUntestedMemoryBaseSizeHob (BASE_4GB, UpperMemorySize);
+      AddMemoryBaseSizeHob (BASE_4GB, UpperMemorySize);
     }
   }
 
@@ -492,8 +530,8 @@ InitializeRamRegions (
     // This is the memory range that will be used for PEI on S3 resume
     //
     BuildMemoryAllocationHob (
-      (EFI_PHYSICAL_ADDRESS)(UINTN) PcdGet32 (PcdS3AcpiReservedMemoryBase),
-      (UINT64)(UINTN) PcdGet32 (PcdS3AcpiReservedMemorySize),
+      mS3AcpiReservedMemoryBase,
+      mS3AcpiReservedMemorySize,
       EfiACPIMemoryNVS
       );
 

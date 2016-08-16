@@ -122,10 +122,6 @@
   #  Include/Guid/AuthenticatedVariableFormat.h
   gEfiCertDbGuid                     = { 0xd9bee56e, 0x75dc, 0x49d9, { 0xb4, 0xd7, 0xb5, 0x34, 0x21, 0xf, 0x63, 0x7a } }
 
-  ## GUID used to "SecureBootMode" variable to save platform secure boot mode
-  #  Include/Guid/AuthenticatedVariableFormat.h
-  gEdkiiSecureBootModeGuid           = { 0xc573b77, 0xeb93, 0x4d3d, { 0xaf, 0xfc, 0x5f, 0xeb, 0xca, 0xfb, 0x65, 0xb0 } }
-
   ## Hob GUID used to pass a TCG_PCR_EVENT from a TPM PEIM to a TPM DXE Driver.
   #  Include/Guid/TcgEventHob.h
   gTcgEventEntryHobGuid              = { 0x2b9ffb52, 0x1b13, 0x416f, { 0xa8, 0x7b, 0xbc, 0x93, 0xd, 0xef, 0x92, 0xa8 }}
@@ -303,6 +299,10 @@
   # @ValidList  0x80000003 | 0x010D0000
   gEfiSecurityPkgTokenSpaceGuid.PcdStatusCodeSubClassTpmDevice|0x010D0000|UINT32|0x00000007
 
+  ## Null-terminated string of the Version of Physical Presence interface supported by platform.
+  # @Prompt Version of Physical Presence interface supported by platform.
+  gEfiSecurityPkgTokenSpaceGuid.PcdTcgPhysicalPresenceInterfaceVer|"1.3"|VOID*|0x00000008
+
 [PcdsFixedAtBuild, PcdsPatchableInModule, PcdsDynamic, PcdsDynamicEx]
   ## Indicates the presence or absence of the platform operator during firmware booting.
   #  If platform operator is not physical presence during boot. TPM will be locked and the TPM commands 
@@ -413,6 +413,12 @@
   ## This PCD defines length(in bytes) of the TCG2 Final event log area.
   # @Prompt Length(in bytes) of the TCG2 Final event log area.
   gEfiSecurityPkgTokenSpaceGuid.PcdTcg2FinalLogAreaLen|0x8000|UINT32|0x00010018
+
+  ## Indicate whether a physical presence user exist.
+  # When it is configured to Dynamic or DynamicEx, it can be set through detection using 
+  # a platform-specific method (e.g. Button pressed) in a actual platform in early boot phase.<BR><BR>
+  # @Prompt A physical presence user status
+  gEfiSecurityPkgTokenSpaceGuid.PcdUserPhysicalPresence|FALSE|BOOLEAN|0x00010019
 
 [PcdsDynamic, PcdsDynamicEx]
 

@@ -2,6 +2,7 @@
 #  Open Virtual Machine Firmware: FDF
 #
 #  Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
+#  (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 #
 #  This program and the accompanying materials
 #  are licensed and made available under the terms and conditions of the BSD License
@@ -67,10 +68,10 @@ FV = SECFV
 
 [FD.MEMFD]
 BaseAddress   = $(MEMFD_BASE_ADDRESS)
-Size          = 0xA00000
+Size          = 0xB00000
 ErasePolarity = 1
 BlockSize     = 0x10000
-NumBlocks     = 0xA0
+NumBlocks     = 0xB0
 
 0x000000|0x006000
 gUefiOvmfPkgTokenSpaceGuid.PcdOvmfSecPageTablesBase|gUefiOvmfPkgTokenSpaceGuid.PcdOvmfSecPageTablesSize
@@ -84,20 +85,18 @@ gEfiMdePkgTokenSpaceGuid.PcdGuidedExtractHandlerTableAddress|gUefiOvmfPkgTokenSp
 0x010000|0x008000
 gUefiOvmfPkgTokenSpaceGuid.PcdOvmfSecPeiTempRamBase|gUefiOvmfPkgTokenSpaceGuid.PcdOvmfSecPeiTempRamSize
 
-0x018000|0x008000
-gUefiOvmfPkgTokenSpaceGuid.PcdS3AcpiReservedMemoryBase|gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdS3AcpiReservedMemorySize
-
 0x020000|0x0E0000
 gUefiOvmfPkgTokenSpaceGuid.PcdOvmfPeiMemFvBase|gUefiOvmfPkgTokenSpaceGuid.PcdOvmfPeiMemFvSize
 FV = PEIFV
 
-0x100000|0x900000
+0x100000|0xA00000
 gUefiOvmfPkgTokenSpaceGuid.PcdOvmfDxeMemFvBase|gUefiOvmfPkgTokenSpaceGuid.PcdOvmfDxeMemFvSize
 FV = DXEFV
 
 ################################################################################
 
 [FV.SECFV]
+FvNameGuid         = 763BED0D-DE9F-48F5-81F1-3E90E1B1A015
 BlockSize          = 0x1000
 FvAlignment        = 16
 ERASE_POLARITY     = 1
@@ -128,6 +127,7 @@ INF  RuleOverride=RESET_VECTOR OvmfPkg/ResetVector/ResetVector.inf
 
 ################################################################################
 [FV.PEIFV]
+FvNameGuid         = 6938079B-B503-4E3D-9D24-B28337A25806
 BlockSize          = 0x10000
 FvAlignment        = 16
 ERASE_POLARITY     = 1
@@ -155,17 +155,20 @@ APRIORI PEI {
 #
 INF  MdeModulePkg/Core/Pei/PeiMain.inf
 INF  MdeModulePkg/Universal/PCD/Pei/Pcd.inf
-INF  IntelFrameworkModulePkg/Universal/StatusCode/Pei/StatusCodePei.inf
+INF  MdeModulePkg/Universal/ReportStatusCodeRouter/Pei/ReportStatusCodeRouterPei.inf
+INF  MdeModulePkg/Universal/StatusCodeHandler/Pei/StatusCodeHandlerPei.inf
 INF  OvmfPkg/PlatformPei/PlatformPei.inf
 INF  MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf
 INF  UefiCpuPkg/Universal/Acpi/S3Resume2Pei/S3Resume2Pei.inf
 !if $(SMM_REQUIRE) == TRUE
 INF  OvmfPkg/SmmAccess/SmmAccessPei.inf
 !endif
+INF  UefiCpuPkg/CpuMpPei/CpuMpPei.inf
 
 ################################################################################
 
 [FV.DXEFV]
+FvNameGuid         = 7CB8BDC9-F8EB-4F34-AAEA-3EE4AF6516A1
 BlockSize          = 0x10000
 FvAlignment        = 16
 ERASE_POLARITY     = 1
@@ -197,7 +200,8 @@ APRIORI DXE {
 #
 INF  MdeModulePkg/Core/Dxe/DxeMain.inf
 
-INF  IntelFrameworkModulePkg/Universal/StatusCode/RuntimeDxe/StatusCodeRuntimeDxe.inf
+INF  MdeModulePkg/Universal/ReportStatusCodeRouter/RuntimeDxe/ReportStatusCodeRouterRuntimeDxe.inf
+INF  MdeModulePkg/Universal/StatusCodeHandler/RuntimeDxe/StatusCodeHandlerRuntimeDxe.inf
 INF  MdeModulePkg/Universal/PCD/Dxe/Pcd.inf
 
 INF  MdeModulePkg/Core/RuntimeDxe/RuntimeDxe.inf
@@ -207,6 +211,8 @@ INF  PcAtChipsetPkg/8259InterruptControllerDxe/8259.inf
 INF  UefiCpuPkg/CpuIo2Dxe/CpuIo2Dxe.inf
 INF  UefiCpuPkg/CpuDxe/CpuDxe.inf
 INF  PcAtChipsetPkg/8254TimerDxe/8254Timer.inf
+INF  OvmfPkg/IncompatiblePciDeviceSupportDxe/IncompatiblePciDeviceSupport.inf
+INF  OvmfPkg/PciHotPlugInitDxe/PciHotPlugInit.inf
 INF  MdeModulePkg/Bus/Pci/PciHostBridgeDxe/PciHostBridgeDxe.inf
 INF  MdeModulePkg/Bus/Pci/PciBusDxe/PciBusDxe.inf
 INF  PcAtChipsetPkg/KbcResetDxe/Reset.inf
@@ -234,7 +240,9 @@ INF  MdeModulePkg/Universal/Console/ConPlatformDxe/ConPlatformDxe.inf
 INF  MdeModulePkg/Universal/Console/ConSplitterDxe/ConSplitterDxe.inf
 INF  MdeModulePkg/Universal/Console/GraphicsConsoleDxe/GraphicsConsoleDxe.inf
 INF  MdeModulePkg/Universal/Console/TerminalDxe/TerminalDxe.inf
-INF  IntelFrameworkModulePkg/Universal/BdsDxe/BdsDxe.inf
+INF  MdeModulePkg/Universal/DriverHealthManagerDxe/DriverHealthManagerDxe.inf
+INF  MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
+INF  MdeModulePkg/Application/UiApp/UiApp.inf
 INF  MdeModulePkg/Universal/DevicePathDxe/DevicePathDxe.inf
 INF  MdeModulePkg/Universal/PrintDxe/PrintDxe.inf
 INF  MdeModulePkg/Universal/Disk/DiskIoDxe/DiskIoDxe.inf
@@ -376,6 +384,7 @@ INF  MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf
 ################################################################################
 
 [FV.FVMAIN_COMPACT]
+FvNameGuid         = 48DB5E17-707C-472D-91CD-1613E7EF51B0
 FvAlignment        = 16
 ERASE_POLARITY     = 1
 MEMORY_MAPPED      = TRUE
@@ -444,6 +453,8 @@ FILE FV_IMAGE = 9E21FD93-9C72-4c15-8C4B-E77F1DB2D792 {
     PE32     PE32                    $(INF_OUTPUT)/$(MODULE_NAME).efi
     UI       STRING="$(MODULE_NAME)" Optional
     VERSION  STRING="$(INF_VERSION)" Optional BUILD_NUM=$(BUILD_NUMBER)
+    RAW ACPI  Optional               |.acpi
+    RAW ASL   Optional               |.aml
   }
 
 [Rule.Common.DXE_RUNTIME_DRIVER]

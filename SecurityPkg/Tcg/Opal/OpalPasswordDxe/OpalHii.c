@@ -30,6 +30,8 @@ extern UINT8  OpalPasswordFormBin[];
 //
 extern UINT8  OpalPasswordDxeStrings[];
 
+CHAR16  OpalPasswordStorageName[] = L"OpalHiiConfig";
+
 EFI_HII_CONFIG_ACCESS_PROTOCOL gHiiConfigAccessProtocol;
 
 //
@@ -108,43 +110,6 @@ HiiSetCurrentConfiguration(
 }
 
 /**
-  Check that all required protocols for HII are available.
-
-  @retval  EFI_SUCCESS        All required protocols are installed.
-  @retval  EFI_NOT_FOUND      One or more protocol are not installed.
-**/
-EFI_STATUS
-HiiCheckForRequiredProtocols (
-  VOID
-  )
-{
-  VOID*       TempProtocol;
-  EFI_STATUS  Status;
-
-  Status = gBS->LocateProtocol(&gEfiHiiStringProtocolGuid, NULL, (VOID**)&TempProtocol );
-  if (EFI_ERROR (Status)) {
-    return EFI_NOT_FOUND;
-  }
-
-  Status = gBS->LocateProtocol(&gEfiHiiDatabaseProtocolGuid, NULL, (VOID**)&TempProtocol );
-  if (EFI_ERROR (Status)) {
-    return EFI_NOT_FOUND;
-  }
-
-  Status = gBS->LocateProtocol(&gEfiHiiConfigRoutingProtocolGuid, NULL, (VOID**)&TempProtocol );
-  if (EFI_ERROR (Status)) {
-    return EFI_NOT_FOUND;
-  }
-
-  Status = gBS->LocateProtocol(&gEfiFormBrowser2ProtocolGuid, NULL, (VOID**)&TempProtocol );
-  if (EFI_ERROR (Status)) {
-    return EFI_NOT_FOUND;
-  }
-
-  return EFI_SUCCESS;
-}
-
-/**
   Install the HII related resources.
 
   @retval  EFI_SUCCESS        Install all the resources success.
@@ -157,15 +122,6 @@ HiiInstall(
 {
   EFI_STATUS                   Status;
   EFI_HANDLE                   DriverHandle;
-
-  //
-  // Check that all required protocols are available for HII.
-  // If not, fail the install
-  //
-  Status = HiiCheckForRequiredProtocols();
-  if (EFI_ERROR(Status)) {
-    return Status;
-  }
 
   //
   // Clear the global configuration.
@@ -373,13 +329,7 @@ HiiSelectDiskAction (
 
     case HII_KEY_ID_GOTO_REVERT:
       gHiiConfiguration.AvailableFields |= HII_FIELD_PASSWORD;
-      if (OpalDisk->SupportedAttributes.PyriteSsc != 1) {
-        //
-        // According to current Pyrite SSC Spec 1.00, there is no parameter for RevertSP method.
-        // So issue RevertSP method without any parameter by suppress KeepUserData option.
-        //
-        gHiiConfiguration.AvailableFields |= HII_FIELD_KEEP_USER_DATA;
-      }
+      gHiiConfiguration.AvailableFields |= HII_FIELD_KEEP_USER_DATA;
       if (AvailActions.RevertKeepDataForced) {
         gHiiConfiguration.AvailableFields |= HII_FIELD_KEEP_USER_DATA_FORCED;
       }
@@ -510,14 +460,16 @@ DriverCallback(
 
       case HII_KEY_ID_ENTER_PASSWORD:
         return HiiPasswordEntered(Value->string);
-
-      case HII_KEY_ID_BLOCKSID:
-        return HiiSetBlockSid(Value->b);
     }
   } else if (Action == EFI_BROWSER_ACTION_CHANGED) {
     switch (HiiKeyId) {
       case HII_KEY_ID_ENTER_PSID:
         HiiPsidRevert();
+        *ActionRequest = EFI_BROWSER_ACTION_REQUEST_FORM_APPLY;
+        return EFI_SUCCESS;
+
+      case HII_KEY_ID_BLOCKSID:
+        HiiSetBlockSid(Value->b);
         *ActionRequest = EFI_BROWSER_ACTION_REQUEST_FORM_APPLY;
         return EFI_SUCCESS;
     }
@@ -607,7 +559,6 @@ HiiPopulateDiskInfoForm(
         gHiiConfiguration.SelectedDiskAvailableActions |= (AvailActions.UserPass == 1) ? HII_ACTION_SET_USER_PWD : HII_ACTION_NONE;
         gHiiConfiguration.SelectedDiskAvailableActions |= (AvailActions.SecureErase == 1) ? HII_ACTION_SECURE_ERASE : HII_ACTION_NONE;
         gHiiConfiguration.SelectedDiskAvailableActions |= (AvailActions.DisableUser == 1) ? HII_ACTION_DISABLE_USER : HII_ACTION_NONE;
-        gHiiConfiguration.SelectedDiskAvailableActions |= HII_ACTION_ENABLE_BLOCKSID;
 
         HiiSetFormString (STRING_TOKEN(STR_DISK_INFO_PSID_REVERT), "PSID Revert to factory default and Disable");
 
@@ -616,14 +567,6 @@ HiiPopulateDiskInfoForm(
         // Default initialize keep user Data to be true
         //
         gHiiConfiguration.KeepUserData = 1;
-        if (OpalDisk->SupportedAttributes.PyriteSsc == 1) {
-          //
-          // According to current Pyrite SSC Spec 1.00, there is no parameter for RevertSP method.
-          // So issue RevertSP method without any parameter by set default value to FALSE.
-          //
-          gHiiConfiguration.KeepUserData = 0;
-        }
-
       }
     }
   }
@@ -652,12 +595,15 @@ HiiPsidRevert(
   OPAL_DISK                     *OpalDisk;
   TCG_RESULT                    Ret;
   OPAL_SESSION                  Session;
+  UINT8                         TmpBuf[PSID_CHARACTER_STRING_END_LENGTH];
 
   Ret = TcgResultFailure;
 
   OpalHiiGetBrowserData();
 
-  UnicodeStrToAsciiStr(gHiiConfiguration.Psid, (CHAR8*)Psid.Psid);
+  ZeroMem (TmpBuf, sizeof (TmpBuf));
+  UnicodeStrToAsciiStrS (gHiiConfiguration.Psid, (CHAR8*)TmpBuf, PSID_CHARACTER_STRING_END_LENGTH);
+  CopyMem (Psid.Psid, TmpBuf, PSID_CHARACTER_LENGTH);
 
   OpalDisk = HiiGetOpalDiskCB (gHiiConfiguration.SelectedDiskIndex);
   if (OpalDisk != NULL) {
@@ -1106,7 +1052,7 @@ HiiPasswordEntered(
     return EFI_BUFFER_TOO_SMALL;
   }
 
-  UnicodeStrToAsciiStr(UniStr, Password);
+  UnicodeStrToAsciiStrS (UniStr, Password, sizeof (Password));
   gBS->FreePool(UniStr);
 
   if (gHiiConfiguration.SelectedAction == HII_KEY_ID_GOTO_UNLOCK) {
@@ -1116,8 +1062,15 @@ HiiPasswordEntered(
   } else if (gHiiConfiguration.SelectedAction == HII_KEY_ID_GOTO_DISABLE_USER) {
     Status = HiiDisableUser (OpalDisk, Password, PassLength);
   } else if (gHiiConfiguration.SelectedAction == HII_KEY_ID_GOTO_REVERT) {
-    DEBUG ((DEBUG_INFO, "gHiiConfiguration.KeepUserData %u\n", gHiiConfiguration.KeepUserData));
-    Status = HiiRevert(OpalDisk, Password, PassLength, gHiiConfiguration.KeepUserData);
+    if (OpalDisk->SupportedAttributes.PyriteSsc == 1 && OpalDisk->LockingFeature.MediaEncryption == 0) {
+      //
+      // For pyrite type device which also not supports media encryption, it not accept "Keep User Data" parameter.
+      // So here hardcode a FALSE for this case.
+      //
+      Status = HiiRevert(OpalDisk, Password, PassLength, FALSE);
+    } else {
+      Status = HiiRevert(OpalDisk, Password, PassLength, gHiiConfiguration.KeepUserData);
+    }
   } else {
     Status = HiiSetPassword(OpalDisk, Password, PassLength);
   }
@@ -1190,6 +1143,13 @@ RouteConfig(
     return (EFI_INVALID_PARAMETER);
   }
 
+  *Progress = Configuration;
+  if (!HiiIsConfigHdrMatch (Configuration, &gHiiSetupVariableGuid, OpalPasswordStorageName)) {
+    return EFI_NOT_FOUND;
+  }
+
+  *Progress = Configuration + StrLen (Configuration);
+
   return EFI_SUCCESS;
 }
 
@@ -1235,6 +1195,12 @@ ExtractConfig(
   //
   if (Progress == NULL || Results == NULL) {
     return (EFI_INVALID_PARAMETER);
+  }
+
+  *Progress = Request;
+  if ((Request != NULL) &&
+    !HiiIsConfigHdrMatch (Request, &gHiiSetupVariableGuid, OpalPasswordStorageName)) {
+    return EFI_NOT_FOUND;
   }
 
   //
@@ -1325,7 +1291,7 @@ HiiSetFormString(
   //
   // Copy into unicode string, then copy into string id
   //
-  AsciiStrToUnicodeStr( SrcAsciiStr, UniStr );
+  AsciiStrToUnicodeStrS ( SrcAsciiStr, UniStr, Len + 1);
 
   //
   // Update the string in the form

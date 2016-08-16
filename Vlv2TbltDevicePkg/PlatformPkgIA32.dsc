@@ -2,15 +2,15 @@
 # Platform description.
 #
 # Copyright (c) 2012  - 2016, Intel Corporation. All rights reserved.<BR>
-#                                                                                  
+#
 # This program and the accompanying materials are licensed and made available under
-# the terms and conditions of the BSD License that accompanies this distribution.  
-# The full text of the license may be found at                                     
-# http://opensource.org/licenses/bsd-license.php.                                  
-#                                                                                  
-# THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,            
-# WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.    
-#                                                                                  
+# the terms and conditions of the BSD License that accompanies this distribution.
+# The full text of the license may be found at
+# http://opensource.org/licenses/bsd-license.php.
+#
+# THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+# WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+#
 #
 #**/
 
@@ -283,11 +283,11 @@
 !endif
   TpmMeasurementLib|SecurityPkg/Library/DxeTpmMeasurementLib/DxeTpmMeasurementLib.inf
   TrEEPhysicalPresenceLib|SecurityPkg/Library/DxeTrEEPhysicalPresenceLib/DxeTrEEPhysicalPresenceLib.inf
-!if $(FTPM_ENABLE) == TRUE  
+!if $(FTPM_ENABLE) == TRUE
   TrEEPpVendorLib|SecurityPkg/Library/TrEEPpVendorLibNull/TrEEPpVendorLibNull.inf
-!endif  
-  
-  
+!endif
+
+
   Tpm2CommandLib|SecurityPkg/Library/Tpm2CommandLib/Tpm2CommandLib.inf
 !if $(MINNOW2_FSP_BUILD) == TRUE
   FspApiLib|IntelFspWrapperPkg/Library/BaseFspApiLib/BaseFspApiLib.inf
@@ -338,7 +338,7 @@
  !if $(MINNOW2_FSP_BUILD) == TRUE
  PlatformFspLib|Vlv2TbltDevicePkg/Library/PlatformFspLib/PlatformFspLib.inf
  !endif
-!if $(FTPM_ENABLE) == TRUE 
+!if $(FTPM_ENABLE) == TRUE
   Tpm2DeviceLib|Vlv2TbltDevicePkg/Library/Tpm2DeviceLibSeCPei/Tpm2DeviceLibSeC.inf
 !endif
 
@@ -400,6 +400,8 @@
   LockBoxLib|MdeModulePkg/Library/SmmLockBoxLib/SmmLockBoxSmmLib.inf
   PerformanceLib|MdePkg/Library/BasePerformanceLibNull/BasePerformanceLibNull.inf
   SmmMemLib|MdePkg/Library/SmmMemLib/SmmMemLib.inf
+  SmmCpuPlatformHookLib|UefiCpuPkg/Library/SmmCpuPlatformHookLibNull/SmmCpuPlatformHookLibNull.inf
+  SmmCpuFeaturesLib|UefiCpuPkg/Library/SmmCpuFeaturesLib/SmmCpuFeaturesLib.inf
 
   BaseCryptLib|CryptoPkg/Library/BaseCryptLib/SmmCryptLib.inf
   !if $(TARGET) != RELEASE
@@ -589,10 +591,10 @@
 
 
   ## This PCD specifies whether PS2 keyboard does a extended verification during start.
-  gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdPs2KbdExtendedVerification|FALSE
+  gEfiMdeModulePkgTokenSpaceGuid.PcdPs2KbdExtendedVerification|FALSE
 
   ## This PCD specifies whether PS2 mouse does a extended verification during start.
-  gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdPs2MouseExtendedVerification|FALSE
+  gEfiMdeModulePkgTokenSpaceGuid.PcdPs2MouseExtendedVerification|FALSE
 
 !if $(VARIABLE_INFO_ENABLE) == TRUE
   gEfiMdeModulePkgTokenSpaceGuid.PcdVariableCollectStatistics|TRUE
@@ -614,7 +616,7 @@
 # $(FLASH_AREA_SIZE)
   gFspWrapperTokenSpaceGuid.PcdFlashCodeCacheSize|0x00800000
 # $(FLASH_REGION_FSPBIN_BASE)
-  gFspWrapperTokenSpaceGuid.PcdFlashFvFspBase|0xFFDB0000
+  gFspWrapperTokenSpaceGuid.PcdFlashFvFspBase|0xFFCC0000
 !endif
 
 !if $(PERFORMANCE_ENABLE) == TRUE
@@ -698,27 +700,27 @@
 
   ## This PCD specifies whether to use the optimized timing for best PS2 detection performance.
   #  Note this PCD could be set to TRUE for best boot performance and set to FALSE for best device compatibility.
-  gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdFastPS2Detection|TRUE
+  gEfiMdeModulePkgTokenSpaceGuid.PcdFastPS2Detection|TRUE
 
   #######################################################################################################
   #
   # Begin of MRC parameters
   #
-  
+
   ## Memory Parameter Patchable.
   #  FALSE - MRC Parameters are fixed for MinnowBoard Max<BR>
   #  TRUE  - MRC Parameters are patchable by following PCDs<BR>
   # @Prompt Memory Parameter Patchable.
-  # @ValidList 0x80000001 | 0, 1  
+  # @ValidList 0x80000001 | 0, 1
   gVlvRefCodePkgTokenSpaceGuid.PcdMemoryParameterPatchable|FALSE
-  
+
   ## Memory Down or DIMM slot.
   #  0 - DIMM<BR>
   #  1 - Memory Down<BR>
   # @Prompt Enable Memory Down
   # @ValidList 0x80000001 | 0, 1
   gVlvRefCodePkgTokenSpaceGuid.PcdEnableMemoryDown|1
-     
+
   ## The speed of DRAM.
   #  0 - 800 MHz<BR>
   #  1 - 1066 MHz<BR>
@@ -739,11 +741,11 @@
   # @Prompt DRAM Type
   # @ValidList 0x80000001 | 0, 1, 2, 3, 4, 5, 6
   gVlvRefCodePkgTokenSpaceGuid.PcdDramType|1
-    
+
   ## Please populate DIMM slot 0 if only one DIMM is supported.
   #  0 - Disable<BR>
   #  1 - Enable<BR>
-  # @Prompt DIMM 0 Enable 
+  # @Prompt DIMM 0 Enable
   # @ValidList 0x80000001 | 0, 1
   gVlvRefCodePkgTokenSpaceGuid.PcdEnableDimm0|1
 
@@ -753,7 +755,7 @@
   # @Prompt DIMM 1 Enable Type
   # @ValidList 0x80000001 | 0, 1
   gVlvRefCodePkgTokenSpaceGuid.PcdEnableDimm1|0
-  
+
   ## DRAM device data width.
   #  0 - x8<BR>
   #  1 - x16<BR>
@@ -770,7 +772,7 @@
   # @Prompt DIMM_Density
   # @ValidList 0x80000001 | 0, 1, 2, 3
   gVlvRefCodePkgTokenSpaceGuid.PcdDimmDensity|2
-  
+
   ## DRAM device data bus width.
   #  0 - 8 bits<BR>
   #  1 - 16 bits<BR>
@@ -792,32 +794,32 @@
   gVlvRefCodePkgTokenSpaceGuid.PcdTcl|11
 
   ## tRP and tRCD in DRAM clk - 5:12.5ns, 6:15ns, etc.
-  # @Prompt tRP_tRCD 
+  # @Prompt tRP_tRCD
   gVlvRefCodePkgTokenSpaceGuid.PcdTrpTrcd|11
 
-  ## tWR in DRAM clk. 
-  # @Prompt tWR 
+  ## tWR in DRAM clk.
+  # @Prompt tWR
   gVlvRefCodePkgTokenSpaceGuid.PcdTwr|12
-  
-  ## tWTR in DRAM clk.  
-  # @Prompt tWTR 
+
+  ## tWTR in DRAM clk.
+  # @Prompt tWTR
   gVlvRefCodePkgTokenSpaceGuid.PcdTwtr|6
-  
-  ## tRRD in DRAM clk. 
-  # @Prompt tRRD 
+
+  ## tRRD in DRAM clk.
+  # @Prompt tRRD
   gVlvRefCodePkgTokenSpaceGuid.PcdTrrd|6
-   
-  ## tRTP in DRAM clk.  
-  # @Prompt tRTP 
+
+  ## tRTP in DRAM clk.
+  # @Prompt tRTP
   gVlvRefCodePkgTokenSpaceGuid.PcdTrtp|6
 
   ## tFAW in DRAM clk.
-  # @Prompt tFAW 
+  # @Prompt tFAW
   gVlvRefCodePkgTokenSpaceGuid.PcdTfaw|32
-  
+
   #
   # End of MRC parameters.
-  # 
+  #
   ###############################################################################################
 
 [PcdsDynamicHii.common.DEFAULT]
@@ -1130,11 +1132,11 @@ $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/IA32/fTPMInitPeim.inf
       DebugLib|MdePkg/Library/BaseDebugLibSerialPort/BaseDebugLibSerialPort.inf
       PcdLib|MdePkg/Library/DxePcdLib/DxePcdLib.inf
       SerialPortLib|$(PLATFORM_PACKAGE)/Library/SerialPortLib/SerialPortLib.inf
-    !if $(FTPM_ENABLE) == TRUE  
+    !if $(FTPM_ENABLE) == TRUE
       Tpm2DeviceLib|Vlv2TbltDevicePkg/Library/Tpm2DeviceLibSeCDxe/Tpm2DeviceLibSeC.inf
     !else
       TrEEPhysicalPresenceLib|$(PLATFORM_PACKAGE)/Library/DxeTrEEPhysicalPresenceLibNull/DxeTrEEPhysicalPresenceLibNull.inf
-    !endif  
+    !endif
   }
 
   $(PLATFORM_PACKAGE)/UiApp/UiApp.inf
@@ -1212,7 +1214,7 @@ $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/IA32/fTPMInitPeim.inf
   $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/$(DXE_ARCHITECTURE)/VlvInitDxe.inf
 
   IntelFrameworkModulePkg/Universal/LegacyRegionDxe/LegacyRegionDxe.inf
-  
+
   PerformancePkg/Dp_App/Dp.inf {
   <LibraryClasses>
   !if $(PERFORMANCE_ENABLE) == TRUE
@@ -1242,7 +1244,7 @@ $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/IA32/fTPMInitPeim.inf
       *_*_X64_CC_FLAGS      = /DSEC_DEBUG_INFO=0
 !endif
   }
-  
+
   $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/$(DXE_ARCHITECTURE)/SeCPolicyInitDxe.inf
 !endif
 
@@ -1311,10 +1313,10 @@ $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/IA32/fTPMInitPeim.inf
   #
   MdeModulePkg/Core/PiSmmCore/PiSmmIpl.inf
   MdeModulePkg/Core/PiSmmCore/PiSmmCore.inf
-  $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/$(DXE_ARCHITECTURE)/PiSmmCpuDxeSmm.inf
+  UefiCpuPkg/PiSmmCpuDxeSmm/PiSmmCpuDxeSmm.inf
   UefiCpuPkg/CpuIo2Smm/CpuIo2Smm.inf
   MdeModulePkg/Universal/LockBox/SmmLockBox/SmmLockBox.inf
-  $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/$(DXE_ARCHITECTURE)/PiSmmCommunicationSmm.inf
+  UefiCpuPkg/PiSmmCommunication/PiSmmCommunicationSmm.inf
   $(PLATFORM_PACKAGE)/SmmSwDispatch2OnSmmSwDispatchThunk/SmmSwDispatch2OnSmmSwDispatchThunk.inf
   $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/$(DXE_ARCHITECTURE)/PowerManagement2.inf
   $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/$(DXE_ARCHITECTURE)/DigitalThermalSensor.inf
@@ -1381,6 +1383,7 @@ $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/IA32/fTPMInitPeim.inf
   MdeModulePkg/Universal/Disk/DiskIoDxe/DiskIoDxe.inf
   MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
   MdeModulePkg/Universal/Disk/UnicodeCollation/EnglishDxe/EnglishDxe.inf
+  FatPkg/EnhancedFatDxe/Fat.inf
 !if $(SATA_ENABLE) == TRUE
   $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/$(DXE_ARCHITECTURE)/SataController.inf
 !endif
@@ -1549,7 +1552,7 @@ $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/IA32/fTPMInitPeim.inf
 !if $(FTPM_ENABLE) == TRUE
   DEFINE DSC_FTPM_BUILD_OPTIONS = /DFTPM_ENABLE
 !else
-  DEFINE DSC_FTPM_BUILD_OPTIONS = 
+  DEFINE DSC_FTPM_BUILD_OPTIONS =
 !endif
 !if $(TPM_ENABLED) == TRUE
   DEFINE DSC_TPM_BUILD_OPTIONS = /DTPM_ENABLED
@@ -1682,3 +1685,4 @@ $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/IA32/fTPMInitPeim.inf
     <PcdsPatchableInModule>
       gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x00000043
   }
+

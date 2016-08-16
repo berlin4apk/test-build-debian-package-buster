@@ -28,14 +28,19 @@
 #include <Library/FileExplorerLib.h>
 #include <Library/DevicePathLib.h>
 #include <Library/PrintLib.h>
+#include <Library/PcdLib.h>
+#include <Library/DxeServicesLib.h>
 #include <Protocol/RamDisk.h>
 #include <Protocol/BlockIo.h>
 #include <Protocol/BlockIo2.h>
 #include <Protocol/HiiConfigAccess.h>
 #include <Protocol/SimpleFileSystem.h>
+#include <Protocol/AcpiTable.h>
+#include <Protocol/AcpiSystemDescriptionTable.h>
 #include <Guid/MdeModuleHii.h>
 #include <Guid/RamDiskHii.h>
 #include <Guid/FileInfo.h>
+#include <IndustryStandard/Acpi61.h>
 
 #include "RamDiskNVData.h"
 
@@ -66,7 +71,12 @@
 // RamDiskDxe driver maintains a list of registered RAM disks.
 //
 extern  LIST_ENTRY                RegisteredRamDisks;
-extern  UINTN                     ListEntryNum;
+
+//
+// Pointers to the EFI_ACPI_TABLE_PROTOCOL and EFI_ACPI_SDT_PROTOCOL.
+//
+extern  EFI_ACPI_TABLE_PROTOCOL   *mAcpiTableProtocol;
+extern  EFI_ACPI_SDT_PROTOCOL     *mAcpiSdtProtocol;
 
 //
 // RAM Disk create method.
@@ -96,6 +106,9 @@ typedef struct {
   EFI_GUID                        TypeGuid;
   UINT16                          InstanceNumber;
   RAM_DISK_CREATE_METHOD          CreateMethod;
+  BOOLEAN                         InNfit;
+  EFI_QUESTION_ID                 CheckBoxId;
+  BOOLEAN                         CheckBoxChecked;
 
   LIST_ENTRY                      ThisInstance;
 } RAM_DISK_PRIVATE_DATA;
@@ -123,6 +136,8 @@ typedef struct {
 typedef struct {
   UINTN                           Signature;
 
+  RAM_DISK_CONFIGURATION          ConfigStore;
+
   EFI_HII_CONFIG_ACCESS_PROTOCOL  ConfigAccess;
   EFI_HANDLE                      DriverHandle;
   EFI_HII_HANDLE                  HiiHandle;
@@ -132,8 +147,6 @@ extern RAM_DISK_CONFIG_PRIVATE_DATA    mRamDiskConfigPrivateDataTemplate;
 
 #define RAM_DISK_CONFIG_PRIVATE_DATA_SIGNATURE   SIGNATURE_32 ('R', 'C', 'F', 'G')
 #define RAM_DISK_CONFIG_PRIVATE_FROM_THIS(a)     CR (a, RAM_DISK_CONFIG_PRIVATE_DATA, ConfigAccess, RAM_DISK_CONFIG_PRIVATE_DATA_SIGNATURE)
-
-#define RAM_DISK_LIST_VAR_OFFSET                 ((UINT16) OFFSET_OF (RAM_DISK_CONFIGURATION, RamDiskList))
 
 /**
   Register a RAM disk with specified address, size and type.
@@ -628,6 +641,22 @@ OpenFileByDevicePath(
   OUT EFI_FILE_HANDLE                       *FileHandle,
   IN UINT64                                 OpenMode,
   IN UINT64                                 Attributes
+  );
+
+
+/**
+  Publish the RAM disk NVDIMM Firmware Interface Table (NFIT) to the ACPI
+  table.
+
+  @param[in] PrivateData          Points to RAM disk private data.
+
+  @retval EFI_SUCCESS             The RAM disk NFIT has been published.
+  @retval others                  The RAM disk NFIT has not been published.
+
+**/
+EFI_STATUS
+RamDiskPublishNfit (
+  IN RAM_DISK_PRIVATE_DATA        *PrivateData
   );
 
 #endif

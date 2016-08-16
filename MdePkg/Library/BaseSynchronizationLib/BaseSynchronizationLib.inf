@@ -38,10 +38,15 @@
   Ia32/InterlockedIncrement.c | MSFT 
   SynchronizationMsc.c  | MSFT
 
+  Ia32/InterlockedCompareExchange64.nasm| INTEL
   Ia32/InterlockedCompareExchange64.asm | INTEL 
+  Ia32/InterlockedCompareExchange32.nasm| INTEL
   Ia32/InterlockedCompareExchange32.asm | INTEL 
+  Ia32/InterlockedCompareExchange16.nasm| INTEL
   Ia32/InterlockedCompareExchange16.asm | INTEL
+  Ia32/InterlockedDecrement.nasm| INTEL
   Ia32/InterlockedDecrement.asm | INTEL 
+  Ia32/InterlockedIncrement.nasm| INTEL
   Ia32/InterlockedIncrement.asm | INTEL 
   Synchronization.c | INTEL
 
@@ -55,15 +60,20 @@
   X64/InterlockedCompareExchange32.c | MSFT
   X64/InterlockedCompareExchange16.c | MSFT
   
+  X64/InterlockedCompareExchange64.nasm| INTEL
   X64/InterlockedCompareExchange64.asm | INTEL
+  X64/InterlockedCompareExchange32.nasm| INTEL
   X64/InterlockedCompareExchange32.asm | INTEL
+  X64/InterlockedCompareExchange16.nasm| INTEL
   X64/InterlockedCompareExchange16.asm | INTEL
   
   X64/InterlockedDecrement.c | MSFT 
   X64/InterlockedIncrement.c | MSFT 
   SynchronizationMsc.c | MSFT 
 
+  X64/InterlockedDecrement.nasm| INTEL
   X64/InterlockedDecrement.asm | INTEL 
+  X64/InterlockedIncrement.nasm| INTEL
   X64/InterlockedIncrement.asm | INTEL 
   Synchronization.c | INTEL 
 

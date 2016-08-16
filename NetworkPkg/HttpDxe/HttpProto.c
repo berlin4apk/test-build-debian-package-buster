@@ -1,7 +1,7 @@
 /** @file
   Miscellaneous routines for HttpDxe driver.
 
-Copyright (c) 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
 (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
@@ -148,21 +148,41 @@ HttpTcpReceiveNotifyDpc (
   
   if (UsingIpv6) {
     gBS->CloseEvent (Wrap->TcpWrap.Rx6Token.CompletionToken.Event);
+    Wrap->TcpWrap.Rx6Token.CompletionToken.Event = NULL;
     
     if (EFI_ERROR (Wrap->TcpWrap.Rx6Token.CompletionToken.Status)) {
+      DEBUG ((EFI_D_ERROR, "HttpTcpReceiveNotifyDpc: %r!\n", Wrap->TcpWrap.Rx6Token.CompletionToken.Status));
       Wrap->HttpToken->Status = Wrap->TcpWrap.Rx6Token.CompletionToken.Status;
       gBS->SignalEvent (Wrap->HttpToken->Event);
+
+      Item = NetMapFindKey (&HttpInstance->RxTokens, Wrap->HttpToken);
+      if (Item != NULL) {
+        NetMapRemoveItem (&HttpInstance->RxTokens, Item, NULL);
+      }
+      
       FreePool (Wrap);
+      Wrap = NULL;
+      
       return ;
     }
 
   } else {
     gBS->CloseEvent (Wrap->TcpWrap.Rx4Token.CompletionToken.Event);
+    Wrap->TcpWrap.Rx4Token.CompletionToken.Event = NULL;
     
     if (EFI_ERROR (Wrap->TcpWrap.Rx4Token.CompletionToken.Status)) {
+      DEBUG ((EFI_D_ERROR, "HttpTcpReceiveNotifyDpc: %r!\n", Wrap->TcpWrap.Rx4Token.CompletionToken.Status));
       Wrap->HttpToken->Status = Wrap->TcpWrap.Rx4Token.CompletionToken.Status;
       gBS->SignalEvent (Wrap->HttpToken->Event);
+      
+      Item = NetMapFindKey (&HttpInstance->RxTokens, Wrap->HttpToken);
+      if (Item != NULL) {
+        NetMapRemoveItem (&HttpInstance->RxTokens, Item, NULL);
+      }
+      
       FreePool (Wrap);
+      Wrap = NULL;
+      
       return ;
     }
   }
@@ -234,8 +254,9 @@ HttpTcpReceiveNotifyDpc (
   // Check pending RxTokens and receive the HTTP message.
   //
   NetMapIterate (&Wrap->HttpInstance->RxTokens, HttpTcpReceive, NULL);
-  
+
   FreePool (Wrap);
+  Wrap = NULL;
 }
 
 /**
@@ -412,15 +433,15 @@ HttpCreateTcpTxEvent (
                     Wrap,
                     &TcpWrap->Tx4Token.CompletionToken.Event
                     );
-      if (EFI_ERROR (Status)) {
-        return Status;
-      }
-    
-      TcpWrap->Tx4Data.Push = TRUE;
-      TcpWrap->Tx4Data.Urgent = FALSE;
-      TcpWrap->Tx4Data.FragmentCount = 1;
-      TcpWrap->Tx4Token.Packet.TxData = &Wrap->TcpWrap.Tx4Data;
-      TcpWrap->Tx4Token.CompletionToken.Status = EFI_NOT_READY;
+    if (EFI_ERROR (Status)) {
+      return Status;
+    }
+  
+    TcpWrap->Tx4Data.Push = TRUE;
+    TcpWrap->Tx4Data.Urgent = FALSE;
+    TcpWrap->Tx4Data.FragmentCount = 1;
+    TcpWrap->Tx4Token.Packet.TxData = &Wrap->TcpWrap.Tx4Data;
+    TcpWrap->Tx4Token.CompletionToken.Status = EFI_NOT_READY;
 
   } else {
     Status = gBS->CreateEvent (
@@ -439,7 +460,6 @@ HttpCreateTcpTxEvent (
     TcpWrap->Tx6Data.FragmentCount  = 1;
     TcpWrap->Tx6Token.Packet.TxData = &Wrap->TcpWrap.Tx6Data;
     TcpWrap->Tx6Token.CompletionToken.Status =EFI_NOT_READY;
-    
     
   }
   
@@ -814,6 +834,11 @@ HttpCleanProtocol (
   HttpCloseConnection (HttpInstance);
   
   HttpCloseTcpConnCloseEvent (HttpInstance);
+
+  if (HttpInstance->TimeoutEvent != NULL) {
+    gBS->CloseEvent (HttpInstance->TimeoutEvent);
+    HttpInstance->TimeoutEvent = NULL;
+  }
 
   if (HttpInstance->CacheBody != NULL) {
     FreePool (HttpInstance->CacheBody);
@@ -1462,8 +1487,10 @@ HttpTcpTransmit (
 {
   HTTP_TOKEN_WRAP           *ValueInItem;
   EFI_STATUS                Status;
-  CHAR8                     *RequestStr;
+  CHAR8                     *RequestMsg;
   CHAR8                     *Url;
+  UINTN                     UrlSize;
+  UINTN                     RequestMsgSize;
 
   ValueInItem = (HTTP_TOKEN_WRAP *) Item->Value;
   if (ValueInItem->TcpWrap.IsTxDone) {
@@ -1473,20 +1500,22 @@ HttpTcpTransmit (
   //
   // Parse the URI of the remote host.
   //
-  Url = AllocatePool (StrLen (ValueInItem->HttpToken->Message->Data.Request->Url) + 1);
+  UrlSize = StrLen (ValueInItem->HttpToken->Message->Data.Request->Url) + 1;
+  Url = AllocatePool (UrlSize);
   if (Url == NULL) {
     return EFI_OUT_OF_RESOURCES;
   }
 
-  UnicodeStrToAsciiStr (ValueInItem->HttpToken->Message->Data.Request->Url, Url);
+  UnicodeStrToAsciiStrS (ValueInItem->HttpToken->Message->Data.Request->Url, Url, UrlSize);
 
   //
   // Create request message.
   //
-  Status = HttpGenRequestString (
+  Status = HttpGenRequestMessage (
                  ValueInItem->HttpToken->Message,
                  Url,
-                 &RequestStr
+                 &RequestMsg,
+                 &RequestMsgSize
                  );
   FreePool (Url);
 
@@ -1500,10 +1529,10 @@ HttpTcpTransmit (
   Status = HttpTransmitTcp (
              ValueInItem->HttpInstance,
              ValueInItem,
-             (UINT8*) RequestStr,
-             AsciiStrLen (RequestStr)
+             (UINT8*) RequestMsg,
+             RequestMsgSize
              );
-  FreePool (RequestStr);
+  FreePool (RequestMsg);
   return Status;
 }
 
@@ -1539,6 +1568,7 @@ HttpTcpReceive (
   @param[in]       HttpInstance     The HTTP instance private data.
   @param[in, out]  SizeofHeaders    The HTTP header length.
   @param[in, out]  BufferSize       The size of buffer to cacahe the header message.
+  @param[in]       Timeout          The time to wait for receiving the header packet.
   
   @retval EFI_SUCCESS               The HTTP header is received.                          
   @retval Others                    Other errors as indicated.
@@ -1548,7 +1578,8 @@ EFI_STATUS
 HttpTcpReceiveHeader (
   IN  HTTP_PROTOCOL         *HttpInstance,
   IN  OUT UINTN             *SizeofHeaders,
-  IN  OUT UINTN             *BufferSize
+  IN  OUT UINTN             *BufferSize,
+  IN  EFI_EVENT             Timeout
   )
 {
   EFI_STATUS                    Status;
@@ -1597,9 +1628,18 @@ HttpTcpReceiveHeader (
         return Status;
       }
       
-      while (!HttpInstance->IsRxDone) {
-       Tcp4->Poll (Tcp4);
-      }    
+      while (!HttpInstance->IsRxDone && ((Timeout == NULL) || EFI_ERROR (gBS->CheckEvent (Timeout)))) {
+        Tcp4->Poll (Tcp4);
+      }
+
+      if (!HttpInstance->IsRxDone) {
+        //
+        // Cancle the Token before close its Event.
+        //
+        Tcp4->Cancel (HttpInstance->Tcp4, &Rx4Token->CompletionToken);
+        gBS->CloseEvent (Rx4Token->CompletionToken.Event);
+        Rx4Token->CompletionToken.Status = EFI_TIMEOUT;
+      }
   
       Status = Rx4Token->CompletionToken.Status;
       if (EFI_ERROR (Status)) {
@@ -1658,9 +1698,18 @@ HttpTcpReceiveHeader (
         return Status;
       }
       
-      while (!HttpInstance->IsRxDone) {
-       Tcp6->Poll (Tcp6);
-      }    
+      while (!HttpInstance->IsRxDone && ((Timeout == NULL) || EFI_ERROR (gBS->CheckEvent (Timeout)))) {
+        Tcp6->Poll (Tcp6);
+      }
+
+      if (!HttpInstance->IsRxDone) {
+        //
+        // Cancle the Token before close its Event.
+        //
+        Tcp6->Cancel (HttpInstance->Tcp6, &Rx6Token->CompletionToken);
+        gBS->CloseEvent (Rx6Token->CompletionToken.Event);
+        Rx6Token->CompletionToken.Status = EFI_TIMEOUT;
+      }
   
       Status = Rx6Token->CompletionToken.Status;
       if (EFI_ERROR (Status)) {
@@ -1736,7 +1785,6 @@ HttpTcpReceiveBody (
   Tcp6 = HttpInstance->Tcp6;
   Rx4Token       = NULL;
   Rx6Token       = NULL;
-
   
   if (HttpInstance->LocalAddressIsIPv6) {
     ASSERT (Tcp6 != NULL);
@@ -1756,7 +1804,6 @@ HttpTcpReceiveBody (
       DEBUG ((EFI_D_ERROR, "Tcp6 receive failed: %r\n", Status));
       return Status;
     }
-      
   } else {
     Rx4Token = &Wrap->TcpWrap.Rx4Token;
     Rx4Token->Packet.RxData->DataLength = (UINT32) HttpMsg->BodyLength;
@@ -1796,45 +1843,45 @@ HttpTcpTokenCleanup (
   Rx6Token       = NULL;
   
   if (HttpInstance->LocalAddressIsIPv6) {
-    if (Wrap->TcpWrap.Rx6Token.CompletionToken.Event != NULL) {
-      gBS->CloseEvent (Wrap->TcpWrap.Rx6Token.CompletionToken.Event);
+    Rx6Token = &Wrap->TcpWrap.Rx6Token;
+    
+    if (Rx6Token->CompletionToken.Event != NULL) {
+      gBS->CloseEvent (Rx6Token->CompletionToken.Event);
+      Rx6Token->CompletionToken.Event = NULL;
     }
 
-    Rx6Token = &Wrap->TcpWrap.Rx6Token;
-    if (Rx6Token->Packet.RxData->FragmentTable[0].FragmentBuffer != NULL) {
-      FreePool (Rx6Token->Packet.RxData->FragmentTable[0].FragmentBuffer);
-      Rx6Token->Packet.RxData->FragmentTable[0].FragmentBuffer = NULL;
-    }
     FreePool (Wrap);
 
-    if (HttpInstance->Rx6Token.CompletionToken.Event != NULL) {
-      gBS->CloseEvent (HttpInstance->Rx6Token.CompletionToken.Event);
-      HttpInstance->Rx6Token.CompletionToken.Event = NULL;
-    }
-
     Rx6Token = &HttpInstance->Rx6Token;
+    
+    if (Rx6Token->CompletionToken.Event != NULL) {
+      gBS->CloseEvent (Rx6Token->CompletionToken.Event);
+      Rx6Token->CompletionToken.Event = NULL;
+    }
+    
     if (Rx6Token->Packet.RxData->FragmentTable[0].FragmentBuffer != NULL) {
       FreePool (Rx6Token->Packet.RxData->FragmentTable[0].FragmentBuffer);
       Rx6Token->Packet.RxData->FragmentTable[0].FragmentBuffer = NULL;
     }
     
   } else {
-    if (Wrap->TcpWrap.Rx4Token.CompletionToken.Event != NULL) {
-      gBS->CloseEvent (Wrap->TcpWrap.Rx4Token.CompletionToken.Event);
-    }
     Rx4Token = &Wrap->TcpWrap.Rx4Token;
-    if (Rx4Token->Packet.RxData->FragmentTable[0].FragmentBuffer != NULL) {
-      FreePool (Rx4Token->Packet.RxData->FragmentTable[0].FragmentBuffer);
-      Rx4Token->Packet.RxData->FragmentTable[0].FragmentBuffer = NULL;
-    }
-    FreePool (Wrap);
-
-    if (HttpInstance->Rx4Token.CompletionToken.Event != NULL) {
-      gBS->CloseEvent (HttpInstance->Rx4Token.CompletionToken.Event);
-      HttpInstance->Rx4Token.CompletionToken.Event = NULL;
+  
+    if (Rx4Token->CompletionToken.Event != NULL) {
+      gBS->CloseEvent (Rx4Token->CompletionToken.Event);
+      Rx4Token->CompletionToken.Event = NULL;
     }
     
+    FreePool (Wrap);
+
     Rx4Token = &HttpInstance->Rx4Token;
+
+    if (Rx4Token->CompletionToken.Event != NULL) {
+      gBS->CloseEvent (Rx4Token->CompletionToken.Event);
+      Rx4Token->CompletionToken.Event = NULL;
+    }
+    
+    
     if (Rx4Token->Packet.RxData->FragmentTable[0].FragmentBuffer != NULL) {
       FreePool (Rx4Token->Packet.RxData->FragmentTable[0].FragmentBuffer);
       Rx4Token->Packet.RxData->FragmentTable[0].FragmentBuffer = NULL;

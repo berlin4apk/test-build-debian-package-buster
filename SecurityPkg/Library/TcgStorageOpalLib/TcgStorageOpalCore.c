@@ -258,7 +258,7 @@ OpalBlockSid(
                   Session->Sscp,
                   Session->MediaId,
                   TCG_OPAL_SECURITY_PROTOCOL_2,
-                  Session->OpalBaseComId,
+                  TCG_BLOCKSID_COMID,   // hardcode ComID 0x0005
                   1,
                   Buffer,
                   BUFFER_SIZE
@@ -814,6 +814,7 @@ OpalSetLockingSpAuthorityEnabledAndPin(
   TCG_PARSE_STRUCT  ParseStruct;
   UINT32            Size;
   TCG_UID           ActiveKey;
+  TCG_RESULT        Ret;
 
   NULL_CHECK(LockingSpSession);
   NULL_CHECK(NewPin);
@@ -901,30 +902,35 @@ OpalSetLockingSpAuthorityEnabledAndPin(
   ERROR_CHECK(OpalCreateRetrieveGlobalLockingRangeActiveKey(LockingSpSession, &CreateStruct, &Size));
   ERROR_CHECK(OpalPerformMethod(LockingSpSession, Size, Buf, sizeof(Buf), &ParseStruct, MethodStatus));
 
-  ERROR_CHECK(OpalParseRetrieveGlobalLockingRangeActiveKey(&ParseStruct, &ActiveKey));
+  //
+  // For Pyrite type SSC, it not supports Active Key. 
+  // So here add check logic before enable it.
+  //
+  Ret = OpalParseRetrieveGlobalLockingRangeActiveKey(&ParseStruct, &ActiveKey);
+  if (Ret == TcgResultSuccess) {
+    ERROR_CHECK(TcgInitTcgCreateStruct(&CreateStruct, Buf, sizeof(Buf)));
+    ERROR_CHECK(TcgCreateSetAce(
+                    &CreateStruct,
+                    &Size,
+                    LockingSpSession->OpalBaseComId,
+                    LockingSpSession->ComIdExtension,
+                    LockingSpSession->TperSessionId,
+                    LockingSpSession->HostSessionId,
+                    (ActiveKey == OPAL_LOCKING_SP_K_AES_256_GLOBALRANGE_KEY) ? OPAL_LOCKING_SP_ACE_K_AES_256_GLOBALRANGE_GENKEY : OPAL_LOCKING_SP_ACE_K_AES_128_GLOBALRANGE_GENKEY,
+                    OPAL_LOCKING_SP_USER1_AUTHORITY,
+                    TCG_ACE_EXPRESSION_OR,
+                    OPAL_LOCKING_SP_ADMINS_AUTHORITY
+                ));
 
-  ERROR_CHECK(TcgInitTcgCreateStruct(&CreateStruct, Buf, sizeof(Buf)));
-  ERROR_CHECK(TcgCreateSetAce(
-                  &CreateStruct,
-                  &Size,
-                  LockingSpSession->OpalBaseComId,
-                  LockingSpSession->ComIdExtension,
-                  LockingSpSession->TperSessionId,
-                  LockingSpSession->HostSessionId,
-                  (ActiveKey == OPAL_LOCKING_SP_K_AES_256_GLOBALRANGE_KEY) ? OPAL_LOCKING_SP_ACE_K_AES_256_GLOBALRANGE_GENKEY : OPAL_LOCKING_SP_ACE_K_AES_128_GLOBALRANGE_GENKEY,
-                  OPAL_LOCKING_SP_USER1_AUTHORITY,
-                  TCG_ACE_EXPRESSION_OR,
-                  OPAL_LOCKING_SP_ADMINS_AUTHORITY
-              ));
+    ERROR_CHECK(OpalPerformMethod(LockingSpSession, Size, Buf, sizeof(Buf), &ParseStruct, MethodStatus));
 
-  ERROR_CHECK(OpalPerformMethod(LockingSpSession, Size, Buf, sizeof(Buf), &ParseStruct, MethodStatus));
-
-  if (*MethodStatus != TCG_METHOD_STATUS_CODE_SUCCESS) {
-    DEBUG ((DEBUG_INFO, "Update ACE for GLOBALRANGE_GENKEY failed\n"));
-    //
-    //TODO do we want to disable user1 if all permissions are not granted
-    //
-    return TcgResultFailure;
+    if (*MethodStatus != TCG_METHOD_STATUS_CODE_SUCCESS) {
+      DEBUG ((DEBUG_INFO, "Update ACE for GLOBALRANGE_GENKEY failed\n"));
+      //
+      // Disable user1 if all permissions are not granted.
+      //
+      return TcgResultFailure;
+    }
   }
 
   ERROR_CHECK(TcgInitTcgCreateStruct(&CreateStruct, Buf, sizeof(Buf)));
@@ -1513,6 +1519,12 @@ OpalGetSupportedAttributesInfo(
   Feat = (OPAL_LEVEL0_FEATURE_DESCRIPTOR*) TcgGetFeature (DiscoveryHeader, TCG_FEATURE_LOCKING, &Size);
   if (Feat != NULL && Size >= sizeof (TCG_LOCKING_FEATURE_DESCRIPTOR)) {
     SupportedAttributes->MediaEncryption = Feat->Locking.MediaEncryption;
+  }
+
+  Size = 0;
+  Feat = (OPAL_LEVEL0_FEATURE_DESCRIPTOR*) TcgGetFeature (DiscoveryHeader, TCG_FEATURE_BLOCK_SID, &Size);
+  if (Feat != NULL && Size >= sizeof (TCG_BLOCK_SID_FEATURE_DESCRIPTOR)) {
+    SupportedAttributes->BlockSid = TRUE;
   }
 
   DEBUG ((DEBUG_INFO, "Base COMID 0x%04X \n", *OpalBaseComId));

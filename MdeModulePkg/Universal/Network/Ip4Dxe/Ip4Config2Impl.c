@@ -142,7 +142,7 @@ Ip4Config2OnPolicyChanged (
   IpSb->DefaultRouteTable = RouteTable;
   Ip4ReceiveFrame (IpIf, NULL, Ip4AccpetFrame, IpSb);
 
-  if (IpSb->State == IP4_SERVICE_CONFIGED) {
+  if (IpSb->State == IP4_SERVICE_CONFIGED || IpSb->State == IP4_SERVICE_STARTED) {
     IpSb->State = IP4_SERVICE_UNSTARTED;
   }
 
@@ -874,7 +874,7 @@ Ip4Config2OnDhcp4Complete (
       //
       // Look for DNS Server opcode (6).
       //
-      if (OptionList[Index]->OpCode == DHCP_TAG_DNS_SERVER) {
+      if (OptionList[Index]->OpCode == DHCP4_TAG_DNS_SERVER) {
         if (((OptionList[Index]->Length & 0x3) != 0) || (OptionList[Index]->Length == 0)) {
           break;
         }
@@ -992,11 +992,11 @@ Ip4StartAutoConfig (
   // DHCP configuration to avoid problems if some DHCP client
   // yields the control of this DHCP service to us.
   //
-  ParaList.Head.OpCode             = DHCP_TAG_PARA_LIST;
+  ParaList.Head.OpCode             = DHCP4_TAG_PARA_LIST;
   ParaList.Head.Length             = 3;
-  ParaList.Head.Data[0]            = DHCP_TAG_NETMASK;
-  ParaList.Route                   = DHCP_TAG_ROUTER;
-  ParaList.Dns                     = DHCP_TAG_DNS_SERVER;
+  ParaList.Head.Data[0]            = DHCP4_TAG_NETMASK;
+  ParaList.Route                   = DHCP4_TAG_ROUTER;
+  ParaList.Dns                     = DHCP4_TAG_DNS_SERVER;
   OptionList[0]                    = &ParaList.Head;
   Dhcp4Mode.ConfigData.OptionCount = 1;
   Dhcp4Mode.ConfigData.OptionList  = OptionList;
@@ -1060,7 +1060,6 @@ Ip4Config2GetIfInfo (
   IN VOID                 *Data      OPTIONAL
   )
 {
-
   IP4_SERVICE                    *IpSb;
   UINTN                          Length;
   IP4_CONFIG2_DATA_ITEM          *Item;
@@ -1179,6 +1178,7 @@ Ip4Config2SetPolicy (
       DataItem->Data.Ptr = NULL;
       DataItem->DataSize = 0;
       DataItem->Status   = EFI_NOT_FOUND;
+      SET_DATA_ATTRIB (DataItem->Attribute, DATA_ATTRIB_VOLATILE);
       NetMapIterate (&DataItem->EventMap, Ip4Config2SignalEvent, NULL);
     } else {
       //
@@ -1459,8 +1459,18 @@ Ip4Config2SetDnsServer (
   IN VOID                 *Data
   )
 {
+  IP4_CONFIG2_DATA_ITEM *Item;
+
+  Item = NULL;
+
   if (Instance->Policy != Ip4Config2PolicyStatic) {
     return EFI_WRITE_PROTECTED;
+  }
+
+  Item = &Instance->DataItem[Ip4Config2DataTypeDnsServer];
+
+  if (DATA_ATTRIB_SET (Item->Attribute, DATA_ATTRIB_VOLATILE)) {
+    REMOVE_DATA_ATTRIB (Item->Attribute, DATA_ATTRIB_VOLATILE);
   }
 
   return Ip4Config2SetDnsServerWorker (Instance, DataSize, Data);

@@ -32,7 +32,7 @@ UINTN                     mMsrDsAreaSize   = SMM_PROFILE_DTS_SIZE;
 //
 // The flag indicates if execute-disable is supported by processor.
 //
-BOOLEAN                   mXdSupported     = FALSE;
+BOOLEAN                   mXdSupported     = TRUE;
 
 //
 // The flag indicates if execute-disable is enabled on processor.
@@ -42,7 +42,7 @@ BOOLEAN                   mXdEnabled       = FALSE;
 //
 // The flag indicates if BTS is supported by processor.
 //
-BOOLEAN                   mBtsSupported     = FALSE;
+BOOLEAN                   mBtsSupported     = TRUE;
 
 //
 // The flag indicates if SMM profile starts to record data.
@@ -925,17 +925,15 @@ InitSmmProfileInternal (
 /**
   Check if XD feature is supported by a processor.
 
-  @param[in,out] Buffer  The pointer to private data buffer.
-
 **/
 VOID
-EFIAPI
 CheckFeatureSupported (
-  IN OUT VOID   *Buffer
+  VOID
   )
 {
-  UINT32                 RegEax;
-  UINT32                 RegEdx;
+  UINT32                         RegEax;
+  UINT32                         RegEdx;
+  MSR_IA32_MISC_ENABLE_REGISTER  MiscEnableMsr;
 
   if (mXdSupported) {
     AsmCpuid (CPUID_EXTENDED_FUNCTION, &RegEax, NULL, NULL, NULL);
@@ -966,56 +964,14 @@ CheckFeatureSupported (
       //    BTINT bits in the MSR_DEBUGCTLA MSR.
       // 2. The IA32_DS_AREA MSR can be programmed to point to the DS save area.
       //
-      if ((AsmMsrBitFieldRead64 (MSR_IA32_MISC_ENABLE, 11, 11) == 0) &&
-          (AsmMsrBitFieldRead64 (MSR_IA32_MISC_ENABLE, 12, 12) == 0)) {
+      MiscEnableMsr.Uint64 = AsmReadMsr64 (MSR_IA32_MISC_ENABLE);
+      if (MiscEnableMsr.Bits.BTS == 1) {
         //
-        // BTS facilities is supported.
+        // BTS facilities is not supported if MSR_IA32_MISC_ENABLE.BTS bit is set.
         //
         mBtsSupported = FALSE;
       }
     }
-  }
-}
-
-/**
-  Check if XD and BTS features are supported by all processors.
-
-**/
-VOID
-CheckProcessorFeature (
-  VOID
-  )
-{
-  EFI_STATUS                        Status;
-  EFI_MP_SERVICES_PROTOCOL          *MpServices;
-
-  Status = gBS->LocateProtocol (&gEfiMpServiceProtocolGuid, NULL, (VOID **)&MpServices);
-  ASSERT_EFI_ERROR (Status);
-
-  //
-  // First detect if XD and BTS are supported
-  //
-  mXdSupported  = TRUE;
-  mBtsSupported = TRUE;
-
-  //
-  // Check if XD and BTS are supported on all processors.
-  //
-  CheckFeatureSupported (NULL);
-
-  //
-  //Check on other processors if BSP supports this
-  //
-  if (mXdSupported || mBtsSupported) {
-    MpServices->StartupAllAPs (
-                  MpServices,
-                  CheckFeatureSupported,
-                  TRUE,
-                  NULL,
-                  0,
-                  NULL,
-                  NULL
-                  );
   }
 }
 
@@ -1072,8 +1028,6 @@ ActivateLBR (
   if ((DebugCtl & MSR_DEBUG_CTL_LBR) != 0) {
     return ;
   }
-  AsmWriteMsr64 (MSR_LER_FROM_LIP, 0);
-  AsmWriteMsr64 (MSR_LER_TO_LIP, 0);
   DebugCtl |= MSR_DEBUG_CTL_LBR;
   AsmWriteMsr64 (MSR_DEBUG_CTL, DebugCtl);
 }

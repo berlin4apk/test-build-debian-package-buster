@@ -1,7 +1,7 @@
 /** @file
 Dynamically update the pages.
 
-Copyright (c) 2004 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -658,138 +658,6 @@ UpdateOrderPage (
 }
 
 /**
-  Create the dynamic page to allow user to set
-  the "BootNext" value.
-
-  @param CallbackData    The BMM context data.
-
-**/
-VOID
-UpdateBootNextPage (
-  IN BMM_CALLBACK_DATA                *CallbackData
-  )
-{
-  BM_MENU_ENTRY   *NewMenuEntry;
-  BM_LOAD_CONTEXT *NewLoadContext;
-  UINTN           NumberOfOptions;
-  UINT16          Index;
-  VOID            *OptionsOpCodeHandle;
-
-  NumberOfOptions               = BootOptionMenu.MenuNumber;
-  CallbackData->BmmAskSaveOrNot = TRUE;
-
-  UpdatePageStart (CallbackData);
-
-  if (NumberOfOptions > 0) {
-    OptionsOpCodeHandle = HiiAllocateOpCodeHandle ();
-    ASSERT (OptionsOpCodeHandle != NULL);
-
-    CallbackData->BmmFakeNvData.BootNext = NONE_BOOTNEXT_VALUE;
-
-    for (Index = 0; Index < BootOptionMenu.MenuNumber; Index++) {
-      NewMenuEntry    = BOpt_GetMenuEntry (&BootOptionMenu, Index);
-      NewLoadContext  = (BM_LOAD_CONTEXT *) NewMenuEntry->VariableContext;
-
-      if (NewLoadContext->IsBootNext) {
-        HiiCreateOneOfOptionOpCode (
-          OptionsOpCodeHandle,
-          NewMenuEntry->DisplayStringToken,
-          EFI_IFR_OPTION_DEFAULT,
-          EFI_IFR_TYPE_NUM_SIZE_32,
-          Index
-          );
-        CallbackData->BmmFakeNvData.BootNext = Index;
-      } else {
-        HiiCreateOneOfOptionOpCode (
-          OptionsOpCodeHandle,
-          NewMenuEntry->DisplayStringToken,
-          0,
-          EFI_IFR_TYPE_NUM_SIZE_32,
-          Index
-          );
-      }
-    }
-
-    if (CallbackData->BmmFakeNvData.BootNext == NONE_BOOTNEXT_VALUE) {
-      HiiCreateOneOfOptionOpCode (
-        OptionsOpCodeHandle,
-        STRING_TOKEN (STR_NONE),
-        EFI_IFR_OPTION_DEFAULT,
-        EFI_IFR_TYPE_NUM_SIZE_32,
-        NONE_BOOTNEXT_VALUE
-        );
-    } else {
-      HiiCreateOneOfOptionOpCode (
-        OptionsOpCodeHandle,
-        STRING_TOKEN (STR_NONE),
-        0,
-        EFI_IFR_TYPE_NUM_SIZE_32,
-        NONE_BOOTNEXT_VALUE
-        );
-    }      
-
-    HiiCreateOneOfOpCode (
-      mStartOpCodeHandle,
-      (EFI_QUESTION_ID) BOOT_NEXT_QUESTION_ID,
-      VARSTORE_ID_BOOT_MAINT,
-      BOOT_NEXT_VAR_OFFSET,
-      STRING_TOKEN (STR_BOOT_NEXT),
-      STRING_TOKEN (STR_BOOT_NEXT_HELP),
-      0,
-      EFI_IFR_NUMERIC_SIZE_4,
-      OptionsOpCodeHandle,
-      NULL
-      );
-
-    HiiFreeOpCodeHandle (OptionsOpCodeHandle);
-  }
-
-  UpdatePageEnd (CallbackData);
-}
-
-/**
-  Create the dynamic page to allow user to set the "TimeOut" value.
-
-  @param CallbackData    The BMM context data.
-
-**/
-VOID
-UpdateTimeOutPage (
-  IN BMM_CALLBACK_DATA                *CallbackData
-  )
-{
-  VOID    *DefaultOpCodeHandle;
-
-  CallbackData->BmmAskSaveOrNot = TRUE;
-
-  UpdatePageStart (CallbackData);
-
-  DefaultOpCodeHandle = HiiAllocateOpCodeHandle ();
-  ASSERT (DefaultOpCodeHandle != NULL);
-  HiiCreateDefaultOpCode (DefaultOpCodeHandle, EFI_HII_DEFAULT_CLASS_STANDARD, EFI_IFR_TYPE_NUM_SIZE_16, CallbackData->BmmFakeNvData.BootTimeOut);
-
-  HiiCreateNumericOpCode (
-    mStartOpCodeHandle,
-    (EFI_QUESTION_ID) BOOT_TIME_OUT_QUESTION_ID,
-    VARSTORE_ID_BOOT_MAINT,
-    BOOT_TIME_OUT_VAR_OFFSET,
-    STRING_TOKEN (STR_NUM_AUTO_BOOT),
-    STRING_TOKEN (STR_HLP_AUTO_BOOT),
-    0,
-    EFI_IFR_NUMERIC_SIZE_2 | EFI_IFR_DISPLAY_UINT_DEC,
-    0,
-    65535,
-    0,
-    DefaultOpCodeHandle
-    );
-  
-  HiiFreeOpCodeHandle (DefaultOpCodeHandle);
-
-  UpdatePageEnd (CallbackData);
-}
-
-
-/**
   Refresh the text mode page.
 
   @param CallbackData    The BMM context data.
@@ -1152,16 +1020,18 @@ UpdateOptionPage(
   CHAR16                *String;
   EFI_STRING_ID         StringToken;
 
+  String = NULL;
+
   if (DevicePath != NULL){
     String = ExtractFileNameFromDevicePath(DevicePath);
-    StringToken = HiiSetString (CallbackData->BmmHiiHandle, 0, String, NULL);
-    FreePool(String);
-  } else {
+  }
+  if (String == NULL) {
     String = HiiGetString (CallbackData->BmmHiiHandle, STRING_TOKEN (STR_NULL_STRING), NULL);
     ASSERT (String != NULL);
-    StringToken =  HiiSetString (CallbackData->BmmHiiHandle, 0, String, NULL);
-    FreePool (String);
   }
+
+  StringToken = HiiSetString (CallbackData->BmmHiiHandle, 0, String, NULL);
+  FreePool (String);
 
   if(FormId == FORM_BOOT_ADD_ID){
     if (!CallbackData->BmmFakeNvData.BootOptionChanged) {

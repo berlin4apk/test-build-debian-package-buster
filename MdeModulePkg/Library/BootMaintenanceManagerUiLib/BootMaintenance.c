@@ -30,6 +30,8 @@ UINT32    mBmmSetupTextModeRow            = 0;
 UINT32    mBmmSetupHorizontalResolution   = 0;
 UINT32    mBmmSetupVerticalResolution     = 0;
 
+BOOLEAN   mBmmModeInitialized             = FALSE;
+
 EFI_DEVICE_PATH_PROTOCOL  EndDevicePath[] = {
   {
     END_DEVICE_PATH_TYPE,
@@ -82,6 +84,7 @@ BMM_CALLBACK_DATA  gBootMaintenancePrivate = {
 
 BMM_CALLBACK_DATA *mBmmCallbackInfo = &gBootMaintenancePrivate;
 BOOLEAN  mAllMenuInit               = FALSE;
+BOOLEAN  mFirstEnterBMMForm         = FALSE;
 
 /**
   Init all memu.
@@ -104,6 +107,16 @@ FreeAllMenu (
   );
 
 /**
+
+  Update the menus in the BMM page.
+
+**/
+VOID
+CustomizeMenus (
+  VOID
+  );
+
+/**
   This function will change video resolution and text mode
   according to defined setup mode or defined boot mode  
 
@@ -114,8 +127,7 @@ FreeAllMenu (
 
 **/
 EFI_STATUS
-EFIAPI
-BmmBdsSetConsoleMode (
+BmmSetConsoleMode (
   BOOLEAN  IsSetupMode
   )
 {
@@ -167,7 +179,7 @@ BmmBdsSetConsoleMode (
 
   if (IsSetupMode) {
     //
-    // The requried resolution and text mode is setup mode.
+    // The required resolution and text mode is setup mode.
     //
     NewHorizontalResolution = mBmmSetupHorizontalResolution;
     NewVerticalResolution   = mBmmSetupVerticalResolution;
@@ -223,7 +235,7 @@ BmmBdsSetConsoleMode (
             return EFI_SUCCESS;
           } else {
             //
-            // If current text mode is different from requried text mode.  Set new video mode
+            // If current text mode is different from required text mode.  Set new video mode
             //
             for (Index = 0; Index < MaxTextMode; Index++) {
               Status = SimpleTextOut->QueryMode (SimpleTextOut, Index, &CurrentColumn, &CurrentRow);
@@ -248,7 +260,7 @@ BmmBdsSetConsoleMode (
             }
             if (Index == MaxTextMode) {
               //
-              // If requried text mode is not supported, return error.
+              // If required text mode is not supported, return error.
               //
               FreePool (Info);
               return EFI_UNSUPPORTED;
@@ -378,6 +390,7 @@ ExtractFileNameFromDevicePath (
   String = UiDevicePathToStr(DevicePath);
   MatchString = String;
   LastMatch   = String;
+  FileName    = NULL;
 
   while(MatchString != NULL){
     LastMatch   = MatchString + 1;
@@ -386,7 +399,9 @@ ExtractFileNameFromDevicePath (
 
   Length = StrLen(LastMatch);
   FileName = AllocateCopyPool ((Length + 1) * sizeof(CHAR16), LastMatch);
-  *(FileName + Length) = 0;
+  if (FileName != NULL) {
+    *(FileName + Length) = 0;
+  }
 
   FreePool(String);
 
@@ -870,14 +885,33 @@ BootMaintCallback (
   UINTN             Index;
   EFI_DEVICE_PATH_PROTOCOL * File;
 
-  if (Action != EFI_BROWSER_ACTION_CHANGING && Action != EFI_BROWSER_ACTION_CHANGED) {
+  if (Action != EFI_BROWSER_ACTION_CHANGING && Action != EFI_BROWSER_ACTION_CHANGED && Action != EFI_BROWSER_ACTION_FORM_OPEN) {
     //
-    // Do nothing for other UEFI Action. Only do call back when data is changed.
+    // Do nothing for other UEFI Action. Only do call back when data is changed or the form is open.
     //
     return EFI_UNSUPPORTED;
   }
 
   Private        = BMM_CALLBACK_DATA_FROM_THIS (This);
+
+  if (Action == EFI_BROWSER_ACTION_FORM_OPEN) {
+    if (QuestionId == KEY_VALUE_TRIGGER_FORM_OPEN_ACTION) {
+      if (!mFirstEnterBMMForm) {
+        //
+        // BMMUiLib depends on LegacyUi library to show legacy menus.
+        // If we want to show Legacy menus correctly in BMM page,
+        // we must do it after the LegacyUi library has already been initialized.
+        // Opening the BMM form is the appropriate time that the LegacyUi library has already been initialized.
+        // So we do the tasks which are related to legacy menus here.
+        // 1. Update the menus (including legacy munu) show in BootMiantenanceManager page.
+        // 2. Re-scan the BootOption menus (including the legacy boot option).
+        //
+        CustomizeMenus ();
+        BOpt_GetBootOptions (Private);
+        mFirstEnterBMMForm = TRUE;
+      }
+    }
+  }
   //
   // Retrive uncommitted data from Form Browser
   //
@@ -922,16 +956,6 @@ BootMaintCallback (
         case FORM_DRV_DEL_ID:
           CleanUpPage (FORM_DRV_DEL_ID, Private);
           UpdateDrvDelPage (Private);
-          break;
-
-        case FORM_BOOT_NEXT_ID:
-          CleanUpPage (FORM_BOOT_NEXT_ID, Private);
-          UpdateBootNextPage (Private);
-          break;
-
-        case FORM_TIME_OUT_ID:
-          CleanUpPage (FORM_TIME_OUT_ID, Private);
-          UpdateTimeOutPage (Private);
           break;
 
         case FORM_CON_IN_ID:
@@ -1122,42 +1146,20 @@ DiscardChangeHandler (
 }
 
 /**
-  Create dynamic code for BMM.
 
-  @param  BmmCallbackInfo        The BMM context data.
+  Update the menus in the BMM page.
 
 **/
 VOID
-InitializeDrivers(
-  IN BMM_CALLBACK_DATA        *BmmCallbackInfo
+CustomizeMenus (
+  VOID
   )
 {
-  EFI_HII_HANDLE              HiiHandle;
   VOID                        *StartOpCodeHandle;
   VOID                        *EndOpCodeHandle;
-  EFI_IFR_GUID_LABEL          *StartLabel;
-  EFI_IFR_GUID_LABEL          *EndLabel;
-  UINTN                       Index;    
-  EFI_STRING                  String;
-  EFI_STRING_ID               Token;
-  EFI_STRING_ID               TokenHelp;  
-  EFI_HII_HANDLE              *HiiHandles;
-  EFI_GUID                    FormSetGuid;
-  CHAR16                      *DevicePathStr;
-  EFI_STRING_ID               DevicePathId;
-  EFI_IFR_FORM_SET            *Buffer;      
-  UINTN                       BufferSize;   
-  UINT8                       ClassGuidNum; 
-  EFI_GUID                    *ClassGuid;   
-  UINTN                       TempSize;
-  UINT8                       *Ptr;
-  EFI_STATUS                  Status;
+  EFI_IFR_GUID_LABEL          *StartGuidLabel;
+  EFI_IFR_GUID_LABEL          *EndGuidLabel;
 
-  TempSize =0;
-  BufferSize = 0;
-  Buffer = NULL;
-
-  HiiHandle = BmmCallbackInfo->BmmHiiHandle;
   //
   // Allocate space for creation of UpdateData Buffer
   //
@@ -1166,104 +1168,29 @@ InitializeDrivers(
 
   EndOpCodeHandle = HiiAllocateOpCodeHandle ();
   ASSERT (EndOpCodeHandle != NULL);
-
   //
   // Create Hii Extend Label OpCode as the start opcode
   //
-  StartLabel = (EFI_IFR_GUID_LABEL *) HiiCreateGuidOpCode (StartOpCodeHandle, &gEfiIfrTianoGuid, NULL, sizeof (EFI_IFR_GUID_LABEL));
-  StartLabel->ExtendOpCode = EFI_IFR_EXTEND_OP_LABEL;
-  StartLabel->Number       = LABEL_BMM_PLATFORM_INFORMATION;
-
+  StartGuidLabel = (EFI_IFR_GUID_LABEL *) HiiCreateGuidOpCode (StartOpCodeHandle, &gEfiIfrTianoGuid, NULL, sizeof (EFI_IFR_GUID_LABEL));
+  StartGuidLabel->ExtendOpCode = EFI_IFR_EXTEND_OP_LABEL;
+  StartGuidLabel->Number       = LABEL_FORM_MAIN_START;
   //
   // Create Hii Extend Label OpCode as the end opcode
   //
-  EndLabel = (EFI_IFR_GUID_LABEL *) HiiCreateGuidOpCode (EndOpCodeHandle, &gEfiIfrTianoGuid, NULL, sizeof (EFI_IFR_GUID_LABEL));
-  EndLabel->ExtendOpCode = EFI_IFR_EXTEND_OP_LABEL;
-  EndLabel->Number       = LABEL_END;
+  EndGuidLabel = (EFI_IFR_GUID_LABEL *) HiiCreateGuidOpCode (EndOpCodeHandle, &gEfiIfrTianoGuid, NULL, sizeof (EFI_IFR_GUID_LABEL));
+  EndGuidLabel->ExtendOpCode = EFI_IFR_EXTEND_OP_LABEL;
+  EndGuidLabel->Number       = LABEL_FORM_MAIN_END;
 
   //
-  // Get all the Hii handles
+  //Updata Front Page form
   //
-  HiiHandles = HiiGetHiiHandles (NULL);
-  ASSERT (HiiHandles != NULL);
+  UiCustomizeBMMPage (
+    mBmmCallbackInfo->BmmHiiHandle,
+    StartOpCodeHandle
+    );
 
-  //
-  // Search for formset of each class type
-  //
-  for (Index = 0; HiiHandles[Index] != NULL; Index++) {
-    Status = HiiGetFormSetFromHiiHandle(HiiHandles[Index], &Buffer,&BufferSize);
-    if (EFI_ERROR (Status)) {
-      continue;
-    }
-
-    Ptr = (UINT8 *)Buffer;
-    while(TempSize < BufferSize)  {
-      TempSize += ((EFI_IFR_OP_HEADER *) Ptr)->Length;
-
-      if (((EFI_IFR_OP_HEADER *) Ptr)->Length <= OFFSET_OF (EFI_IFR_FORM_SET, Flags)){
-        Ptr += ((EFI_IFR_OP_HEADER *) Ptr)->Length;
-        continue;
-      }
-
-      //
-      // Find FormSet OpCode
-      //
-      ClassGuidNum = (UINT8) (((EFI_IFR_FORM_SET *)Ptr)->Flags & 0x3);
-      ClassGuid = (EFI_GUID *) (VOID *)(Ptr + sizeof (EFI_IFR_FORM_SET));
-      while (ClassGuidNum-- > 0) {
-        if (CompareGuid (&gEfiIfrBootMaintenanceGuid, ClassGuid) == 0){
-          ClassGuid ++;
-          continue;
-        }
-
-        String = HiiGetString (HiiHandles[Index], ((EFI_IFR_FORM_SET *)Ptr)->FormSetTitle, NULL);
-        if (String == NULL) {
-          String = HiiGetString (HiiHandle, STRING_TOKEN (STR_MISSING_STRING), NULL);
-          ASSERT (String != NULL);
-        }
-        Token = HiiSetString (HiiHandle, 0, String, NULL);
-        FreePool (String);
-
-        String = HiiGetString (HiiHandles[Index], ((EFI_IFR_FORM_SET *)Ptr)->Help, NULL);
-        if (String == NULL) {
-          String = HiiGetString (HiiHandle, STRING_TOKEN (STR_MISSING_STRING), NULL);
-          ASSERT (String != NULL);
-        }
-        TokenHelp = HiiSetString (HiiHandle, 0, String, NULL);
-        FreePool (String);
-
-        FormSetGuid = ((EFI_IFR_FORM_SET *)Ptr)->Guid;
-
-        DevicePathStr = BmmExtractDevicePathFromHiiHandle(HiiHandles[Index]);
-        DevicePathId  = 0;
-        if (DevicePathStr != NULL){
-          DevicePathId = HiiSetString (HiiHandle, 0, DevicePathStr, NULL);
-          FreePool (DevicePathStr);
-        }
-         HiiCreateGotoExOpCode (
-           StartOpCodeHandle,
-           0,
-           Token,
-           TokenHelp,
-           0,
-           (EFI_QUESTION_ID) (Index + FRONT_PAGE_KEY_OFFSET),
-           0,
-           &FormSetGuid,
-           DevicePathId
-         );
-        break;
-      }
-      Ptr += ((EFI_IFR_OP_HEADER *) Ptr)->Length;
-    }
-
-    FreePool(Buffer);
-    Buffer = NULL;
-    TempSize = 0;
-    BufferSize = 0;
-  } 
-  
   HiiUpdateForm (
-    HiiHandle,
+    mBmmCallbackInfo->BmmHiiHandle,
     &mBootMaintGuid,
     FORM_MAIN_ID,
     StartOpCodeHandle,
@@ -1271,8 +1198,7 @@ InitializeDrivers(
     );
 
   HiiFreeOpCodeHandle (StartOpCodeHandle);
-  HiiFreeOpCodeHandle (EndOpCodeHandle);  
-  FreePool (HiiHandles);
+  HiiFreeOpCodeHandle (EndOpCodeHandle);
 }
 
 /**
@@ -1292,8 +1218,6 @@ InitializeBmmConfig (
   UINT16          Index;
 
   ASSERT (CallbackData != NULL);
-
-  InitializeDrivers (CallbackData);
 
   //
   // Initialize data which located in BMM main page
@@ -1383,6 +1307,77 @@ FreeAllMenu (
 }
 
 /**
+  Initial the boot mode related parameters.
+
+**/
+VOID
+BmmInitialBootModeInfo (
+  VOID
+  )
+{
+  EFI_STATUS                         Status;
+  EFI_GRAPHICS_OUTPUT_PROTOCOL       *GraphicsOutput;
+  EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL    *SimpleTextOut;
+  UINTN                              BootTextColumn;
+  UINTN                              BootTextRow;
+
+  if (mBmmModeInitialized) {
+    return;
+  }
+
+  //
+  // After the console is ready, get current video resolution
+  // and text mode before launching setup at first time.
+  //
+  Status = gBS->HandleProtocol (
+                  gST->ConsoleOutHandle,
+                  &gEfiGraphicsOutputProtocolGuid,
+                  (VOID**)&GraphicsOutput
+                  );
+  if (EFI_ERROR (Status)) {
+    GraphicsOutput = NULL;
+  }
+
+  Status = gBS->HandleProtocol (
+                  gST->ConsoleOutHandle,
+                  &gEfiSimpleTextOutProtocolGuid,
+                  (VOID**)&SimpleTextOut
+                  );
+  if (EFI_ERROR (Status)) {
+    SimpleTextOut = NULL;
+  }
+
+  if (GraphicsOutput != NULL) {
+    //
+    // Get current video resolution and text mode.
+    //
+    mBmmBootHorizontalResolution = GraphicsOutput->Mode->Info->HorizontalResolution;
+    mBmmBootVerticalResolution   = GraphicsOutput->Mode->Info->VerticalResolution;
+  }
+
+  if (SimpleTextOut != NULL) {
+    Status = SimpleTextOut->QueryMode (
+                              SimpleTextOut,
+                              SimpleTextOut->Mode->Mode,
+                              &BootTextColumn,
+                              &BootTextRow
+                              );
+    mBmmBootTextModeColumn = (UINT32)BootTextColumn;
+    mBmmBootTextModeRow    = (UINT32)BootTextRow;
+  }
+
+  //
+  // Get user defined text mode for setup.
+  //
+  mBmmSetupHorizontalResolution = PcdGet32 (PcdSetupVideoHorizontalResolution);
+  mBmmSetupVerticalResolution   = PcdGet32 (PcdSetupVideoVerticalResolution);
+  mBmmSetupTextModeColumn       = PcdGet32 (PcdSetupConOutColumn);
+  mBmmSetupTextModeRow          = PcdGet32 (PcdSetupConOutRow);
+
+  mBmmModeInitialized           = TRUE;
+}
+
+/**
 
   Install Boot Maintenance Manager Menu driver.
 
@@ -1469,6 +1464,8 @@ BootMaintenanceManagerUiLibConstructor (
   // Update boot maintenance manager page 
   //
   InitializeBmmConfig(mBmmCallbackInfo);
+
+  BmmInitialBootModeInfo();
 
   return EFI_SUCCESS;
 }

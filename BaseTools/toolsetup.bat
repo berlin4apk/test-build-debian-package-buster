@@ -160,7 +160,10 @@ if not defined WORKSPACE (
    goto skip_reconfig
 )
 
-set CONF_PATH=%WORKSPACE%\Conf
+if not defined CONF_PATH (
+  set CONF_PATH=%WORKSPACE%\Conf
+)
+
 if NOT exist %CONF_PATH% (
   if defined PACKAGES_PATH (
     for %%i IN (%PACKAGES_PATH%) DO (

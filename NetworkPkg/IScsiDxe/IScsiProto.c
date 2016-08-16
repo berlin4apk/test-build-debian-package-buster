@@ -1,7 +1,7 @@
 /** @file
   The implementation of iSCSI protocol based on RFC3720.
 
-Copyright (c) 2004 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -138,7 +138,11 @@ IScsiConnLogin (
   //
   // Start the timer, and wait Timeout seconds to establish the TCP connection.
   //
-  Status = gBS->SetTimer (Conn->TimeoutEvent, TimerRelative, Timeout * TICKS_PER_MS);
+  Status = gBS->SetTimer (
+                  Conn->TimeoutEvent,
+                  TimerRelative,
+                  MultU64x32 (Timeout, TICKS_PER_MS)
+                  );
   if (EFI_ERROR (Status)) {
     return Status;
   }
@@ -731,7 +735,10 @@ IScsiPrepareLoginReq (
   }
 
   LoginReq = (ISCSI_LOGIN_REQUEST *) NetbufAllocSpace (Nbuf, sizeof (ISCSI_LOGIN_REQUEST), NET_BUF_TAIL);
-  ASSERT (LoginReq != NULL);
+  if (LoginReq == NULL) {
+    NetbufFree (Nbuf);
+    return NULL;
+  }
   ZeroMem (LoginReq, sizeof (ISCSI_LOGIN_REQUEST));
 
   //
@@ -1245,7 +1252,10 @@ IScsiReceivePdu (
   }
 
   Header = NetbufAllocSpace (PduHdr, Len, NET_BUF_TAIL);
-  ASSERT (Header != NULL);
+  if (Header == NULL) {
+    Status = EFI_OUT_OF_RESOURCES;
+    goto ON_EXIT;
+  }
   InsertTailList (NbufList, &PduHdr->List);
 
   //
@@ -2316,7 +2326,10 @@ IScsiNewDataOutPdu (
   InsertTailList (NbufList, &PduHdr->List);
 
   DataOutHdr  = (ISCSI_SCSI_DATA_OUT *) NetbufAllocSpace (PduHdr, sizeof (ISCSI_SCSI_DATA_OUT), NET_BUF_TAIL);
-  ASSERT (DataOutHdr != NULL);
+  if (DataOutHdr == NULL) {
+    IScsiFreeNbufList (NbufList);
+    return NULL;
+  }
   XferContext = &Tcb->XferContext;
 
   ZeroMem (DataOutHdr, sizeof (ISCSI_SCSI_DATA_OUT));

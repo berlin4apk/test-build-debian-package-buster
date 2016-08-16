@@ -53,6 +53,7 @@ class CommonUtils:
 
         self.unsupportedSyntaxSeen = False
         self.src = self.args.source
+        self.keep = self.args.keep
         assert(os.path.exists(self.src))
         self.dirmode = os.path.isdir(self.src)
         srcExt = os.path.splitext(self.src)[1]
@@ -78,6 +79,9 @@ class CommonUtils:
                             help="Disable all messages except FATAL ERRORS.")
         parser.add_argument("--git", action="store_true",
                             help="Use git to create commits for each file converted")
+        parser.add_argument("--keep", action="append", choices=('asm', 's'),
+                            default=[],
+                            help="Don't remove files with this extension")
         parser.add_argument("--diff", action="store_true",
                             help="Show diff of conversion")
         parser.add_argument("-f", "--force", action="store_true",
@@ -175,8 +179,17 @@ class CommonUtils:
         if not self.git or not self.gitdir:
             return
 
+        if self.ShouldKeepFile(path):
+            return
+
         cmd = ('git', 'rm', path)
         self.RunAndCaptureOutput(cmd)
+
+    def ShouldKeepFile(self, path):
+        ext = os.path.splitext(path)[1].lower()
+        if ext.startswith('.'):
+            ext = ext[1:]
+        return ext in self.keep
 
     def FileConversionFinished(self, pkg, module, src, dst):
         if not self.git or not self.gitdir:
@@ -285,7 +298,9 @@ class ConvertAsmFile(CommonUtils):
                 self.oldAsmEmptyLineCount = 0
 
     procDeclRe = re.compile(r'''
-                                ([\w@][\w@0-9]*) \s+
+                                (?: ASM_PFX \s* [(] \s* )?
+                                ([\w@][\w@0-9]*) \s*
+                                [)]? \s+
                                 PROC
                                 (?: \s+ NEAR | FAR )?
                                 (?: \s+ C )?
@@ -471,7 +486,7 @@ class ConvertAsmFile(CommonUtils):
             self.EmitAsmWithComment(oldAsm, newAsm, endOfLine)
             uses = self.mo.group(3)
             if uses is not None:
-                uses = filter(None, uses.split())
+                uses = tuple(filter(None, uses.split()))
             else:
                 uses = tuple()
             self.uses = uses
@@ -482,7 +497,7 @@ class ConvertAsmFile(CommonUtils):
             self.EmitAsmWithComment(oldAsm, newAsm, endOfLine)
         elif self.MatchAndSetMo(self.publicRe, oldAsm):
             publics = re.findall(self.varAndTypeSubRe, self.mo.group(1))
-            publics = map(lambda p: p.split(':')[0].strip(), publics)
+            publics = tuple(map(lambda p: p.split(':')[0].strip(), publics))
             for i in range(len(publics) - 1):
                 name = publics[i]
                 self.EmitNewContent('global ASM_PFX(%s)' % publics[i])
@@ -753,7 +768,8 @@ class ConvertInfFile(CommonUtils):
                 src = self.mo.group(1)
                 srcExt = self.mo.group(2)
                 dst = os.path.splitext(src)[0] + '.nasm'
-                if src not in srcToDst:
+                fullDst = os.path.join(self.dir, dst)
+                if src not in srcToDst and not os.path.exists(fullDst):
                     srcToDst[src] = dst
                     srcToDst['order'].append(src)
         return srcToDst
@@ -841,36 +857,50 @@ class ConvertInfFile(CommonUtils):
             conv = ConvertAsmFile(fullSrc, fullDst, self)
             self.unsupportedSyntaxSeen = conv.unsupportedSyntaxSeen
 
-        lastLine = ''
         fileChanged = False
+        recentSources = list()
         i = 0
-        for line in self.lines:
-            line = line.rstrip()
+        while i < len(self.lines):
+            line = self.lines[i].rstrip()
             updatedLine = line
+            lineChanged = False
+            preserveOldSource = False
             for src in self.dstToSrc[dst]:
                 assert self.srcToDst[src] == dst
                 updatedLine = self.ReplacePreserveSpacing(
                     updatedLine, src, dst)
-
-            lineChanged = updatedLine != line
-            if lineChanged:
-                if lastLine.strip() == updatedLine.strip():
-                    self.lines[i] = None
-                else:
-                    self.lines[i] = updatedLine + '\n'
-
-            if self.diff:
+                lineChanged = updatedLine != line
                 if lineChanged:
-                    print('-%s' % line)
-                    if self.lines[i] is not None:
-                        print('+%s' % updatedLine)
+                    preserveOldSource = self.ShouldKeepFile(src)
+                    break
+
+            if lineChanged:
+                if preserveOldSource:
+                    if updatedLine.strip() not in recentSources:
+                        self.lines.insert(i, updatedLine + '\n')
+                        recentSources.append(updatedLine.strip())
+                        i += 1
+                        if self.diff:
+                            print('+%s' % updatedLine)
+                    if self.diff:
+                        print('', line)
                 else:
+                    if self.diff:
+                        print('-%s' % line)
+                    if updatedLine.strip() in recentSources:
+                        self.lines[i] = None
+                    else:
+                        self.lines[i] = updatedLine + '\n'
+                        recentSources.append(updatedLine.strip())
+                        if self.diff:
+                            print('+%s' % updatedLine)
+            else:
+                if len(recentSources) > 0:
+                    recentSources = list()
+                if self.diff:
                     print('', line)
 
             fileChanged |= lineChanged
-            if self.lines[i] is not None:
-                lastLine = self.lines[i]
-
             i += 1
 
         if fileChanged:

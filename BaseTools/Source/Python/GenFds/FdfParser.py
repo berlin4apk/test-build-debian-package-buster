@@ -55,7 +55,6 @@ from Common.String import ReplaceMacro
 
 from Common.Misc import tdict
 
-import re
 import Common.LongFilePathOs as os
 from Common.LongFilePathSupport import OpenLongFilePath as open
 
@@ -106,7 +105,7 @@ def GetRealFileLine (File, Line):
         if Profile.IsLineInFile(Line):
             return Profile.GetLineInFile(Line)
         elif Line >= Profile.InsertStartLineNumber and Profile.Level == 1:
-           InsertedLines += Profile.GetTotalLines()
+            InsertedLines += Profile.GetTotalLines()
 
     return (File, Line - InsertedLines)
 
@@ -181,7 +180,7 @@ class IncludeFileProfile :
         TotalLines = self.InsertAdjust + len(self.FileLinesList)
 
         for Profile in self.IncludeFileList:
-          TotalLines += Profile.GetTotalLines()
+            TotalLines += Profile.GetTotalLines()
 
         return TotalLines
 
@@ -232,6 +231,7 @@ class FileProfile :
 
         self.PcdDict = {}
         self.InfList = []
+        self.InfDict = {'ArchTBD':[]}
         # ECC will use this Dict and List information
         self.PcdFileLineDict = {}
         self.InfFileLineList = []
@@ -1398,6 +1398,20 @@ class FdfParser:
                 % (FileLineTuple[1], self.CurrentOffsetWithinLine + 1, self.Profile.FileLinesList[self.CurrentLineNumber - 1][self.CurrentOffsetWithinLine :].rstrip('\n').rstrip('\r'))
             raise
 
+    ## SectionParser() method
+    #
+    #   Parse the file section info
+    #   Exception will be raised if syntax error found
+    #
+    #   @param  self          The object pointer
+    #   @param  section       The section string
+
+    def SectionParser(self, section):
+        S = section.upper()
+        if not S.startswith("[DEFINES") and not S.startswith("[FD.") and not S.startswith("[FV.") and not S.startswith("[CAPSULE.") \
+            and not S.startswith("[VTF.") and not S.startswith("[RULE.") and not S.startswith("[OPTIONROM.") and not S.startswith('[FMPPAYLOAD.'):
+            raise Warning("Unknown section or section appear sequence error (The correct sequence should be [DEFINES], [FD.], [FV.], [Capsule.], [VTF.], [Rule.], [OptionRom.], [FMPPAYLOAD.])", self.FileName, self.CurrentLineNumber)
+
     ## __GetDefines() method
     #
     #   Get Defines section contents and store its data into AllMacrosList
@@ -1413,9 +1427,7 @@ class FdfParser:
 
         S = self.__Token.upper()
         if S.startswith("[") and not S.startswith("[DEFINES"):
-            if not S.startswith("[FD.") and not S.startswith("[FV.") and not S.startswith("[CAPSULE.") \
-                and not S.startswith("[VTF.") and not S.startswith("[RULE.") and not S.startswith("[OPTIONROM."):
-                raise Warning("Unknown section or section appear sequence error (The correct sequence should be [DEFINES], [FD.], [FV.], [Capsule.], [VTF.], [Rule.], [OptionRom.])", self.FileName, self.CurrentLineNumber)
+            self.SectionParser(S)
             self.__UndoToken()
             return False
 
@@ -1931,7 +1943,7 @@ class FdfParser:
             raise Warning("expected FV name", self.FileName, self.CurrentLineNumber)
 
         RegionObj.RegionType = "FV"
-        RegionObj.RegionDataList.append(self.__Token)
+        RegionObj.RegionDataList.append((self.__Token).upper())
 
         while self.__IsKeyword( "FV"):
 
@@ -1941,7 +1953,7 @@ class FdfParser:
             if not self.__GetNextToken():
                 raise Warning("expected FV name", self.FileName, self.CurrentLineNumber)
 
-            RegionObj.RegionDataList.append(self.__Token)
+            RegionObj.RegionDataList.append((self.__Token).upper())
 
     ## __GetRegionCapType() method
     #
@@ -2108,9 +2120,7 @@ class FdfParser:
 
         S = self.__Token.upper()
         if S.startswith("[") and not S.startswith("[FV."):
-            if not S.startswith('[FMPPAYLOAD.') and not S.startswith("[CAPSULE.") \
-                and not S.startswith("[VTF.") and not S.startswith("[RULE.") and not S.startswith("[OPTIONROM."):
-                raise Warning("Unknown section or section appear sequence error (The correct sequence should be [FD.], [FV.], [Capsule.], [VTF.], [Rule.], [OptionRom.])", self.FileName, self.CurrentLineNumber)
+            self.SectionParser(S)
             self.__UndoToken()
             return False
 
@@ -2463,6 +2473,13 @@ class FdfParser:
             self.Profile.InfList.append(ffsInf.InfFileName)
             FileLineTuple = GetRealFileLine(self.FileName, self.CurrentLineNumber)
             self.Profile.InfFileLineList.append(FileLineTuple)
+            if ffsInf.UseArch:
+                if ffsInf.UseArch not in self.Profile.InfDict:
+                    self.Profile.InfDict[ffsInf.UseArch] = [ffsInf.InfFileName]
+                else:
+                    self.Profile.InfDict[ffsInf.UseArch].append(ffsInf.InfFileName)
+            else:
+                self.Profile.InfDict['ArchTBD'].append(ffsInf.InfFileName)
 
         if self.__IsToken('|'):
             if self.__IsKeyword('RELOCS_STRIPPED'):
@@ -3151,9 +3168,8 @@ class FdfParser:
         if not self.__GetNextToken():
             return False
         S = self.__Token.upper()
-        if not S.startswith("[FMPPAYLOAD."):
-            if not S.startswith("[CAPSULE.") and not S.startswith("[VTF.") and not S.startswith("[RULE.") and not S.startswith("[OPTIONROM."):
-                raise Warning("Unknown section or section appear sequence error (The correct sequence should be [FD.], [FV.], [FmpPayload.], [Capsule.], [VTF.], [Rule.], [OptionRom.])", self.FileName, self.CurrentLineNumber)
+        if S.startswith("[") and not S.startswith("[FMPPAYLOAD."):
+            self.SectionParser(S)
             self.__UndoToken()
             return False
 
@@ -3223,8 +3239,7 @@ class FdfParser:
 
         S = self.__Token.upper()
         if S.startswith("[") and not S.startswith("[CAPSULE."):
-            if not S.startswith("[VTF.") and not S.startswith("[RULE.") and not S.startswith("[OPTIONROM."):
-                raise Warning("Unknown section or section appear sequence error (The correct sequence should be [FD.], [FV.], [Capsule.], [VTF.], [Rule.], [OptionRom.])", self.FileName, self.CurrentLineNumber)
+            self.SectionParser(S)
             self.__UndoToken()
             return False
 
@@ -3394,18 +3409,19 @@ class FdfParser:
         return True
 
     def __GetFmpStatement(self, CapsuleObj):
-        if not self.__IsKeyword("FMP"):
-            return False
+        if not self.__IsKeyword("FMP_PAYLOAD"):
+            if not self.__IsKeyword("FMP"):
+                return False
 
-        if not self.__IsKeyword("PAYLOAD"):
-            self.__UndoToken()
-            return False
+            if not self.__IsKeyword("PAYLOAD"):
+                self.__UndoToken()
+                return False
 
         if not self.__IsToken("="):
             raise Warning("expected '='", self.FileName, self.CurrentLineNumber)
 
         if not self.__GetNextToken():
-            raise Warning("expected payload name after FMP PAYLOAD =", self.FileName, self.CurrentLineNumber)
+            raise Warning("expected payload name after FMP_PAYLOAD =", self.FileName, self.CurrentLineNumber)
         Payload = self.__Token.upper()
         if Payload not in self.Profile.FmpPayloadDict:
             raise Warning("This FMP Payload does not exist: %s" % self.__Token, self.FileName, self.CurrentLineNumber)
@@ -3427,9 +3443,8 @@ class FdfParser:
             raise Warning("expected File name", self.FileName, self.CurrentLineNumber)
         
         AnyFileName = self.__Token
-        AnyFileName = GenFdsGlobalVariable.ReplaceWorkspaceMacro(AnyFileName)
-        if not os.path.exists(AnyFileName):
-            raise Warning("File %s not exists"%AnyFileName, self.FileName, self.CurrentLineNumber)
+        self.__VerifyFile(AnyFileName)
+
         return AnyFileName
 
     ## __GetAnyFileStatement() method
@@ -3507,8 +3522,7 @@ class FdfParser:
 
         S = self.__Token.upper()
         if S.startswith("[") and not S.startswith("[RULE."):
-            if not S.startswith("[OPTIONROM."):
-                raise Warning("Unknown section or section appear sequence error (The correct sequence should be [FD.], [FV.], [Capsule.], [VTF.], [Rule.], [OptionRom.])", self.FileName, self.CurrentLineNumber)
+            self.SectionParser(S)
             self.__UndoToken()
             return False
         self.__UndoToken()
@@ -3586,7 +3600,7 @@ class FdfParser:
     #
     def __GetFileExtension(self):
         if not self.__IsToken("."):
-                raise Warning("expected '.'", self.FileName, self.CurrentLineNumber)
+            raise Warning("expected '.'", self.FileName, self.CurrentLineNumber)
 
         Ext = ""
         if self.__GetNextToken():
@@ -4084,8 +4098,7 @@ class FdfParser:
 
         S = self.__Token.upper()
         if S.startswith("[") and not S.startswith("[VTF."):
-            if not S.startswith("[RULE.") and not S.startswith("[OPTIONROM."):
-                raise Warning("Unknown section or section appear sequence error (The correct sequence should be [FD.], [FV.], [Capsule.], [VTF.], [Rule.], [OptionRom.])", self.FileName, self.CurrentLineNumber)
+            self.SectionParser(S)
             self.__UndoToken()
             return False
 
@@ -4291,7 +4304,9 @@ class FdfParser:
 
         S = self.__Token.upper()
         if S.startswith("[") and not S.startswith("[OPTIONROM."):
-            raise Warning("Unknown section or section appear sequence error (The correct sequence should be [FD.], [FV.], [Capsule.], [VTF.], [Rule.], [OptionRom.])", self.FileName, self.CurrentLineNumber)
+            self.SectionParser(S)
+            self.__UndoToken()
+            return False
         
         self.__UndoToken()
         if not self.__IsToken("[OptionRom.", True):
@@ -4344,6 +4359,13 @@ class FdfParser:
             self.Profile.InfList.append(ffsInf.InfFileName)
             FileLineTuple = GetRealFileLine(self.FileName, self.CurrentLineNumber)
             self.Profile.InfFileLineList.append(FileLineTuple)
+            if ffsInf.UseArch:
+                if ffsInf.UseArch not in self.Profile.InfDict:
+                    self.Profile.InfDict[ffsInf.UseArch] = [ffsInf.InfFileName]
+                else:
+                    self.Profile.InfDict[ffsInf.UseArch].append(ffsInf.InfFileName)
+            else:
+                self.Profile.InfDict['ArchTBD'].append(ffsInf.InfFileName)
 
         
         self.__GetOptRomOverrides (ffsInf)

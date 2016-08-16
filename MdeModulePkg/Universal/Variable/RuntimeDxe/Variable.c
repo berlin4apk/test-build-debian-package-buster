@@ -1771,6 +1771,7 @@ CheckRemainingSpaceForConsistencyInternal (
     TotalNeededSize += VariableEntry->VariableSize;
     VariableEntry = VA_ARG (Args, VARIABLE_ENTRY_CONSISTENCY *);
   }
+  VA_END  (Args);
 
   if (RemainingVariableStorageSize >= TotalNeededSize) {
     //
@@ -1823,6 +1824,7 @@ CheckRemainingSpaceForConsistencyInternal (
     RemainingVariableStorageSize -= VariableEntry->VariableSize;
     VariableEntry = VA_ARG (Args, VARIABLE_ENTRY_CONSISTENCY *);
   }
+  VA_END  (Args);
 
   return TRUE;
 }
@@ -2847,6 +2849,10 @@ VariableServiceGetVariable (
 
   if (VariableName == NULL || VendorGuid == NULL || DataSize == NULL) {
     return EFI_INVALID_PARAMETER;
+  }
+
+  if (VariableName[0] == 0) {
+    return EFI_NOT_FOUND;
   }
 
   AcquireLockOnlyAtBootTime(&mVariableModuleGlobal->VariableGlobal.VariableServicesLock);

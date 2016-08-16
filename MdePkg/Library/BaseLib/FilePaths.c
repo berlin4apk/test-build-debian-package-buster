@@ -1,7 +1,7 @@
 /** @file
   Defines file-path manipulation functions.
 
-  Copyright (c) 2011 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2011 - 2016, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -17,7 +17,8 @@
 
 /**
   Removes the last directory or file entry in a path by changing the last
-  L'\' to a CHAR_NULL.
+  L'\' to a CHAR_NULL. For a path which is like L"fs0:startup.nsh",
+  it's converted to L"fs0:".
 
   @param[in,out] Path     A pointer to the path to modify.
 
@@ -39,7 +40,7 @@ PathRemoveLastItem(
       ; Walker != NULL && *Walker != CHAR_NULL
       ; Walker++
      ){
-    if (*Walker == L'\\' && *(Walker + 1) != CHAR_NULL) {
+    if ((*Walker == L'\\' || *Walker == L':') && *(Walker + 1) != CHAR_NULL) {
       LastSlash = Walker+1;
     }
   }
@@ -96,7 +97,9 @@ PathCleanUpDirectories(
   }
   if ((TempString = StrStr(Path, L"\\..")) != NULL && *(TempString + 3) == CHAR_NULL) {
     *TempString = CHAR_NULL;
-    PathRemoveLastItem(Path);
+    if (!PathRemoveLastItem(Path)) {
+      *TempString = L'\\';
+    }
   }
   //
   // Fix up the .

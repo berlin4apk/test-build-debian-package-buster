@@ -1,7 +1,7 @@
 /** @file
   This file provides some helper functions which are specific for EMMC device.
 
-  Copyright (c) 2015, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -50,6 +50,8 @@ EmmcReset (
   SdMmcCmdBlk.CommandType  = SdMmcCommandTypeBc;
   SdMmcCmdBlk.ResponseType = 0;
   SdMmcCmdBlk.CommandArgument = 0;
+
+  gBS->Stall (1000);
 
   Status = SdMmcPassThruPassThru (PassThru, Slot, &Packet, NULL);
 
@@ -540,17 +542,25 @@ EmmcTuningClkForHs200 (
       return Status;
     }
 
-    if ((HostCtrl2 & (BIT6 | BIT7)) == BIT7) {
+    if ((HostCtrl2 & (BIT6 | BIT7)) == 0) {
       break;
+    }
+
+    if ((HostCtrl2 & (BIT6 | BIT7)) == BIT7) {
+      return EFI_SUCCESS;
     }
   } while (++Retry < 40);
 
-  if (Retry == 40) {
-    Status = EFI_TIMEOUT;
-    DEBUG ((EFI_D_ERROR, "EmmcTuningClkForHs200: Send tuning block exceeds 40 times\n"));
+  DEBUG ((EFI_D_ERROR, "EmmcTuningClkForHs200: Send tuning block fails at %d times with HostCtrl2 %02x\n", Retry, HostCtrl2));
+  //
+  // Abort the tuning procedure and reset the tuning circuit.
+  //
+  HostCtrl2 = (UINT8)~(BIT6 | BIT7);
+  Status = SdMmcHcAndMmio (PciIo, Slot, SD_MMC_HC_HOST_CTRL2, sizeof (HostCtrl2), &HostCtrl2);
+  if (EFI_ERROR (Status)) {
+    return Status;
   }
-
-  return Status;
+  return EFI_DEVICE_ERROR;
 }
 
 /**
@@ -1071,7 +1081,7 @@ EmmcSetBusMode (
     //
     // Execute High Speed timing switch procedure
     //
-    Status = EmmcSwitchToHighSpeed (PciIo, PassThru, Slot, Rca, ClockFreq, BusWidth, IsDdr);
+    Status = EmmcSwitchToHighSpeed (PciIo, PassThru, Slot, Rca, ClockFreq, IsDdr, BusWidth);
   }
 
   DEBUG ((EFI_D_INFO, "EmmcSetBusMode: Switch to %a %r\n", (HsTiming == 3) ? "HS400" : ((HsTiming == 2) ? "HS200" : "HighSpeed"), Status));

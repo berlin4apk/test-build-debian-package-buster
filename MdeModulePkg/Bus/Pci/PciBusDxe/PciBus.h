@@ -102,8 +102,7 @@ struct _PCI_BAR {
   UINT64        Length;
   UINT64        Alignment;
   PCI_BAR_TYPE  BarType;
-  BOOLEAN       Prefetchable;
-  UINT8         MemType;
+  BOOLEAN       BarTypeFixed;
   UINT16        Offset;
 };
 
@@ -309,7 +308,7 @@ struct _PCI_IO_DEVICE {
 //
 // Global Variables
 //
-extern EFI_INCOMPATIBLE_PCI_DEVICE_SUPPORT_PROTOCOL *gEfiIncompatiblePciDeviceSupport;
+extern EFI_INCOMPATIBLE_PCI_DEVICE_SUPPORT_PROTOCOL *gIncompatiblePciDeviceSupport;
 extern EFI_DRIVER_BINDING_PROTOCOL                  gPciBusDriverBinding;
 extern EFI_COMPONENT_NAME_PROTOCOL                  gPciBusComponentName;
 extern EFI_COMPONENT_NAME2_PROTOCOL                 gPciBusComponentName2;

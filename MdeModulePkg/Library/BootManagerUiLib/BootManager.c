@@ -1,7 +1,7 @@
 /** @file
   The boot manager reference implementation
 
-Copyright (c) 2004 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials are licensed and made available under
 the terms and conditions of the BSD License that accompanies this distribution.
 The full text of the license may be found at
@@ -30,6 +30,8 @@ UINT32    mBmSetupTextModeColumn         = 0;
 UINT32    mBmSetupTextModeRow            = 0;
 UINT32    mBmSetupHorizontalResolution   = 0;
 UINT32    mBmSetupVerticalResolution     = 0;
+
+BOOLEAN   mBmModeInitialized             = FALSE;
 
 CHAR16             *mDeviceTypeStr[] = {
   L"Legacy BEV",
@@ -89,8 +91,7 @@ BOOT_MANAGER_CALLBACK_DATA  gBootManagerPrivate = {
 
 **/
 EFI_STATUS
-EFIAPI
-BmBdsSetConsoleMode (
+BmSetConsoleMode (
   BOOLEAN  IsSetupMode
   )
 {
@@ -142,7 +143,7 @@ BmBdsSetConsoleMode (
 
   if (IsSetupMode) {
     //
-    // The requried resolution and text mode is setup mode.
+    // The required resolution and text mode is setup mode.
     //
     NewHorizontalResolution = mBmSetupHorizontalResolution;
     NewVerticalResolution   = mBmSetupVerticalResolution;
@@ -198,7 +199,7 @@ BmBdsSetConsoleMode (
             return EFI_SUCCESS;
           } else {
             //
-            // If current text mode is different from requried text mode.  Set new video mode
+            // If current text mode is different from required text mode.  Set new video mode
             //
             for (Index = 0; Index < MaxTextMode; Index++) {
               Status = SimpleTextOut->QueryMode (SimpleTextOut, Index, &CurrentColumn, &CurrentRow);
@@ -223,7 +224,7 @@ BmBdsSetConsoleMode (
             }
             if (Index == MaxTextMode) {
               //
-              // If requried text mode is not supported, return error.
+              // If required text mode is not supported, return error.
               //
               FreePool (Info);
               return EFI_UNSUPPORTED;
@@ -418,8 +419,7 @@ BmDevicePathToStr (
 }
 
 /**
-  This function invokes Boot Manager. If all devices have not a chance to be connected,
-  the connect all will be triggered. It then enumerate all boot options. If 
+  This function invokes Boot Manager. It then enumerate all boot options. If
   a boot option from the Boot Manager page is selected, Boot Manager will boot
   from this boot option.
   
@@ -448,8 +448,6 @@ UpdateBootManager (
   UINTN                         MaxLen;
 
   DeviceType = (UINT16) -1;
-
-  EfiBootManagerConnectAll ();
 
   //
   // for better user experience
@@ -650,6 +648,77 @@ BootManagerRouteConfig (
 }
 
 /**
+  Initial the boot mode related parameters.
+
+**/
+VOID
+BmInitialBootModeInfo (
+  VOID
+  )
+{
+  EFI_STATUS                         Status;
+  EFI_GRAPHICS_OUTPUT_PROTOCOL       *GraphicsOutput;
+  EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL    *SimpleTextOut;
+  UINTN                              BootTextColumn;
+  UINTN                              BootTextRow;
+
+  if (mBmModeInitialized) {
+    return;
+  }
+
+  //
+  // After the console is ready, get current video resolution
+  // and text mode before launching setup at first time.
+  //
+  Status = gBS->HandleProtocol (
+                  gST->ConsoleOutHandle,
+                  &gEfiGraphicsOutputProtocolGuid,
+                  (VOID**)&GraphicsOutput
+                  );
+  if (EFI_ERROR (Status)) {
+    GraphicsOutput = NULL;
+  }
+
+  Status = gBS->HandleProtocol (
+                  gST->ConsoleOutHandle,
+                  &gEfiSimpleTextOutProtocolGuid,
+                  (VOID**)&SimpleTextOut
+                  );
+  if (EFI_ERROR (Status)) {
+    SimpleTextOut = NULL;
+  }
+
+  if (GraphicsOutput != NULL) {
+    //
+    // Get current video resolution and text mode.
+    //
+    mBmBootHorizontalResolution = GraphicsOutput->Mode->Info->HorizontalResolution;
+    mBmBootVerticalResolution   = GraphicsOutput->Mode->Info->VerticalResolution;
+  }
+
+  if (SimpleTextOut != NULL) {
+    Status = SimpleTextOut->QueryMode (
+                              SimpleTextOut,
+                              SimpleTextOut->Mode->Mode,
+                              &BootTextColumn,
+                              &BootTextRow
+                              );
+    mBmBootTextModeColumn = (UINT32)BootTextColumn;
+    mBmBootTextModeRow    = (UINT32)BootTextRow;
+  }
+
+  //
+  // Get user defined text mode for setup.
+  //
+  mBmSetupHorizontalResolution = PcdGet32 (PcdSetupVideoHorizontalResolution);
+  mBmSetupVerticalResolution   = PcdGet32 (PcdSetupVideoVerticalResolution);
+  mBmSetupTextModeColumn       = PcdGet32 (PcdSetupConOutColumn);
+  mBmSetupTextModeRow          = PcdGet32 (PcdSetupConOutRow);
+
+  mBmModeInitialized           = TRUE;
+}
+
+/**
   This call back function is registered with Boot Manager formset.
   When user selects a boot option, this call back function will
   be triggered. The boot option is saved for later processing.
@@ -715,9 +784,9 @@ BootManagerCallback (
   //
   // parse the selected option
   //
-  BmBdsSetConsoleMode (FALSE);
+  BmSetConsoleMode (FALSE);
   EfiBootManagerBoot (&BootOption[QuestionId - 1]);
-  BmBdsSetConsoleMode (TRUE);
+  BmSetConsoleMode (TRUE);
 
   if (EFI_ERROR (BootOption[QuestionId - 1].Status)) {
     gST->ConOut->OutputString (
@@ -778,6 +847,7 @@ BootManagerUiLibConstructor (
                                     );
   ASSERT (gBootManagerPrivate.HiiHandle != NULL);
 
+  BmInitialBootModeInfo ();
 
   return EFI_SUCCESS;
 }

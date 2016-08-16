@@ -149,6 +149,22 @@ Ip6CleanService (
   EFI_IPv6_ADDRESS          AllNodes;
   IP6_NEIGHBOR_ENTRY        *NeighborCache;
 
+  IpSb->State     = IP6_SERVICE_DESTROY;
+
+  if (IpSb->Timer != NULL) {
+    gBS->SetTimer (IpSb->Timer, TimerCancel, 0);
+    gBS->CloseEvent (IpSb->Timer);
+
+    IpSb->Timer = NULL;
+  }
+
+  if (IpSb->FasterTimer != NULL) {
+    gBS->SetTimer (IpSb->FasterTimer, TimerCancel, 0);
+    gBS->CloseEvent (IpSb->FasterTimer);
+
+    IpSb->FasterTimer = NULL;
+  }
+
   Ip6ConfigCleanInstance (&IpSb->Ip6ConfigInstance);
 
   if (!IpSb->LinkLocalDadFail) {
@@ -214,19 +230,6 @@ Ip6CleanService (
     gBS->CloseEvent (IpSb->RecvRequest.MnpToken.Event);
   }
 
-  if (IpSb->Timer != NULL) {
-    gBS->SetTimer (IpSb->Timer, TimerCancel, 0);
-    gBS->CloseEvent (IpSb->Timer);
-
-    IpSb->Timer = NULL;
-  }
-
-  if (IpSb->FasterTimer != NULL) {
-    gBS->SetTimer (IpSb->FasterTimer, TimerCancel, 0);
-    gBS->CloseEvent (IpSb->FasterTimer);
-
-    IpSb->FasterTimer = NULL;
-  }
   //
   // Free the Neighbor Discovery resources
   //
@@ -578,7 +581,7 @@ Ip6DriverBindingStart (
                        DataItem->DataSize,
                        DataItem->Data.Ptr
                        );
-    if (EFI_ERROR(Status)) {
+    if (EFI_ERROR(Status) && Status != EFI_NOT_READY) {
       goto ON_ERROR;
     }
   }
@@ -599,46 +602,44 @@ Ip6DriverBindingStart (
     }
   }
 
-  if (!EFI_ERROR (Status)) {
-    //
-    // ready to go: start the receiving and timer
-    //
-    Status = Ip6ReceiveFrame (Ip6AcceptFrame, IpSb);
-    if (EFI_ERROR (Status)) {
-      goto ON_ERROR;
-    }
-
-    //
-    // The timer expires every 100 (IP6_TIMER_INTERVAL_IN_MS) milliseconds.
-    //
-    Status = gBS->SetTimer (
-                    IpSb->FasterTimer,
-                    TimerPeriodic,
-                    TICKS_PER_MS * IP6_TIMER_INTERVAL_IN_MS
-                    );
-    if (EFI_ERROR (Status)) {
-      goto ON_ERROR;
-    }
-
-    //
-    // The timer expires every 1000 (IP6_ONE_SECOND_IN_MS) milliseconds.
-    //
-    Status = gBS->SetTimer (
-                    IpSb->Timer,
-                    TimerPeriodic,
-                    TICKS_PER_MS * IP6_ONE_SECOND_IN_MS
-                    );
-    if (EFI_ERROR (Status)) {
-      goto ON_ERROR;
-    }    
-
-    //
-    // Initialize the IP6 ID
-    //
-    mIp6Id = NET_RANDOM (NetRandomInitSeed ());
-
-    return EFI_SUCCESS;
+  //
+  // ready to go: start the receiving and timer
+  //
+  Status = Ip6ReceiveFrame (Ip6AcceptFrame, IpSb);
+  if (EFI_ERROR (Status)) {
+    goto ON_ERROR;
   }
+
+  //
+  // The timer expires every 100 (IP6_TIMER_INTERVAL_IN_MS) milliseconds.
+  //
+  Status = gBS->SetTimer (
+                  IpSb->FasterTimer,
+                  TimerPeriodic,
+                  TICKS_PER_MS * IP6_TIMER_INTERVAL_IN_MS
+                  );
+  if (EFI_ERROR (Status)) {
+    goto ON_ERROR;
+  }
+
+  //
+  // The timer expires every 1000 (IP6_ONE_SECOND_IN_MS) milliseconds.
+  //
+  Status = gBS->SetTimer (
+                  IpSb->Timer,
+                  TimerPeriodic,
+                  TICKS_PER_MS * IP6_ONE_SECOND_IN_MS
+                  );
+  if (EFI_ERROR (Status)) {
+    goto ON_ERROR;
+  }    
+
+  //
+  // Initialize the IP6 ID
+  //
+  mIp6Id = NET_RANDOM (NetRandomInitSeed ());
+
+  return EFI_SUCCESS;
 
 ON_ERROR:
   Ip6CleanService (IpSb);
@@ -761,8 +762,6 @@ Ip6DriverBindingStop (
                );
   } else if (IsListEmpty (&IpSb->Children)) {
     State           = IpSb->State;
-    IpSb->State     = IP6_SERVICE_DESTROY;
-
     Status = Ip6CleanService (IpSb);
     if (EFI_ERROR (Status)) {
       IpSb->State = State;
@@ -797,7 +796,7 @@ Exit:
                                  the existing child handle.
 
   @retval EFI_SUCCES             The child handle was created with the I/O services.
-  @retval EFI_OUT_OF_RESOURCES   There are not enough resources availabe to create
+  @retval EFI_OUT_OF_RESOURCES   There are not enough resources available to create
                                  the child.
   @retval other                  The child handle was not created.
 

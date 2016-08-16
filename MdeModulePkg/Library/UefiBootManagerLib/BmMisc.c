@@ -2,6 +2,7 @@
   Misc library functions.
 
 Copyright (c) 2011 - 2015, Intel Corporation. All rights reserved.<BR>
+(C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -129,13 +130,10 @@ BmMatchDevicePaths (
 
   @param Boot               TRUE if current boot option belongs to boot
                             category instead of application category.
-  @param RamDiskSizeInPages Reserved memory size in pages occupied by
-                            RAM Disk.
 **/
 VOID
 BmSetMemoryTypeInformationVariable (
-  IN BOOLEAN                    Boot,
-  IN UINTN                      RamDiskSizeInPages
+  IN BOOLEAN                    Boot
   )
 {
   EFI_STATUS                   Status;
@@ -226,13 +224,6 @@ BmSetMemoryTypeInformationVariable (
     }
     if (CurrentMemoryTypeInformation[Index1].Type == EfiMaxMemoryType) {
       continue;
-    }
-
-    //
-    // Do not count the reserved memory occupied by RAM Disk.
-    //
-    if (CurrentMemoryTypeInformation[Index1].Type == EfiReservedMemoryType) {
-      CurrentMemoryTypeInformation[Index1].NumberOfPages -= (UINT32) RamDiskSizeInPages;
     }
 
     //

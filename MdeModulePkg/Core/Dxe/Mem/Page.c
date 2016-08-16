@@ -1335,7 +1335,15 @@ CoreAllocatePages (
 
   Status = CoreInternalAllocatePages (Type, MemoryType, NumberOfPages, Memory);
   if (!EFI_ERROR (Status)) {
-    CoreUpdateProfile ((EFI_PHYSICAL_ADDRESS) (UINTN) RETURN_ADDRESS (0), MemoryProfileActionAllocatePages, MemoryType, EFI_PAGES_TO_SIZE (NumberOfPages), (VOID *) (UINTN) *Memory);
+    CoreUpdateProfile (
+      (EFI_PHYSICAL_ADDRESS) (UINTN) RETURN_ADDRESS (0),
+      MemoryProfileActionAllocatePages,
+      MemoryType,
+      EFI_PAGES_TO_SIZE (NumberOfPages),
+      (VOID *) (UINTN) *Memory,
+      NULL
+      );
+    InstallMemoryAttributesTableOnMemoryAllocation (MemoryType);
   }
   return Status;
 }
@@ -1345,6 +1353,7 @@ CoreAllocatePages (
 
   @param  Memory                 Base address of memory being freed
   @param  NumberOfPages          The number of pages to free
+  @param  MemoryType             Pointer to memory type
 
   @retval EFI_NOT_FOUND          Could not find the entry that covers the range
   @retval EFI_INVALID_PARAMETER  Address not aligned
@@ -1355,7 +1364,8 @@ EFI_STATUS
 EFIAPI
 CoreInternalFreePages (
   IN EFI_PHYSICAL_ADDRESS   Memory,
-  IN UINTN                  NumberOfPages
+  IN UINTN                  NumberOfPages,
+  OUT EFI_MEMORY_TYPE       *MemoryType OPTIONAL
   )
 {
   EFI_STATUS      Status;
@@ -1403,6 +1413,10 @@ CoreInternalFreePages (
   NumberOfPages += EFI_SIZE_TO_PAGES (Alignment) - 1;
   NumberOfPages &= ~(EFI_SIZE_TO_PAGES (Alignment) - 1);
 
+  if (MemoryType != NULL) {
+    *MemoryType = Entry->Type;
+  }
+
   Status = CoreConvertPages (Memory, NumberOfPages, EfiConventionalMemory);
 
   if (EFI_ERROR (Status)) {
@@ -1432,11 +1446,20 @@ CoreFreePages (
   IN UINTN                 NumberOfPages
   )
 {
-  EFI_STATUS  Status;
+  EFI_STATUS        Status;
+  EFI_MEMORY_TYPE   MemoryType;
 
-  Status = CoreInternalFreePages (Memory, NumberOfPages);
+  Status = CoreInternalFreePages (Memory, NumberOfPages, &MemoryType);
   if (!EFI_ERROR (Status)) {
-    CoreUpdateProfile ((EFI_PHYSICAL_ADDRESS) (UINTN) RETURN_ADDRESS (0), MemoryProfileActionFreePages, (EFI_MEMORY_TYPE) 0, EFI_PAGES_TO_SIZE (NumberOfPages), (VOID *) (UINTN) Memory);
+    CoreUpdateProfile (
+      (EFI_PHYSICAL_ADDRESS) (UINTN) RETURN_ADDRESS (0),
+      MemoryProfileActionFreePages,
+      MemoryType,
+      EFI_PAGES_TO_SIZE (NumberOfPages),
+      (VOID *) (UINTN) Memory,
+      NULL
+      );
+    InstallMemoryAttributesTableOnMemoryAllocation (MemoryType);
   }
   return Status;
 }

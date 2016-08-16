@@ -1,7 +1,7 @@
 /** @file
   TCP input process routines.
 
-  Copyright (c) 2009 - 2016 Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -31,7 +31,7 @@ TcpSeqAcceptable (
   IN TCP_SEG *Seg
   )
 {
-  return (TCP_SEQ_LEQ (Tcb->RcvWl2, Seg->End) &&
+  return (TCP_SEQ_LEQ (Tcb->RcvNxt, Seg->End) &&
           TCP_SEQ_LT (Seg->Seq, Tcb->RcvWl2 + Tcb->RcvWnd));
 }
 

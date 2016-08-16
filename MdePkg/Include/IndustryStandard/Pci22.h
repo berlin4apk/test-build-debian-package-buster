@@ -635,6 +635,7 @@ typedef union {
 #define EFI_PCI_CAPABILITY_ID_SLOTID  0x04
 #define EFI_PCI_CAPABILITY_ID_MSI     0x05
 #define EFI_PCI_CAPABILITY_ID_HOTPLUG 0x06
+#define EFI_PCI_CAPABILITY_ID_SHPC    0x0C
 
 ///
 /// Capabilities List Header
@@ -644,18 +645,6 @@ typedef struct {
   UINT8 CapabilityID;
   UINT8 NextItemPtr;
 } EFI_PCI_CAPABILITY_HDR;
-
-///
-/// Power Management Register Block Definition 
-/// Section 3.2, PCI Power Management Interface Specifiction, Revision 1.2
-///
-typedef struct {
-  EFI_PCI_CAPABILITY_HDR  Hdr;
-  UINT16                  PMC;
-  UINT16                  PMCSR;
-  UINT8                   BridgeExtention;
-  UINT8                   Data;
-} EFI_PCI_CAPABILITY_PMI;
 
 ///
 /// PMC - Power Management Capabilities
@@ -684,7 +673,9 @@ typedef union {
 typedef union {
   struct {
     UINT16 PowerState : 2;
-    UINT16 Reserved : 6;
+    UINT16 ReservedForPciExpress : 1;
+    UINT16 NoSoftReset : 1;
+    UINT16 Reserved : 4;
     UINT16 PmeEnable : 1;
     UINT16 DataSelect : 4;
     UINT16 DataScale : 2;
@@ -692,6 +683,36 @@ typedef union {
   } Bits;
   UINT16 Data;
 } EFI_PCI_PMCSR;
+
+#define PCI_POWER_STATE_D0     0
+#define PCI_POWER_STATE_D1     1
+#define PCI_POWER_STATE_D2     2
+#define PCI_POWER_STATE_D3_HOT 3
+
+///
+/// PMCSR_BSE - PMCSR PCI-to-PCI Bridge Support Extensions
+/// Section 3.2.5, PCI Power Management Interface Specifiction, Revision 1.2
+///
+typedef union {
+  struct {
+    UINT8 Reserved : 6;
+    UINT8 B2B3 : 1;
+    UINT8 BusPowerClockControl : 1;
+  } Bits;
+  UINT8   Uint8;
+} EFI_PCI_PMCSR_BSE;
+
+///
+/// Power Management Register Block Definition
+/// Section 3.2, PCI Power Management Interface Specifiction, Revision 1.2
+///
+typedef struct {
+  EFI_PCI_CAPABILITY_HDR  Hdr;
+  EFI_PCI_PMC             PMC;
+  EFI_PCI_PMCSR           PMCSR;
+  EFI_PCI_PMCSR_BSE       BridgeExtention;
+  UINT8                   Data;
+} EFI_PCI_CAPABILITY_PMI;
 
 ///
 /// A.G.P Capability

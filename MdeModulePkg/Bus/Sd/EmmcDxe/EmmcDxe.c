@@ -68,6 +68,11 @@ EMMC_PARTITION mEmmcPartitionTemplate = {
     EmmcSecurityProtocolIn,
     EmmcSecurityProtocolOut
   },
+  {                            // EraseBlock
+    EFI_ERASE_BLOCK_PROTOCOL_REVISION,
+    1,
+    EmmcEraseBlocks
+  },
   {
     NULL,
     NULL
@@ -226,7 +231,7 @@ GetEmmcModelName (
   String[sizeof (Cid->OemId) + sizeof (Cid->ProductName)] = ' ';
   CopyMem (String + sizeof (Cid->OemId) + sizeof (Cid->ProductName) + 1, Cid->ProductSerialNumber, sizeof (Cid->ProductSerialNumber));
 
-  AsciiStrToUnicodeStr (String, Device->ModelName);
+  AsciiStrToUnicodeStrS (String, Device->ModelName, sizeof (Device->ModelName) / sizeof (Device->ModelName[0]));
 
   return EFI_SUCCESS;
 }
@@ -369,6 +374,16 @@ DiscoverAllPartitions (
       Partition->Enable = TRUE;
       Partition->BlockMedia.LastBlock = DivU64x32 (Capacity, Partition->BlockMedia.BlockSize) - 1;
     }
+
+    if ((ExtCsd->EraseGroupDef & BIT0) == 0) {
+      if (Csd->WriteBlLen < 9) {
+        Partition->EraseBlock.EraseLengthGranularity = 1;
+      } else {
+        Partition->EraseBlock.EraseLengthGranularity = (Csd->EraseGrpMult + 1) * (Csd->EraseGrpSize + 1) * (1 << (Csd->WriteBlLen - 9));
+      }
+    } else {
+      Partition->EraseBlock.EraseLengthGranularity = 1024 * ExtCsd->HcEraseGrpSize;
+    }
   }
 
   return EFI_SUCCESS;
@@ -428,53 +443,60 @@ InstallProtocolOnPartition (
     //
     // Install BlkIo/BlkIo2/Ssp for the specified partition
     //
-    Status = gBS->InstallMultipleProtocolInterfaces (
-                    &Partition->Handle,
-                    &gEfiDevicePathProtocolGuid,
-                    Partition->DevicePath,
-                    &gEfiBlockIoProtocolGuid,
-                    &Partition->BlockIo,
-                    &gEfiBlockIo2ProtocolGuid,
-                    &Partition->BlockIo2,
-                    NULL
-                    );
-   if (EFI_ERROR (Status)) {
-      goto Error;
-    }
-
-    if (((Partition->PartitionType == EmmcPartitionUserData) ||
-        (Partition->PartitionType == EmmcPartitionBoot1) ||
-        (Partition->PartitionType == EmmcPartitionBoot2)) &&
-        ((Device->Csd.Ccc & BIT10) != 0)) {
-      Status = gBS->InstallProtocolInterface (
+    if (Partition->PartitionType != EmmcPartitionRPMB) {
+      Status = gBS->InstallMultipleProtocolInterfaces (
                       &Partition->Handle,
-                      &gEfiStorageSecurityCommandProtocolGuid,
-                      EFI_NATIVE_INTERFACE,
-                      &Partition->StorageSecurity
+                      &gEfiDevicePathProtocolGuid,
+                      Partition->DevicePath,
+                      &gEfiBlockIoProtocolGuid,
+                      &Partition->BlockIo,
+                      &gEfiBlockIo2ProtocolGuid,
+                      &Partition->BlockIo2,
+                      &gEfiEraseBlockProtocolGuid,
+                      &Partition->EraseBlock,
+                      NULL
                       );
       if (EFI_ERROR (Status)) {
-        gBS->UninstallMultipleProtocolInterfaces (
-               &Partition->Handle,
-               &gEfiDevicePathProtocolGuid,
-               Partition->DevicePath,
-               &gEfiBlockIoProtocolGuid,
-               &Partition->BlockIo,
-               &gEfiBlockIo2ProtocolGuid,
-               &Partition->BlockIo2,
-               NULL
-               );
         goto Error;
       }
+
+      if (((Partition->PartitionType == EmmcPartitionUserData) ||
+          (Partition->PartitionType == EmmcPartitionBoot1) ||
+          (Partition->PartitionType == EmmcPartitionBoot2)) &&
+          ((Device->Csd.Ccc & BIT10) != 0)) {
+        Status = gBS->InstallProtocolInterface (
+                        &Partition->Handle,
+                        &gEfiStorageSecurityCommandProtocolGuid,
+                        EFI_NATIVE_INTERFACE,
+                        &Partition->StorageSecurity
+                        );
+        if (EFI_ERROR (Status)) {
+          gBS->UninstallMultipleProtocolInterfaces (
+                 &Partition->Handle,
+                 &gEfiDevicePathProtocolGuid,
+                 Partition->DevicePath,
+                 &gEfiBlockIoProtocolGuid,
+                 &Partition->BlockIo,
+                 &gEfiBlockIo2ProtocolGuid,
+                 &Partition->BlockIo2,
+                 &gEfiEraseBlockProtocolGuid,
+                 &Partition->EraseBlock,
+                 NULL
+                 );
+          goto Error;
+        }
+      }
+
+      gBS->OpenProtocol (
+             Device->Private->Controller,
+             &gEfiSdMmcPassThruProtocolGuid,
+             (VOID **) &(Device->Private->PassThru),
+             Device->Private->DriverBindingHandle,
+             Partition->Handle,
+             EFI_OPEN_PROTOCOL_BY_CHILD_CONTROLLER
+             );    
     }
 
-    gBS->OpenProtocol (
-           Device->Private->Controller,
-           &gEfiSdMmcPassThruProtocolGuid,
-           (VOID **) &(Device->Private->PassThru),
-           Device->Private->DriverBindingHandle,
-           Partition->Handle,
-           EFI_OPEN_PROTOCOL_BY_CHILD_CONTROLLER
-           );
   } else {
     Status = EFI_INVALID_PARAMETER;
   }
@@ -492,6 +514,7 @@ Error:
 
   @param[in]  Private             The EMMC driver private data structure.
   @param[in]  Slot                The slot number to check device present.
+  @param[in]  RemainingDevicePath The pointer to the remaining device path.
 
   @retval EFI_SUCCESS             Successfully to discover the device and attach
                                   SdMmcIoProtocol to it.
@@ -1079,6 +1102,8 @@ EmmcDxeDriverBindingStop (
                     &Partition->BlockIo,
                     &gEfiBlockIo2ProtocolGuid,
                     &Partition->BlockIo2,
+                    &gEfiEraseBlockProtocolGuid,
+                    &Partition->EraseBlock,
                     NULL
                     );
     if (EFI_ERROR (Status)) {

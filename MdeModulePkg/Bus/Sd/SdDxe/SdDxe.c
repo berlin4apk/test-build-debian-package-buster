@@ -64,6 +64,11 @@ SD_DEVICE mSdDeviceTemplate = {
     0,                         // IoAlign
     0                          // LastBlock
   },
+  {                            // EraseBlock
+    EFI_ERASE_BLOCK_PROTOCOL_REVISION,
+    1,
+    SdEraseBlocks
+  },
   {                            // Queue
     NULL,
     NULL
@@ -156,7 +161,7 @@ GetSdModelName (
   String[sizeof (Cid->OemId) + sizeof (Cid->ProductName)] = ' ';
   CopyMem (String + sizeof (Cid->OemId) + sizeof (Cid->ProductName) + 1, Cid->ProductSerialNumber, sizeof (Cid->ProductSerialNumber));
 
-  AsciiStrToUnicodeStr (String, Device->ModelName);
+  AsciiStrToUnicodeStrS (String, Device->ModelName, sizeof (Device->ModelName) / sizeof (Device->ModelName[0]));
 
   return EFI_SUCCESS;
 }
@@ -246,6 +251,12 @@ DiscoverUserArea (
   Device->BlockMedia.MediaPresent     = TRUE;
   Device->BlockMedia.LogicalPartition = FALSE;
   Device->BlockMedia.LastBlock        = DivU64x32 (Capacity, Device->BlockMedia.BlockSize) - 1;
+
+  if (Csd->EraseBlkEn) {
+    Device->EraseBlock.EraseLengthGranularity = 1;
+  } else {
+    Device->EraseBlock.EraseLengthGranularity = (Csd->SectorSize + 1) * (1 << (Csd->WriteBlLen - 9));
+  }
 
   return Status;
 }
@@ -369,6 +380,8 @@ DiscoverSdDevice (
                   &Device->BlockIo,
                   &gEfiBlockIo2ProtocolGuid,
                   &Device->BlockIo2,
+                  &gEfiEraseBlockProtocolGuid,
+                  &Device->EraseBlock,
                   NULL
                   );
 
@@ -787,7 +800,7 @@ SdDxeDriverBindingStop (
     //
     // Free all on-going async tasks.
     //
-    OldTpl = gBS->RaiseTPL (TPL_CALLBACK);
+    OldTpl = gBS->RaiseTPL (TPL_NOTIFY);
     for (Link = GetFirstNode (&Device->Queue);
          !IsNull (&Device->Queue, Link);
          Link = NextLink) {
@@ -825,6 +838,8 @@ SdDxeDriverBindingStop (
                     &Device->BlockIo,
                     &gEfiBlockIo2ProtocolGuid,
                     &Device->BlockIo2,
+                    &gEfiEraseBlockProtocolGuid,
+                    &Device->EraseBlock,
                     NULL
                     );
     if (EFI_ERROR (Status)) {

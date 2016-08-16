@@ -17,12 +17,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 #include "SmmProfileInternal.h"
 
-///
-/// MSR Register Index
-///
-#define MSR_IA32_MISC_ENABLE                  0x1A0
-#define   B_XD_DISABLE_BIT                    BIT34
-
 //
 // External functions
 //
@@ -96,13 +90,10 @@ PageFaultIdtHandlerSmmProfile (
 /**
   Check if XD feature is supported by a processor.
 
-  @param[in,out] Buffer  The pointer to private data buffer.
-
 **/
 VOID
-EFIAPI
 CheckFeatureSupported (
-  IN OUT VOID   *Buffer
+  VOID
   );
 
 /**
@@ -120,15 +111,6 @@ ActivateXd (
 **/
 VOID
 InitPaging (
-  VOID
-  );
-
-/**
-  Check if XD and BTS features are supported by all processors.
-
-**/
-VOID
-CheckProcessorFeature (
   VOID
   );
 

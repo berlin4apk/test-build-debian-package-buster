@@ -466,7 +466,10 @@ EfiShellGetFilePathFromDevicePath(
         ASSERT((PathForReturn == NULL && PathSize == 0) || (PathForReturn != NULL));
 
         AlignedNode = AllocateCopyPool (DevicePathNodeLength(FilePath), FilePath);
-        ASSERT (AlignedNode != NULL);
+        if (AlignedNode == NULL) {
+          FreePool (PathForReturn);
+          return NULL;
+        }
 
         // File Path Device Path Nodes 'can optionally add a "\" separator to
         //  the beginning and/or the end of the Path Name string.'
@@ -1129,13 +1132,18 @@ EfiShellCreateFile(
 {
   EFI_DEVICE_PATH_PROTOCOL  *DevicePath;
   EFI_STATUS                Status;
+  BOOLEAN                   Volatile;
 
   //
   // Is this for an environment variable
   // do we start with >v
   //
   if (StrStr(FileName, L">v") == FileName) {
-    if (!IsVolatileEnv(FileName+2)) {
+    Status = IsVolatileEnv (FileName + 2, &Volatile);
+    if (EFI_ERROR (Status)) {
+      return Status;
+    }
+    if (!Volatile) {
       return (EFI_INVALID_PARAMETER);
     }
     *FileHandle = CreateFileInterfaceEnv(FileName+2);
@@ -1245,6 +1253,7 @@ EfiShellOpenFileByName(
 {
   EFI_DEVICE_PATH_PROTOCOL        *DevicePath;
   EFI_STATUS                      Status;
+  BOOLEAN                         Volatile;
 
   *FileHandle = NULL;
 
@@ -1304,7 +1313,11 @@ EfiShellOpenFileByName(
   // do we start with >v
   //
   if (StrStr(FileName, L">v") == FileName) {
-    if (!IsVolatileEnv(FileName+2) &&
+    Status = IsVolatileEnv (FileName + 2, &Volatile);
+    if (EFI_ERROR (Status)) {
+      return Status;
+    }
+    if (!Volatile &&
         ((OpenMode & EFI_FILE_MODE_WRITE) != 0)) {
       return (EFI_INVALID_PARAMETER);
     }
@@ -1441,6 +1454,7 @@ InternalShellExecuteDevicePath(
   }
 
   InitializeListHead(&OrigEnvs);
+  ZeroMem(&ShellParamsProtocol, sizeof(EFI_SHELL_PARAMETERS_PROTOCOL));
 
   NewHandle = NULL;
   
@@ -1483,6 +1497,20 @@ InternalShellExecuteDevicePath(
     EFI_OPEN_PROTOCOL_GET_PROTOCOL);
 
   if (!EFI_ERROR(Status)) {
+    //
+    // If the image is not an app abort it.
+    //
+    if (LoadedImage->ImageCodeType != EfiLoaderCode){
+      ShellPrintHiiEx(
+        -1, 
+        -1, 
+        NULL,
+        STRING_TOKEN (STR_SHELL_IMAGE_NOT_APP),
+        ShellInfoObject.HiiHandle
+      );
+      goto UnloadImage;
+    }
+
     ASSERT(LoadedImage->LoadOptionsSize == 0);
     if (NewCmdLine != NULL) {
       LoadedImage->LoadOptionsSize  = (UINT32)StrSize(NewCmdLine);
@@ -2117,6 +2145,14 @@ EfiShellFindFilesInDir(
       ; !EFI_ERROR(Status) && !NoFile
       ; Status = FileHandleFindNextFile(FileDirHandle, FileInfo, &NoFile)
      ){
+    if (ShellFileList == NULL) {
+      ShellFileList = (EFI_SHELL_FILE_INFO*)AllocateZeroPool(sizeof(EFI_SHELL_FILE_INFO));
+      if (ShellFileList == NULL) {
+        SHELL_FREE_NON_NULL (BasePath);
+        return EFI_OUT_OF_RESOURCES;
+      }
+      InitializeListHead(&ShellFileList->Link);
+    }
     //
     // allocate a new EFI_SHELL_FILE_INFO and populate it...
     //
@@ -2126,11 +2162,12 @@ EfiShellFindFilesInDir(
       FileInfo->FileName,
       NULL,         // no handle since not open
       FileInfo);
-
-    if (ShellFileList == NULL) {
-      ShellFileList = (EFI_SHELL_FILE_INFO*)AllocateZeroPool(sizeof(EFI_SHELL_FILE_INFO));
-      ASSERT(ShellFileList != NULL);
-      InitializeListHead(&ShellFileList->Link);
+    if (ShellFileListItem == NULL) {
+      Status = EFI_OUT_OF_RESOURCES;
+      //
+      // Free resources outside the loop.
+      //
+      break;
     }
     InsertTailList(&ShellFileList->Link, &ShellFileListItem->Link);
   }
@@ -2335,7 +2372,10 @@ ShellSearchHandle(
      ; NextFilePatternStart++);
 
   CurrentFilePattern = AllocateZeroPool((NextFilePatternStart-FilePattern+1)*sizeof(CHAR16));
-  ASSERT(CurrentFilePattern != NULL);
+  if (CurrentFilePattern == NULL) {
+    return EFI_OUT_OF_RESOURCES;
+  }
+
   StrnCpyS(CurrentFilePattern, NextFilePatternStart-FilePattern+1, FilePattern, NextFilePatternStart-FilePattern);
 
   if (CurrentFilePattern[0]   == CHAR_NULL
@@ -2394,15 +2434,14 @@ ShellSearchHandle(
          ){
         if (UnicodeCollation->MetaiMatch(UnicodeCollation, (CHAR16*)ShellInfoNode->FileName, CurrentFilePattern)){
           if (ShellInfoNode->FullName != NULL && StrStr(ShellInfoNode->FullName, L":") == NULL) {
-            Size = StrSize(ShellInfoNode->FullName);
-            Size += StrSize(MapName) + sizeof(CHAR16);
+            Size = StrSize (ShellInfoNode->FullName) + StrSize (MapName);
             NewFullName = AllocateZeroPool(Size);
             if (NewFullName == NULL) {
               Status = EFI_OUT_OF_RESOURCES;
             } else {
-              StrCpyS(NewFullName, Size/sizeof(CHAR16), MapName);
-              StrCatS(NewFullName, Size/sizeof(CHAR16), ShellInfoNode->FullName+1);
-              FreePool((VOID*)ShellInfoNode->FullName);
+              StrCpyS(NewFullName, Size / sizeof(CHAR16), MapName);
+              StrCatS(NewFullName, Size / sizeof(CHAR16), ShellInfoNode->FullName);
+              FreePool ((VOID *) ShellInfoNode->FullName);
               ShellInfoNode->FullName = NewFullName;
             }
           }
@@ -2444,7 +2483,6 @@ ShellSearchHandle(
             // copy the information we need into a new Node
             //
             NewShellNode = InternalDuplicateShellFileInfo(ShellInfoNode, FALSE);
-            ASSERT(NewShellNode != NULL);
             if (NewShellNode == NULL) {
               Status = EFI_OUT_OF_RESOURCES;
             }
@@ -2533,8 +2571,8 @@ EfiShellFindFiles(
 
   PatternCopy = PathCleanUpDirectories(PatternCopy);
 
-  Count = StrStr(PatternCopy, L":") - PatternCopy;
-  Count += 2;
+  Count = StrStr(PatternCopy, L":") - PatternCopy + 1;
+  ASSERT (Count <= StrLen (PatternCopy));
 
   ASSERT(MapName == NULL);
   MapName = StrnCatGrow(&MapName, NULL, PatternCopy, Count);
@@ -2691,7 +2729,6 @@ EfiShellGetEnvEx(
   EFI_STATUS  Status;
   VOID        *Buffer;
   UINTN       Size;
-  LIST_ENTRY  List;
   ENV_VAR_LIST *Node;
   CHAR16      *CurrentWriteLocation;
 
@@ -2699,21 +2736,13 @@ EfiShellGetEnvEx(
   Buffer = NULL;
 
   if (Name == NULL) {
-    //
-    // Get all our environment variables
-    //
-    InitializeListHead(&List);
-    Status = GetEnvironmentVariableList(&List);
-    if (EFI_ERROR(Status)){
-      return (NULL);
-    }
 
     //
     // Build the semi-colon delimited list. (2 passes)
     //
-    for ( Node = (ENV_VAR_LIST*)GetFirstNode(&List)
-      ; !IsNull(&List, &Node->Link)
-      ; Node = (ENV_VAR_LIST*)GetNextNode(&List, &Node->Link)
+    for ( Node = (ENV_VAR_LIST*)GetFirstNode(&gShellEnvVarList.Link)
+      ; !IsNull(&gShellEnvVarList.Link, &Node->Link)
+      ; Node = (ENV_VAR_LIST*)GetNextNode(&gShellEnvVarList.Link, &Node->Link)
      ){
       ASSERT(Node->Key != NULL);
       Size += StrSize(Node->Key);
@@ -2723,16 +2752,13 @@ EfiShellGetEnvEx(
 
     Buffer = AllocateZeroPool(Size);
     if (Buffer == NULL) {
-      if (!IsListEmpty (&List)) {
-        FreeEnvironmentVariableList(&List);
-      }
       return (NULL);
     }
     CurrentWriteLocation = (CHAR16*)Buffer;
 
-    for ( Node = (ENV_VAR_LIST*)GetFirstNode(&List)
-      ; !IsNull(&List, &Node->Link)
-      ; Node = (ENV_VAR_LIST*)GetNextNode(&List, &Node->Link)
+    for ( Node = (ENV_VAR_LIST*)GetFirstNode(&gShellEnvVarList.Link)
+      ; !IsNull(&gShellEnvVarList.Link, &Node->Link)
+      ; Node = (ENV_VAR_LIST*)GetNextNode(&gShellEnvVarList.Link, &Node->Link)
      ){
       ASSERT(Node->Key != NULL);
       StrCpyS( CurrentWriteLocation, 
@@ -2742,37 +2768,43 @@ EfiShellGetEnvEx(
       CurrentWriteLocation += StrLen(CurrentWriteLocation) + 1;
     }
 
-    //
-    // Free the list...
-    //
-    if (!IsListEmpty (&List)) {
-      FreeEnvironmentVariableList(&List);
-    }
   } else {
     //
     // We are doing a specific environment variable
     //
+    Status = ShellFindEnvVarInList(Name, (CHAR16**)&Buffer, &Size, Attributes);
 
-    //
-    // get the size we need for this EnvVariable
-    //
-    Status = SHELL_GET_ENVIRONMENT_VARIABLE_AND_ATTRIBUTES(Name, Attributes, &Size, Buffer);
-    if (Status == EFI_BUFFER_TOO_SMALL) {
+    if (EFI_ERROR(Status)){
       //
-      // Allocate the space and recall the get function
+      // get the size we need for this EnvVariable
       //
-      Buffer = AllocateZeroPool(Size);
       Status = SHELL_GET_ENVIRONMENT_VARIABLE_AND_ATTRIBUTES(Name, Attributes, &Size, Buffer);
-    }
-    //
-    // we didnt get it (might not exist)
-    // free the memory if we allocated any and return NULL
-    //
-    if (EFI_ERROR(Status)) {
-      if (Buffer != NULL) {
-        FreePool(Buffer);
+      if (Status == EFI_BUFFER_TOO_SMALL) {
+        //
+        // Allocate the space and recall the get function
+        //
+        Buffer = AllocateZeroPool(Size);
+        Status = SHELL_GET_ENVIRONMENT_VARIABLE_AND_ATTRIBUTES(Name, Attributes, &Size, Buffer);
       }
-      return (NULL);
+      //
+      // we didnt get it (might not exist)
+      // free the memory if we allocated any and return NULL
+      //
+      if (EFI_ERROR(Status)) {
+        if (Buffer != NULL) {
+          FreePool(Buffer);
+        }
+        return (NULL);
+      } else {
+        //
+        // If we did not find the environment variable in the gShellEnvVarList
+        // but get it from UEFI variable storage successfully then we need update
+        // the gShellEnvVarList.
+        //
+        ShellFreeEnvVarList ();
+        Status = ShellInitEnvVarList ();
+        ASSERT (Status == EFI_SUCCESS);
+      }
     }
   }
 
@@ -2832,16 +2864,29 @@ InternalEfiShellSetEnv(
   IN BOOLEAN Volatile
   )
 {
+  EFI_STATUS      Status;
+
   if (Value == NULL || StrLen(Value) == 0) {
-    return (SHELL_DELETE_ENVIRONMENT_VARIABLE(Name));
+    Status = SHELL_DELETE_ENVIRONMENT_VARIABLE(Name);
+    if (!EFI_ERROR(Status)) {
+      ShellRemvoeEnvVarFromList(Name);
+    }
   } else {
     SHELL_DELETE_ENVIRONMENT_VARIABLE(Name);
-    if (Volatile) {
-      return (SHELL_SET_ENVIRONMENT_VARIABLE_V(Name, StrSize(Value), Value));
-    } else {
-      return (SHELL_SET_ENVIRONMENT_VARIABLE_NV(Name, StrSize(Value), Value));
+    Status = ShellAddEnvVarToList(
+               Name, Value, StrSize(Value),
+               EFI_VARIABLE_BOOTSERVICE_ACCESS | (Volatile ? 0 : EFI_VARIABLE_NON_VOLATILE)
+               );
+    if (!EFI_ERROR (Status)) {
+      Status = Volatile
+             ? SHELL_SET_ENVIRONMENT_VARIABLE_V(Name, StrSize(Value), Value)
+             : SHELL_SET_ENVIRONMENT_VARIABLE_NV(Name, StrSize(Value), Value);
+      if (EFI_ERROR (Status)) {
+        ShellRemvoeEnvVarFromList(Name);
+      }
     }
   }
+  return Status;
 }
 
 /**
@@ -3184,7 +3229,9 @@ EfiShellGetHelpText(
     && (Command[StrLen(Command)-4] == L'.')
     ) {
       FixCommand = AllocateZeroPool(StrSize(Command) - 4 * sizeof (CHAR16));
-      ASSERT(FixCommand != NULL);
+      if (FixCommand == NULL) {
+        return EFI_OUT_OF_RESOURCES;
+      }
 
       StrnCpyS( FixCommand, 
                 (StrSize(Command) - 4 * sizeof (CHAR16))/sizeof(CHAR16), 
@@ -3363,7 +3410,9 @@ EfiShellGetAlias(
   // Convert to lowercase to make aliases case-insensitive
   if (Alias != NULL) {
     AliasLower = AllocateCopyPool (StrSize (Alias), Alias);
-    ASSERT (AliasLower != NULL);
+    if (AliasLower == NULL) {
+      return NULL;
+    }
     ToLower (AliasLower);
 
     if (Volatile == NULL) {
@@ -3427,7 +3476,9 @@ InternalSetAlias(
   // Convert to lowercase to make aliases case-insensitive
   if (Alias != NULL) {
     AliasLower = AllocateCopyPool (StrSize (Alias), Alias);
-    ASSERT (AliasLower != NULL);
+    if (AliasLower == NULL) {
+      return EFI_OUT_OF_RESOURCES;
+    }
     ToLower (AliasLower);
   } else {
     AliasLower = NULL;
@@ -3586,6 +3637,7 @@ CreatePopulateInstallShellProtocol (
   EFI_HANDLE                  *Buffer;
   UINTN                       HandleCounter;
   SHELL_PROTOCOL_HANDLE_LIST  *OldProtocolNode;
+  EFI_SHELL_PROTOCOL          *OldShell;
 
   if (NewShell == NULL) {
     return (EFI_INVALID_PARAMETER);
@@ -3637,20 +3689,27 @@ CreatePopulateInstallShellProtocol (
     // now overwrite each of them, but save the info to restore when we end.
     //
     for (HandleCounter = 0 ; HandleCounter < (BufferSize/sizeof(EFI_HANDLE)) ; HandleCounter++) {
-      OldProtocolNode = AllocateZeroPool(sizeof(SHELL_PROTOCOL_HANDLE_LIST));
-      ASSERT(OldProtocolNode != NULL);
       Status = gBS->OpenProtocol(Buffer[HandleCounter],
                                 &gEfiShellProtocolGuid,
-                                (VOID **) &(OldProtocolNode->Interface),
+                                (VOID **) &OldShell,
                                 gImageHandle,
                                 NULL,
                                 EFI_OPEN_PROTOCOL_GET_PROTOCOL
                                );
       if (!EFI_ERROR(Status)) {
+        OldProtocolNode = AllocateZeroPool(sizeof(SHELL_PROTOCOL_HANDLE_LIST));
+        if (OldProtocolNode == NULL) {
+          if (!IsListEmpty (&ShellInfoObject.OldShellList.Link)) {
+            CleanUpShellProtocol (&mShellProtocol);
+          }
+          Status = EFI_OUT_OF_RESOURCES;
+          break;
+        }
         //
         // reinstall over the old one...
         //
-        OldProtocolNode->Handle = Buffer[HandleCounter];
+        OldProtocolNode->Handle    = Buffer[HandleCounter];
+        OldProtocolNode->Interface = OldShell;
         Status = gBS->ReinstallProtocolInterface(
                             OldProtocolNode->Handle,
                             &gEfiShellProtocolGuid,
@@ -3703,38 +3762,50 @@ CreatePopulateInstallShellProtocol (
   @retval EFI_SUCCESS       The operation was successful.
 **/
 EFI_STATUS
-EFIAPI
 CleanUpShellProtocol (
   IN OUT EFI_SHELL_PROTOCOL  *NewShell
   )
 {
-  EFI_STATUS                        Status;
   SHELL_PROTOCOL_HANDLE_LIST        *Node2;
-  EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL *SimpleEx;
 
   //
   // if we need to restore old protocols...
   //
   if (!IsListEmpty(&ShellInfoObject.OldShellList.Link)) {
-    for (Node2 = (SHELL_PROTOCOL_HANDLE_LIST *)GetFirstNode(&ShellInfoObject.OldShellList.Link)
+    for (Node2 = (SHELL_PROTOCOL_HANDLE_LIST *) GetFirstNode (&ShellInfoObject.OldShellList.Link)
          ; !IsListEmpty (&ShellInfoObject.OldShellList.Link)
-         ; Node2 = (SHELL_PROTOCOL_HANDLE_LIST *)GetFirstNode(&ShellInfoObject.OldShellList.Link)
-        ){
-      RemoveEntryList(&Node2->Link);
-      Status = gBS->ReinstallProtocolInterface(Node2->Handle,
-                                               &gEfiShellProtocolGuid,
-                                               NewShell,
-                                               Node2->Interface);
-      FreePool(Node2);
+         ; Node2 = (SHELL_PROTOCOL_HANDLE_LIST *) GetFirstNode (&ShellInfoObject.OldShellList.Link)
+         ) {
+      RemoveEntryList (&Node2->Link);
+      gBS->ReinstallProtocolInterface (Node2->Handle, &gEfiShellProtocolGuid, NewShell, Node2->Interface);
+      FreePool (Node2);
     }
   } else {
     //
     // no need to restore
     //
-    Status = gBS->UninstallProtocolInterface(gImageHandle,
-                                             &gEfiShellProtocolGuid,
-                                             NewShell);
+    gBS->UninstallProtocolInterface (gImageHandle, &gEfiShellProtocolGuid, NewShell);
   }
+  return EFI_SUCCESS;
+}
+
+/**
+  Cleanup the shell environment.
+
+  @param[in, out] NewShell   The pointer to the new shell protocol structure.
+
+  @retval EFI_SUCCESS       The operation was successful.
+**/
+EFI_STATUS
+CleanUpShellEnvironment (
+  IN OUT EFI_SHELL_PROTOCOL  *NewShell
+  )
+{
+  EFI_STATUS                        Status;
+  EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL *SimpleEx;
+  
+  CleanUpShellProtocol (NewShell);
+
   Status = gBS->CloseEvent(NewShell->ExecutionBreak);
   NewShell->ExecutionBreak = NULL;
 

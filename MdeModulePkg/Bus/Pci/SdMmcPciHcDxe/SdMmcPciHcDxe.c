@@ -4,7 +4,7 @@
 
   It would expose EFI_SD_MMC_PASS_THRU_PROTOCOL for upper layer use.
 
-  Copyright (c) 2015, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -51,8 +51,8 @@ SD_MMC_HC_PRIVATE_DATA gSdMmcPciHcTemplate = {
                                     // Queue
   INITIALIZE_LIST_HEAD_VARIABLE (gSdMmcPciHcTemplate.Queue),
   {                                 // Slot
-    {0, UnknownSlot, 0, 0}, {0, UnknownSlot, 0, 0}, {0, UnknownSlot, 0, 0},
-    {0, UnknownSlot, 0, 0}, {0, UnknownSlot, 0, 0}, {0, UnknownSlot, 0, 0}
+    {0, UnknownSlot, 0, 0, 0}, {0, UnknownSlot, 0, 0, 0}, {0, UnknownSlot, 0, 0, 0},
+    {0, UnknownSlot, 0, 0, 0}, {0, UnknownSlot, 0, 0, 0}, {0, UnknownSlot, 0, 0, 0}
   },
   {                                 // Capability
     {0},
@@ -162,7 +162,7 @@ ProcessAsyncTaskList (
   Link   = GetFirstNode (&Private->Queue);
   if (!IsNull (&Private->Queue, Link)) {
     Trb = SD_MMC_HC_TRB_FROM_THIS (Link);
-    if (Private->Slot[Trb->Slot].MediaPresent == FALSE) {
+    if (!Private->Slot[Trb->Slot].MediaPresent) {
       Status = EFI_NO_MEDIA;
       goto Done;
     }
@@ -238,18 +238,21 @@ SdMmcPciHcEnumerateDevice (
   LIST_ENTRY                          *Link;
   LIST_ENTRY                          *NextLink;
   SD_MMC_HC_TRB                       *Trb;
+  EFI_TPL                             OldTpl;
 
   Private = (SD_MMC_HC_PRIVATE_DATA*)Context;
 
   for (Slot = 0; Slot < SD_MMC_HC_MAX_SLOT; Slot++) {
     if ((Private->Slot[Slot].Enable) && (Private->Slot[Slot].SlotType == RemovableSlot)) {
       Status = SdMmcHcCardDetect (Private->PciIo, Slot, &MediaPresent);
-      if ((Status == EFI_MEDIA_CHANGED) && (MediaPresent == FALSE)) {
+      if ((Status == EFI_MEDIA_CHANGED) && !MediaPresent) {
         DEBUG ((EFI_D_INFO, "SdMmcPciHcEnumerateDevice: device disconnected at slot %d of pci %p\n", Slot, Private->PciIo));
         Private->Slot[Slot].MediaPresent = FALSE;
+        Private->Slot[Slot].Initialized  = FALSE;
         //
         // Signal all async task events at the slot with EFI_NO_MEDIA status.
         //
+        OldTpl = gBS->RaiseTPL (TPL_NOTIFY);
         for (Link = GetFirstNode (&Private->Queue);
              !IsNull (&Private->Queue, Link);
              Link = NextLink) {
@@ -262,6 +265,7 @@ SdMmcPciHcEnumerateDevice (
             SdMmcFreeTrb (Trb);
           }
         }
+        gBS->RestoreTPL (OldTpl);
         //
         // Notify the upper layer the connect state change through ReinstallProtocolInterface.
         //
@@ -272,8 +276,15 @@ SdMmcPciHcEnumerateDevice (
               &Private->PassThru
               );
       }
-      if ((Status == EFI_MEDIA_CHANGED) && (MediaPresent == TRUE)) {
+      if ((Status == EFI_MEDIA_CHANGED) && MediaPresent) {
         DEBUG ((EFI_D_INFO, "SdMmcPciHcEnumerateDevice: device connected at slot %d of pci %p\n", Slot, Private->PciIo));
+        //
+        // Reset the specified slot of the SD/MMC Pci Host Controller
+        //
+        Status = SdMmcHcReset (Private->PciIo, Slot);
+        if (EFI_ERROR (Status)) {
+          continue;
+        }
         //
         // Reinitialize slot and restart identification process for the new attached device
         //
@@ -283,6 +294,7 @@ SdMmcPciHcEnumerateDevice (
         }
 
         Private->Slot[Slot].MediaPresent = TRUE;
+        Private->Slot[Slot].Initialized  = TRUE;
         RoutineNum = sizeof (mCardTypeDetectRoutineTable) / sizeof (CARD_TYPE_DETECT_ROUTINE);
         for (Index = 0; Index < RoutineNum; Index++) {
           Routine = &mCardTypeDetectRoutineTable[Index];
@@ -292,6 +304,12 @@ SdMmcPciHcEnumerateDevice (
               break;
             }
           }
+        }
+        //
+        // This card doesn't get initialized correctly.
+        //
+        if (Index == RoutineNum) {
+          Private->Slot[Slot].Initialized = FALSE;
         }
 
         //
@@ -613,7 +631,9 @@ SdMmcPciHcDriverBindingStart (
     // Check whether there is a SD/MMC card attached
     //
     Status = SdMmcHcCardDetect (PciIo, Slot, &MediaPresent);
-    if ((Status == EFI_MEDIA_CHANGED) && (MediaPresent == FALSE)) {
+    if (EFI_ERROR (Status) && (Status != EFI_MEDIA_CHANGED)) {
+      continue;
+    } else if (!MediaPresent) {
       DEBUG ((EFI_D_ERROR, "SdMmcHcCardDetect: No device attached in Slot[%d]!!!\n", Slot));
       continue;
     }
@@ -624,6 +644,7 @@ SdMmcPciHcDriverBindingStart (
     }
 
     Private->Slot[Slot].MediaPresent = TRUE;
+    Private->Slot[Slot].Initialized  = TRUE;
     RoutineNum = sizeof (mCardTypeDetectRoutineTable) / sizeof (CARD_TYPE_DETECT_ROUTINE);
     for (Index = 0; Index < RoutineNum; Index++) {
       Routine = &mCardTypeDetectRoutineTable[Index];
@@ -634,6 +655,12 @@ SdMmcPciHcDriverBindingStart (
         }
       }
     }
+    //
+    // This card doesn't get initialized correctly.
+    //
+    if (Index == RoutineNum) {
+      Private->Slot[Slot].Initialized = FALSE;
+    }
   }
 
   //
@@ -641,7 +668,7 @@ SdMmcPciHcDriverBindingStart (
   //
   Status = gBS->CreateEvent (
                   EVT_TIMER | EVT_NOTIFY_SIGNAL,
-                  TPL_CALLBACK,
+                  TPL_NOTIFY,
                   ProcessAsyncTaskList,
                   Private,
                   &Private->TimerEvent
@@ -918,6 +945,10 @@ SdMmcPassThruPassThru (
     return EFI_NO_MEDIA;
   }
 
+  if (!Private->Slot[Slot].Initialized) {
+    return EFI_DEVICE_ERROR;
+  }
+
   Trb = SdMmcCreateTrb (Private, Slot, Packet, Event);
   if (Trb == NULL) {
     return EFI_OUT_OF_RESOURCES;
@@ -933,7 +964,7 @@ SdMmcPassThruPassThru (
   // Wait async I/O list is empty before execute sync I/O operation.
   //
   while (TRUE) {
-    OldTpl = gBS->RaiseTPL (TPL_CALLBACK);
+    OldTpl = gBS->RaiseTPL (TPL_NOTIFY);
     if (IsListEmpty (&Private->Queue)) {
       gBS->RestoreTPL (OldTpl);
       break;
@@ -1235,13 +1266,17 @@ SdMmcPassThruResetDevice (
     return EFI_INVALID_PARAMETER;
   }
 
-    if (!Private->Slot[Slot].MediaPresent) {
-      return EFI_NO_MEDIA;
-    }
+  if (!Private->Slot[Slot].MediaPresent) {
+    return EFI_NO_MEDIA;
+  }
+
+  if (!Private->Slot[Slot].Initialized) {
+    return EFI_DEVICE_ERROR;
+  }
   //
   // Free all async I/O requests in the queue
   //
-  OldTpl = gBS->RaiseTPL (TPL_CALLBACK);
+  OldTpl = gBS->RaiseTPL (TPL_NOTIFY);
 
   for (Link = GetFirstNode (&Private->Queue);
        !IsNull (&Private->Queue, Link);

@@ -213,7 +213,7 @@ ContainsSplit(
 
   FirstQuote    = FindNextInstance (CmdLine, L"\"", TRUE);
   SecondQuote   = NULL;
-  TempSpot      = FindFirstCharacter(CmdLine, L"|", L'^');
+  TempSpot      = ShellFindFirstCharacter(CmdLine, L"|", TRUE);
 
   if (FirstQuote == NULL    || 
       TempSpot == NULL      || 
@@ -236,7 +236,7 @@ ContainsSplit(
       continue;
     } else {
       FirstQuote = FindNextInstance (SecondQuote + 1, L"\"", TRUE);
-      TempSpot = FindFirstCharacter(TempSpot + 1, L"|", L'^');
+      TempSpot = ShellFindFirstCharacter(TempSpot + 1, L"|", TRUE);
       continue;
     } 
   }
@@ -342,6 +342,7 @@ UefiMain (
   UINTN                           Size;
   EFI_HANDLE                      ConInHandle;
   EFI_SIMPLE_TEXT_INPUT_PROTOCOL  *OldConIn;
+  SPLIT_LIST                      *Split;
 
   if (PcdGet8(PcdShellSupportLevel) > 3) {
     return (EFI_UNSUPPORTED);
@@ -444,6 +445,8 @@ UefiMain (
 
     Status = CommandInit();
     ASSERT_EFI_ERROR(Status);
+
+    Status = ShellInitEnvVarList ();
 
     //
     // Check the command line
@@ -664,7 +667,7 @@ FreeResources:
     if (ShellInfoObject.NewEfiShellProtocol->IsRootShell()){
       InternalEfiShellSetEnv(L"cwd", NULL, TRUE);
     }
-    CleanUpShellProtocol(ShellInfoObject.NewEfiShellProtocol);
+    CleanUpShellEnvironment (ShellInfoObject.NewEfiShellProtocol);
     DEBUG_CODE(ShellInfoObject.NewEfiShellProtocol = NULL;);
   }
 
@@ -673,7 +676,17 @@ FreeResources:
   }
 
   if (!IsListEmpty(&ShellInfoObject.SplitList.Link)){
-    ASSERT(FALSE); ///@todo finish this de-allocation.
+    ASSERT(FALSE); ///@todo finish this de-allocation (free SplitStdIn/Out when needed).
+
+    for ( Split = (SPLIT_LIST*)GetFirstNode (&ShellInfoObject.SplitList.Link)
+        ; !IsNull (&ShellInfoObject.SplitList.Link, &Split->Link)
+        ; Split = (SPLIT_LIST *)GetNextNode (&ShellInfoObject.SplitList.Link, &Split->Link)
+     ) {
+      RemoveEntryList (&Split->Link);
+      FreePool (Split);
+    }
+
+    DEBUG_CODE (InitializeListHead (&ShellInfoObject.SplitList.Link););
   }
 
   if (ShellInfoObject.ShellInitSettings.FileName != NULL) {
@@ -701,6 +714,9 @@ FreeResources:
     FreePool(ShellInfoObject.ConsoleInfo);
     DEBUG_CODE(ShellInfoObject.ConsoleInfo = NULL;);
   }
+
+  ShellFreeEnvVarList ();
+  ShellSetRawCmdLine (NULL);
 
   if (ShellCommandGetExit()) {
     return ((EFI_STATUS)ShellCommandGetExitCode());
@@ -900,12 +916,19 @@ ProcessCommandLine(
   // like a shell option (which is assumed to be `file-name`).
 
   Status = gBS->LocateProtocol (
-                  &gEfiUnicodeCollationProtocolGuid,
+                  &gEfiUnicodeCollation2ProtocolGuid,
                   NULL,
                   (VOID **) &UnicodeCollation
                   );
   if (EFI_ERROR (Status)) {
-    return Status;
+    Status = gBS->LocateProtocol (
+                    &gEfiUnicodeCollationProtocolGuid,
+                    NULL,
+                    (VOID **) &UnicodeCollation
+                    );
+    if (EFI_ERROR (Status)) {
+      return Status;
+    }
   }
 
   // Set default options
@@ -1297,7 +1320,7 @@ DoShellPrompt (
 **/
 VOID*
 EFIAPI
-AddBufferToFreeList(
+AddBufferToFreeList (
   VOID *Buffer
   )
 {
@@ -1307,10 +1330,13 @@ AddBufferToFreeList(
     return (NULL);
   }
 
-  BufferListEntry = AllocateZeroPool(sizeof(BUFFER_LIST));
-  ASSERT(BufferListEntry != NULL);
+  BufferListEntry = AllocateZeroPool (sizeof (BUFFER_LIST));
+  if (BufferListEntry == NULL) {
+    return NULL;
+  }
+
   BufferListEntry->Buffer = Buffer;
-  InsertTailList(&ShellInfoObject.BufferToFreeList.Link, &BufferListEntry->Link);
+  InsertTailList (&ShellInfoObject.BufferToFreeList.Link, &BufferListEntry->Link);
   return (Buffer);
 }
 
@@ -1369,9 +1395,15 @@ AddLineToCommandHistory(
 
 
   Node = AllocateZeroPool(sizeof(BUFFER_LIST));
-  ASSERT(Node != NULL);
-  Node->Buffer = AllocateCopyPool(StrSize(Buffer), Buffer);
-  ASSERT(Node->Buffer != NULL);
+  if (Node == NULL) {
+    return;
+  }
+
+  Node->Buffer = AllocateCopyPool (StrSize (Buffer), Buffer);
+  if (Node->Buffer == NULL) {
+    FreePool (Node);
+    return;
+  }
 
   for ( Walker = (BUFFER_LIST*)GetFirstNode(&ShellInfoObject.ViewingSettings.CommandHistory.Link)
       ; !IsNull(&ShellInfoObject.ViewingSettings.CommandHistory.Link, &Walker->Link)
@@ -1699,7 +1731,9 @@ RunSplitCommand(
   // make a SPLIT_LIST item and add to list
   //
   Split = AllocateZeroPool(sizeof(SPLIT_LIST));
-  ASSERT(Split != NULL);
+  if (Split == NULL) {
+    return EFI_OUT_OF_RESOURCES;
+  }
   Split->SplitStdIn   = StdIn;
   Split->SplitStdOut  = ConvertEfiFileProtocolToShellHandle(CreateFileInterfaceMem(Unicode), NULL);
   ASSERT(Split->SplitStdOut != NULL);
@@ -1732,11 +1766,12 @@ RunSplitCommand(
   //
   // Note that the original StdIn is now the StdOut...
   //
-  if (Split->SplitStdOut != NULL && Split->SplitStdOut != StdIn) {
+  if (Split->SplitStdOut != NULL) {
     ShellInfoObject.NewEfiShellProtocol->CloseFile(ConvertShellHandleToEfiFileProtocol(Split->SplitStdOut));
   }
   if (Split->SplitStdIn != NULL) {
     ShellInfoObject.NewEfiShellProtocol->CloseFile(ConvertShellHandleToEfiFileProtocol(Split->SplitStdIn));
+    FreePool (Split->SplitStdIn);
   }
 
   FreePool(Split);
@@ -1958,7 +1993,7 @@ IsValidSplit(
       return (EFI_OUT_OF_RESOURCES);
     }
     TempWalker = (CHAR16*)Temp;
-    if (!EFI_ERROR(GetNextParameter(&TempWalker, &FirstParameter, StrSize(CmdLine), TRUE))) {
+    if (!EFI_ERROR (ShellGetNextParameter (&TempWalker, FirstParameter, StrSize(CmdLine), TRUE))) {
       if (GetOperationType(FirstParameter) == Unknown_Invalid) {
         ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_SHELL_NOT_FOUND), ShellInfoObject.HiiHandle, FirstParameter);
         SetLastError(SHELL_NOT_FOUND);
@@ -2007,7 +2042,7 @@ VerifySplit(
   //
   // recurse to verify the next item
   //
-  TempSpot = FindFirstCharacter(CmdLine, L"|", L'^') + 1;
+  TempSpot = ShellFindFirstCharacter(CmdLine, L"|", TRUE) + 1;
   if (*TempSpot == L'a' && 
       (*(TempSpot + 1) == L' ' || *(TempSpot + 1) == CHAR_NULL)
      ) {
@@ -2124,7 +2159,7 @@ DoHelpUpdate(
 
   Walker = *CmdLine;
   while(Walker != NULL && *Walker != CHAR_NULL) {
-    if (!EFI_ERROR(GetNextParameter(&Walker, &CurrentParameter, StrSize(*CmdLine), TRUE))) {
+    if (!EFI_ERROR (ShellGetNextParameter (&Walker, CurrentParameter, StrSize(*CmdLine), TRUE))) {
       if (StrStr(CurrentParameter, L"-?") == CurrentParameter) {
         CurrentParameter[0] = L' ';
         CurrentParameter[1] = L' ';
@@ -2495,6 +2530,7 @@ SetupAndRunCommandOrFile(
   SHELL_FILE_HANDLE         OriginalStdOut;
   SHELL_FILE_HANDLE         OriginalStdErr;
   SYSTEM_TABLE_INFO         OriginalSystemTableInfo;
+  CONST SCRIPT_FILE         *ConstScriptFile;
 
   //
   // Update the StdIn, StdOut, and StdErr for redirection to environment variables, files, etc... unicode and ASCII
@@ -2514,7 +2550,12 @@ SetupAndRunCommandOrFile(
   // Now print errors
   //
   if (EFI_ERROR(Status)) {
-    ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_SHELL_ERROR), ShellInfoObject.HiiHandle, (VOID*)(Status));
+    ConstScriptFile = ShellCommandGetCurrentScriptFile();
+    if (ConstScriptFile == NULL || ConstScriptFile->CurrentCommand == NULL) {
+      ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_SHELL_ERROR), ShellInfoObject.HiiHandle, (VOID*)(Status));
+    } else {
+      ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_SHELL_ERROR_SCRIPT), ShellInfoObject.HiiHandle, (VOID*)(Status), ConstScriptFile->CurrentCommand->Line);
+    }
   }
 
   //
@@ -2549,6 +2590,7 @@ RunShellCommand(
   CHAR16                    *FirstParameter;
   CHAR16                    *TempWalker;
   SHELL_OPERATION_TYPES     Type;
+  CHAR16                    *OldCmdLine;
 
   ASSERT(CmdLine != NULL);
   if (StrLen(CmdLine) == 0) {
@@ -2556,11 +2598,14 @@ RunShellCommand(
   }
 
   Status              = EFI_SUCCESS;
+  FirstParameter      = NULL;
   CleanOriginal       = NULL;
+  OldCmdLine          = NULL;
 
   CleanOriginal = StrnCatGrow(&CleanOriginal, NULL, CmdLine, 0);
   if (CleanOriginal == NULL) {
-    return (EFI_OUT_OF_RESOURCES);
+    Status = EFI_OUT_OF_RESOURCES;
+    goto Done;
   }
 
   TrimSpaces(&CleanOriginal);
@@ -2587,35 +2632,36 @@ RunShellCommand(
   // Handle case that passed in command line is just 1 or more " " characters.
   //
   if (StrLen (CleanOriginal) == 0) {
-    SHELL_FREE_NON_NULL(CleanOriginal);
-    return (EFI_SUCCESS);
+    Status = EFI_SUCCESS;
+    goto Done;
   }
 
   Status = ProcessCommandLineToFinal(&CleanOriginal);
   if (EFI_ERROR(Status)) {
-    SHELL_FREE_NON_NULL(CleanOriginal);
-    return (Status);
+    goto Done;
   }
+
+  OldCmdLine = ShellGetRawCmdLine ();
+  ShellSetRawCmdLine (CleanOriginal);
 
   //
   // We don't do normal processing with a split command line (output from one command input to another)
   //
   if (ContainsSplit(CleanOriginal)) {
     Status = ProcessNewSplitCommandLine(CleanOriginal);
-    SHELL_FREE_NON_NULL(CleanOriginal);
-    return (Status);
-  } 
+    goto Done;
+  }
 
   //
   // We need the first parameter information so we can determine the operation type
   //
   FirstParameter = AllocateZeroPool(StrSize(CleanOriginal));
   if (FirstParameter == NULL) {
-    SHELL_FREE_NON_NULL(CleanOriginal);
-    return (EFI_OUT_OF_RESOURCES);
+    Status = EFI_OUT_OF_RESOURCES;
+    goto Done;
   }
   TempWalker = CleanOriginal;
-  if (!EFI_ERROR(GetNextParameter(&TempWalker, &FirstParameter, StrSize(CleanOriginal), TRUE))) {
+  if (!EFI_ERROR (ShellGetNextParameter (&TempWalker, FirstParameter, StrSize(CleanOriginal), TRUE))) {
     //
     // Depending on the first parameter we change the behavior
     //
@@ -2640,9 +2686,12 @@ RunShellCommand(
     ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_SHELL_NOT_FOUND), ShellInfoObject.HiiHandle, FirstParameter);
     SetLastError(SHELL_NOT_FOUND);
   }
- 
-  SHELL_FREE_NON_NULL(CleanOriginal);
-  SHELL_FREE_NON_NULL(FirstParameter);
+
+Done:
+  ShellSetRawCmdLine (OldCmdLine);
+  SHELL_FREE_NON_NULL (OldCmdLine);
+  SHELL_FREE_NON_NULL (CleanOriginal);
+  SHELL_FREE_NON_NULL (FirstParameter);
 
   return (Status);
 }
@@ -3080,37 +3129,3 @@ RunScriptFile (
   return (Status);
 }
 
-/**
-  Return the pointer to the first occurrence of any character from a list of characters.
-
-  @param[in] String           the string to parse
-  @param[in] CharacterList    the list of character to look for
-  @param[in] EscapeCharacter  An escape character to skip
-
-  @return the location of the first character in the string
-  @retval CHAR_NULL no instance of any character in CharacterList was found in String
-**/
-CONST CHAR16*
-EFIAPI
-FindFirstCharacter(
-  IN CONST CHAR16 *String,
-  IN CONST CHAR16 *CharacterList,
-  IN CONST CHAR16 EscapeCharacter
-  )
-{
-  UINT32 WalkChar;
-  UINT32 WalkStr;
-
-  for (WalkStr = 0; WalkStr < StrLen(String); WalkStr++) {
-    if (String[WalkStr] == EscapeCharacter) {
-      WalkStr++;
-      continue;
-    }
-    for (WalkChar = 0; WalkChar < StrLen(CharacterList); WalkChar++) {
-      if (String[WalkStr] == CharacterList[WalkChar]) {
-        return (&String[WalkStr]);
-      }
-    }
-  }
-  return (String + StrLen(String));
-}

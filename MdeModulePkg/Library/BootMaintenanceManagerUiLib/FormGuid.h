@@ -1,7 +1,7 @@
 /** @file
 Formset guids, form id and VarStore data structure for Boot Maintenance Manager.
 
-Copyright (c) 2004 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -45,8 +45,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #define FORM_BOOT_ADD_DESCRIPTION_ID         0x101F
 #define FORM_DRIVER_ADD_FILE_DESCRIPTION_ID  0x1020
 #define FORM_CON_MODE_ID                     0x1021
-#define FORM_MEMORY_CHECK_ID                 0x1022
-#define FORM_UEFI_OPTIMIZED_BOOT_ID          0x1023
 #define FORM_BOOT_FROM_FILE_ID               0x1024
 
 
@@ -74,6 +72,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #define KEY_VALUE_NO_SAVE_AND_EXIT_BOOT      0x1114
 #define KEY_VALUE_SAVE_AND_EXIT_DRIVER       0x1115
 #define KEY_VALUE_NO_SAVE_AND_EXIT_DRIVER    0x1116
+#define KEY_VALUE_TRIGGER_FORM_OPEN_ACTION   0x1117
 
 #define MAXIMUM_NORMAL_KEY_VALUE             0x11FF
 
@@ -85,9 +84,13 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 //
 // End Label
 //
+#define LABEL_FORM_MAIN_START                0xfffc
+#define LABEL_FORM_MAIN_END                  0xfffd
+
 #define LABEL_BMM_PLATFORM_INFORMATION       0xfffe
 #define LABEL_END                            0xffff
 #define MAX_MENU_NUMBER                      100
+
 
 ///
 /// This is the structure that will be used to store the

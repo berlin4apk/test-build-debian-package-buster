@@ -179,6 +179,8 @@ EFI_HANDLE mImageHandle;
   PE/COFF image is external input, so this function will validate its data structure
   within this image buffer before use.
 
+  Notes: PE/COFF image is checked by BasePeCoffLib PeCoffLoaderGetImageInfo().
+
   @param[in]  PCRIndex       TPM PCR index
   @param[in]  ImageAddress   Start address of image buffer.
   @param[in]  ImageSize      Image size
@@ -893,10 +895,10 @@ TreeSubmitCommand (
     return EFI_UNSUPPORTED;
   }
 
-  if (InputParameterBlockSize >= mTcgDxeData.BsCap.MaxCommandSize) {
+  if (InputParameterBlockSize > mTcgDxeData.BsCap.MaxCommandSize) {
     return EFI_INVALID_PARAMETER;
   }
-  if (OutputParameterBlockSize >= mTcgDxeData.BsCap.MaxResponseSize) {
+  if (OutputParameterBlockSize > mTcgDxeData.BsCap.MaxResponseSize) {
     return EFI_INVALID_PARAMETER;
   }
 

@@ -50,18 +50,27 @@ GetPtpInterface (
   InterfaceId.Uint32 = MmioRead32 ((UINTN)&((PTP_CRB_REGISTERS *)Register)->InterfaceId);
   InterfaceCapability.Uint32 = MmioRead32 ((UINTN)&((PTP_FIFO_REGISTERS *)Register)->InterfaceCapability);
 
+  if (InterfaceId.Bits.InterfaceType == PTP_INTERFACE_IDENTIFIER_INTERFACE_TYPE_TIS) {
+    return PtpInterfaceTis;
+  }
+
   if ((InterfaceId.Bits.InterfaceType == PTP_INTERFACE_IDENTIFIER_INTERFACE_TYPE_CRB) &&
       (InterfaceId.Bits.InterfaceVersion == PTP_INTERFACE_IDENTIFIER_INTERFACE_VERSION_CRB) &&
       (InterfaceId.Bits.CapCRB != 0)) {
     return PtpInterfaceCrb;
   }
+
   if ((InterfaceId.Bits.InterfaceType == PTP_INTERFACE_IDENTIFIER_INTERFACE_TYPE_FIFO) &&
       (InterfaceId.Bits.InterfaceVersion == PTP_INTERFACE_IDENTIFIER_INTERFACE_VERSION_FIFO) &&
       (InterfaceId.Bits.CapFIFO != 0) &&
       (InterfaceCapability.Bits.InterfaceVersion == INTERFACE_CAPABILITY_INTERFACE_VERSION_PTP)) {
     return PtpInterfaceFifo;
   }
-  return PtpInterfaceTis;
+
+  //
+  // No Ptp interface available
+  //
+  return PtpInterfaceMax;
 }
 
 EFI_TPM2_ACPI_TABLE  mTpm2AcpiTemplate = {
@@ -251,6 +260,41 @@ AssignOpRegion (
 }
 
 /**
+  Patch version string of Physical Presence interface supported by platform. The initial string tag in TPM 
+ACPI table is "$PV".
+
+  @param[in, out] Table          The TPM item in ACPI table.
+  @param[in]      PPVer          Version string of Physical Presence interface supported by platform.
+
+  @return                        The allocated address for the found region.
+
+**/
+EFI_STATUS
+UpdatePPVersion (
+  EFI_ACPI_DESCRIPTION_HEADER    *Table,
+  CHAR8                          *PPVer
+  )
+{
+  EFI_STATUS  Status;
+  UINT8       *DataPtr;
+
+  //
+  // Patch some pointers for the ASL code before loading the SSDT.
+  //
+  for (DataPtr  = (UINT8 *)(Table + 1);
+       DataPtr <= (UINT8 *) ((UINT8 *) Table + Table->Length - PHYSICAL_PRESENCE_VERSION_SIZE);
+       DataPtr += 1) {
+    if (AsciiStrCmp((CHAR8 *)DataPtr,  PHYSICAL_PRESENCE_VERSION_TAG) == 0) {
+      Status = AsciiStrCpyS((CHAR8 *)DataPtr, PHYSICAL_PRESENCE_VERSION_SIZE, PPVer);
+      DEBUG((EFI_D_INFO, "TPM2 Physical Presence Interface Version update status 0x%x\n", Status));
+      return Status;
+    }
+  }
+
+  return EFI_NOT_FOUND;
+}
+
+/**
   Initialize and publish TPM items in ACPI table.
 
   @retval   EFI_SUCCESS     The TCG ACPI table is published successfully.
@@ -277,6 +321,11 @@ PublishAcpiTable (
              );
   ASSERT_EFI_ERROR (Status);
 
+  //
+  // Update Table version before measuring it to PCR
+  //
+  Status = UpdatePPVersion(Table, (CHAR8 *)PcdGetPtr(PcdTcgPhysicalPresenceInterfaceVer));
+  ASSERT_EFI_ERROR (Status);
 
   //
   // Measure to PCR[0] with event EV_POST_CODE ACPI DATA
@@ -297,7 +346,7 @@ PublishAcpiTable (
   ASSERT (mTcgNvs != NULL);
 
   //
-  // Publish the TPM ACPI table
+  // Publish the TPM ACPI table. Table is re-checksumed.
   //
   Status = gBS->LocateProtocol (&gEfiAcpiTableProtocolGuid, NULL, (VOID **) &AcpiTable);
   ASSERT_EFI_ERROR (Status);
@@ -360,6 +409,7 @@ PublishTpm2 (
   case PtpInterfaceTis:
     break;
   default:
+    DEBUG((EFI_D_ERROR, "TPM2 InterfaceType get error! %d\n", InterfaceType));
     break;
   }
 

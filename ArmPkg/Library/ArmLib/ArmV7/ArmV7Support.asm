@@ -34,6 +34,12 @@ CTRL_I_BIT      EQU     (1 << 12)
   bx      lr
 
 
+ RVCT_ASM_EXPORT ArmInvalidateInstructionCacheEntryToPoUByMVA
+  mcr     p15, 0, r0, c7, c5, 1   ; invalidate single instruction cache line to PoU
+  mcr     p15, 0, r0, c7, c5, 7   ; invalidate branch predictor
+  bx      lr
+
+
  RVCT_ASM_EXPORT ArmCleanDataCacheEntryToPoUByMVA
   mcr     p15, 0, r0, c7, c11, 1  ; clean single data cache line to PoU
   bx      lr
@@ -287,10 +293,6 @@ Finished
 
  RVCT_ASM_EXPORT ArmReadIdPfr1
   mrc    p15, 0, r0, c0, c1, 1     ; Read ID_PFR1 Register
-  bx     lr
-
- RVCT_ASM_EXPORT ArmReadIdMmfr0
-  mrc    p15, 0, r0, c0, c1, 4     ; Read ID_MMFR0 Register
   bx     lr
 
  END

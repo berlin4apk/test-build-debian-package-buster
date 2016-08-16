@@ -44,7 +44,12 @@
   ArmLib|ArmPkg/Library/ArmLib/ArmV7/ArmV7Lib.inf
   ArmCpuLib|ArmPkg/Drivers/ArmCpuLib/ArmCortexA15Lib/ArmCortexA15Lib.inf
 
+[LibraryClasses.ARM.SEC]
+  ArmLib|ArmPkg/Library/ArmLib/ArmV7/ArmV7LibSec.inf
+
 [LibraryClasses.common]
+  ArmMmuLib|ArmPkg/Library/ArmMmuLib/ArmMmuBaseLib.inf
+
   # Virtio Support
   VirtioLib|OvmfPkg/Library/VirtioLib/VirtioLib.inf
   VirtioMmioDeviceLib|OvmfPkg/Library/VirtioMmioDeviceLib/VirtioMmioDeviceLib.inf
@@ -74,6 +79,12 @@
   RVCT:*_*_ARM_PLATFORM_FLAGS == --cpu Cortex-A15 -I$(WORKSPACE)/ArmVirtPkg/Include
   GCC:*_*_ARM_PLATFORM_FLAGS == -mcpu=cortex-a15 -I$(WORKSPACE)/ArmVirtPkg/Include
   GCC:*_*_AARCH64_PLATFORM_FLAGS == -I$(WORKSPACE)/ArmVirtPkg/Include
+
+[BuildOptions.ARM.EDKII.SEC, BuildOptions.ARM.EDKII.BASE]
+  # Avoid MOVT/MOVW instruction pairs in code that may end up in the PIE
+  # executable we build for the relocatable PrePi. They are not runtime
+  # relocatable in ELF.
+  *_CLANG35_*_CC_FLAGS = -mno-movt
 
 ################################################################################
 #
@@ -195,7 +206,7 @@
   #
   # Platform Driver
   #
-  ArmVirtPkg/VirtFdtDxe/VirtFdtDxe.inf
+  ArmVirtPkg/XenioFdtDxe/XenioFdtDxe.inf
   ArmVirtPkg/FdtClientDxe/FdtClientDxe.inf
 
   #
@@ -216,3 +227,11 @@
 
   OvmfPkg/XenBusDxe/XenBusDxe.inf
   OvmfPkg/XenPvBlkDxe/XenPvBlkDxe.inf
+
+  #
+  # ACPI support
+  #
+!if $(ARCH) == AARCH64
+  MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableDxe.inf
+  ArmVirtPkg/XenAcpiPlatformDxe/XenAcpiPlatformDxe.inf
+!endif

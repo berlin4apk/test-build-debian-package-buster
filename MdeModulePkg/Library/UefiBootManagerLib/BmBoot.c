@@ -2,7 +2,7 @@
   Library functions which relates with booting.
 
 Copyright (c) 2011 - 2016, Intel Corporation. All rights reserved.<BR>
-(C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
+(C) Copyright 2015-2016 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -586,7 +586,7 @@ BmExpandUsbDevicePath (
 
   for (Index = 0; (Index < HandleCount) && (FileBuffer == NULL); Index++) {
     FullDevicePath = AppendDevicePath (DevicePathFromHandle (Handles[Index]), RemainingDevicePath);
-    FileBuffer = BmGetLoadOptionBuffer (FullDevicePath, FullPath, FileSize);
+    FileBuffer = EfiBootManagerGetLoadOptionBuffer (FullDevicePath, FullPath, FileSize);
     FreePool (FullDevicePath);
   }
 
@@ -851,7 +851,7 @@ BmExpandPartitionDevicePath (
         Status = EfiBootManagerConnectDevicePath (Instance, NULL);
         if (!EFI_ERROR (Status)) {
           TempDevicePath = AppendDevicePath (Instance, NextDevicePathNode (FilePath));
-          FileBuffer = BmGetLoadOptionBuffer (TempDevicePath, FullPath, FileSize);
+          FileBuffer = EfiBootManagerGetLoadOptionBuffer (TempDevicePath, FullPath, FileSize);
           FreePool (TempDevicePath);
 
           if (FileBuffer != NULL) {
@@ -911,7 +911,7 @@ BmExpandPartitionDevicePath (
       // Find the matched partition device path
       //
       TempDevicePath = AppendDevicePath (BlockIoDevicePath, NextDevicePathNode (FilePath));
-      FileBuffer = BmGetLoadOptionBuffer (TempDevicePath, FullPath, FileSize);
+      FileBuffer = EfiBootManagerGetLoadOptionBuffer (TempDevicePath, FullPath, FileSize);
       FreePool (TempDevicePath);
 
       if (FileBuffer != NULL) {
@@ -1425,7 +1425,8 @@ BmGetFileBufferFromLoadFiles (
   @return The load option buffer. Caller is responsible to free the memory.
 **/
 VOID *
-BmGetLoadOptionBuffer (
+EFIAPI
+EfiBootManagerGetLoadOptionBuffer (
   IN  EFI_DEVICE_PATH_PROTOCOL          *FilePath,
   OUT EFI_DEVICE_PATH_PROTOCOL          **FullPath,
   OUT UINTN                             *FileSize
@@ -1529,6 +1530,34 @@ BmGetLoadOptionBuffer (
 }
 
 /**
+  Check if it's a Device Path pointing to BootMenuApp.
+
+  @param  DevicePath     Input device path.
+
+  @retval TRUE   The device path is BootMenuApp File Device Path.
+  @retval FALSE  The device path is NOT BootMenuApp File Device Path.
+**/
+BOOLEAN
+BmIsBootMenuAppFilePath (
+  EFI_DEVICE_PATH_PROTOCOL     *DevicePath
+)
+{
+  EFI_HANDLE                      FvHandle;
+  VOID                            *NameGuid;
+  EFI_STATUS                      Status;
+
+  Status = gBS->LocateDevicePath (&gEfiFirmwareVolume2ProtocolGuid, &DevicePath, &FvHandle);
+  if (!EFI_ERROR (Status)) {
+    NameGuid = EfiGetNameGuidFromFwVolDevicePathNode ((CONST MEDIA_FW_VOL_FILEPATH_DEVICE_PATH *) DevicePath);
+    if (NameGuid != NULL) {
+      return CompareGuid (NameGuid, PcdGetPtr (PcdBootManagerMenuFile));
+    }
+  }
+
+  return FALSE;
+}
+
+/**
   Attempt to boot the EFI boot option. This routine sets L"BootCurent" and
   also signals the EFI ready to boot event. If the device path for the option
   starts with a BBS device path a legacy boot is attempted via the registered 
@@ -1561,14 +1590,11 @@ EfiBootManagerBoot (
   UINTN                     OptionNumber;
   UINTN                     OriginalOptionNumber;
   EFI_DEVICE_PATH_PROTOCOL  *FilePath;
-  EFI_DEVICE_PATH_PROTOCOL  *Node;
   EFI_DEVICE_PATH_PROTOCOL  *RamDiskDevicePath;
-  EFI_HANDLE                FvHandle;
   VOID                      *FileBuffer;
   UINTN                     FileSize;
   EFI_BOOT_LOGO_PROTOCOL    *BootLogo;
   EFI_EVENT                 LegacyBootEvent;
-  UINTN                     RamDiskSizeInPages;
 
   if (BootOption == NULL) {
     return;
@@ -1619,12 +1645,7 @@ EfiBootManagerBoot (
   // 3. Signal the EVT_SIGNAL_READY_TO_BOOT event when we are about to load and execute
   //    the boot option.
   //
-  Node   = BootOption->FilePath;
-  Status = gBS->LocateDevicePath (&gEfiFirmwareVolume2ProtocolGuid, &Node, &FvHandle);
-  if (!EFI_ERROR (Status) && CompareGuid (
-        EfiGetNameGuidFromFwVolDevicePathNode ((CONST MEDIA_FW_VOL_FILEPATH_DEVICE_PATH *) Node),
-        PcdGetPtr (PcdBootManagerMenuFile)
-        )) {
+  if (BmIsBootMenuAppFilePath (BootOption->FilePath)) {
     DEBUG ((EFI_D_INFO, "[Bds] Booting Boot Manager Menu.\n"));
     BmStopHotkeyService (NULL, NULL);
   } else {
@@ -1642,13 +1663,29 @@ EfiBootManagerBoot (
   PERF_START_EX (gImageHandle, "BdsAttempt", NULL, 0, (UINT32) OptionNumber);
 
   //
-  // 5. Load EFI boot option to ImageHandle
+  // 5. Adjust the different type memory page number just before booting
+  //    and save the updated info into the variable for next boot to use
   //
+  BmSetMemoryTypeInformationVariable (
+    (BOOLEAN) ((BootOption->Attributes & LOAD_OPTION_CATEGORY) == LOAD_OPTION_CATEGORY_BOOT)
+  );
+
+  //
+  // 6. Load EFI boot option to ImageHandle
+  //
+  DEBUG_CODE_BEGIN ();
+  if (BootOption->Description == NULL) {
+    DEBUG ((DEBUG_INFO | DEBUG_LOAD, "[Bds]Booting from unknown device path\n"));
+  } else {
+    DEBUG ((DEBUG_INFO | DEBUG_LOAD, "[Bds]Booting %s\n", BootOption->Description));
+  }
+  DEBUG_CODE_END ();
+
   ImageHandle       = NULL;
   RamDiskDevicePath = NULL;
   if (DevicePathType (BootOption->FilePath) != BBS_DEVICE_PATH) {
     Status     = EFI_NOT_FOUND;
-    FileBuffer = BmGetLoadOptionBuffer (BootOption->FilePath, &FilePath, &FileSize);
+    FileBuffer = EfiBootManagerGetLoadOptionBuffer (BootOption->FilePath, &FilePath, &FileSize);
     if (FileBuffer != NULL) {
       RamDiskDevicePath = BmGetRamDiskDevicePath (FilePath);
     }
@@ -1698,28 +1735,6 @@ EfiBootManagerBoot (
       return;
     }
   }
-
-  //
-  // 6. Adjust the different type memory page number just before booting
-  //    and save the updated info into the variable for next boot to use
-  //
-  if (RamDiskDevicePath == NULL) {
-    RamDiskSizeInPages = 0;
-  } else {
-    BmGetRamDiskMemoryInfo (RamDiskDevicePath, &RamDiskSizeInPages);
-  }
-  BmSetMemoryTypeInformationVariable (
-    (BOOLEAN) ((BootOption->Attributes & LOAD_OPTION_CATEGORY) == LOAD_OPTION_CATEGORY_BOOT),
-    RamDiskSizeInPages
-    );
-
-  DEBUG_CODE_BEGIN();
-    if (BootOption->Description == NULL) {
-      DEBUG ((DEBUG_INFO | DEBUG_LOAD, "[Bds]Booting from unknown device path\n"));
-    } else {
-      DEBUG ((DEBUG_INFO | DEBUG_LOAD, "[Bds]Booting %s\n", BootOption->Description));
-    }
-  DEBUG_CODE_END();
 
   //
   // Check to see if we should legacy BOOT. If yes then do the legacy boot
@@ -1925,6 +1940,7 @@ BmEnumerateBootOptions (
   UINTN                                 Removable;
   UINTN                                 Index;
   CHAR16                                *Description;
+  UINT32                                BootAttributes;
 
   ASSERT (BootOptionCount != NULL);
 
@@ -2044,7 +2060,7 @@ BmEnumerateBootOptions (
   }
 
   //
-  // Parse load file, assuming UEFI Network boot option
+  // Parse load file protocol
   //
   gBS->LocateHandleBuffer (
          ByProtocol,
@@ -2063,11 +2079,19 @@ BmEnumerateBootOptions (
                     );
     ASSERT (BootOptions != NULL);
 
+    //
+    // If LoadFile includes BootMenuApp, its boot attribue will be set to APP and HIDDEN.
+    //
+    BootAttributes = LOAD_OPTION_ACTIVE;
+    if (BmIsBootMenuAppFilePath (DevicePathFromHandle (Handles[Index]))) {
+      BootAttributes = LOAD_OPTION_CATEGORY_APP | LOAD_OPTION_ACTIVE | LOAD_OPTION_HIDDEN;
+    }
+
     Status = EfiBootManagerInitializeLoadOption (
                &BootOptions[(*BootOptionCount)++],
                LoadOptionNumberUnassigned,
                LoadOptionTypeBoot,
-               LOAD_OPTION_ACTIVE,
+               BootAttributes,
                Description,
                DevicePathFromHandle (Handles[Index]),
                NULL,
@@ -2158,7 +2182,7 @@ EfiBootManagerRefreshAllBootOption (
 }
 
 /**
-  This function is called to create the boot option for the Boot Manager Menu.
+  This function is called to get or create the boot option for the Boot Manager Menu.
 
   The Boot Manager Menu is shown after successfully booting a boot option.
   Assume the BootManagerMenuFile is in the same FV as the module links to this library.
@@ -2166,8 +2190,10 @@ EfiBootManagerRefreshAllBootOption (
   @param  BootOption    Return the boot option of the Boot Manager Menu
 
   @retval EFI_SUCCESS   Successfully register the Boot Manager Menu.
-  @retval Status        Return status of gRT->SetVariable (). BootOption still points
-                        to the Boot Manager Menu even the Status is not EFI_SUCCESS.
+  @retval EFI_NOT_FOUND The Boot Manager Menu cannot be found.
+  @retval others        Return status of gRT->SetVariable (). BootOption still points
+                        to the Boot Manager Menu even the Status is not EFI_SUCCESS
+                        and EFI_NOT_FOUND.
 **/
 EFI_STATUS
 BmRegisterBootManagerMenu (
@@ -2180,30 +2206,79 @@ BmRegisterBootManagerMenu (
   EFI_DEVICE_PATH_PROTOCOL           *DevicePath;
   EFI_LOADED_IMAGE_PROTOCOL          *LoadedImage;
   MEDIA_FW_VOL_FILEPATH_DEVICE_PATH  FileNode;
+  UINTN                              HandleCount;
+  EFI_HANDLE                         *Handles;
+  UINTN                              Index;
+  VOID                               *Data;
+  UINTN                              DataSize;
 
-  Status = GetSectionFromFv (
-             PcdGetPtr (PcdBootManagerMenuFile),
-             EFI_SECTION_USER_INTERFACE,
-             0,
-             (VOID **) &Description,
-             &DescriptionLength
-             );
-  if (EFI_ERROR (Status)) {
-    Description = NULL;
+  DevicePath = NULL;
+  Description = NULL;
+  //
+  // Try to find BootMenuApp from LoadFile protocol
+  //
+  gBS->LocateHandleBuffer (
+         ByProtocol,
+         &gEfiLoadFileProtocolGuid,
+         NULL,
+         &HandleCount,
+         &Handles
+         );
+  for (Index = 0; Index < HandleCount; Index++) {
+    if (BmIsBootMenuAppFilePath (DevicePathFromHandle (Handles[Index]))) {
+      DevicePath  = DuplicateDevicePath (DevicePathFromHandle (Handles[Index]));
+      Description = BmGetBootDescription (Handles[Index]);
+      break;
+    }
+  }
+  if (HandleCount != 0) {
+    FreePool (Handles);
   }
 
-  EfiInitializeFwVolDevicepathNode (&FileNode, PcdGetPtr (PcdBootManagerMenuFile));
-  Status = gBS->HandleProtocol (
-                  gImageHandle,
-                  &gEfiLoadedImageProtocolGuid,
-                  (VOID **) &LoadedImage
-                  );
-  ASSERT_EFI_ERROR (Status);
-  DevicePath = AppendDevicePathNode (
-                 DevicePathFromHandle (LoadedImage->DeviceHandle),
-                 (EFI_DEVICE_PATH_PROTOCOL *) &FileNode
-                 );
-  ASSERT (DevicePath != NULL);
+  if (DevicePath == NULL) {
+    Data = NULL;
+    Status = GetSectionFromFv (
+               PcdGetPtr (PcdBootManagerMenuFile),
+               EFI_SECTION_PE32,
+               0,
+               (VOID **) &Data,
+               &DataSize
+               );
+    if (Data != NULL) {
+      FreePool (Data);
+    }
+    if (EFI_ERROR (Status)) {
+      DEBUG ((EFI_D_WARN, "[Bds]BootManagerMenu FFS section can not be found, skip its boot option registration\n"));
+      return EFI_NOT_FOUND;
+    }
+
+    //
+    // Get BootManagerMenu application's description from EFI User Interface Section.
+    //
+    Status = GetSectionFromFv (
+               PcdGetPtr (PcdBootManagerMenuFile),
+               EFI_SECTION_USER_INTERFACE,
+               0,
+               (VOID **) &Description,
+               &DescriptionLength
+               );
+    if (EFI_ERROR (Status)) {
+      Description = NULL;
+    }
+
+    EfiInitializeFwVolDevicepathNode (&FileNode, PcdGetPtr (PcdBootManagerMenuFile));
+    Status = gBS->HandleProtocol (
+                    gImageHandle,
+                    &gEfiLoadedImageProtocolGuid,
+                    (VOID **) &LoadedImage
+                    );
+    ASSERT_EFI_ERROR (Status);
+    DevicePath = AppendDevicePathNode (
+                   DevicePathFromHandle (LoadedImage->DeviceHandle),
+                   (EFI_DEVICE_PATH_PROTOCOL *) &FileNode
+                   );
+    ASSERT (DevicePath != NULL);
+  }
 
   Status = EfiBootManagerInitializeLoadOption (
              BootOption,
@@ -2236,12 +2311,14 @@ BmRegisterBootManagerMenu (
 /**
   Return the boot option corresponding to the Boot Manager Menu.
   It may automatically create one if the boot option hasn't been created yet.
-  
+
   @param BootOption    Return the Boot Manager Menu.
 
   @retval EFI_SUCCESS   The Boot Manager Menu is successfully returned.
-  @retval Status        Return status of gRT->SetVariable (). BootOption still points
-                        to the Boot Manager Menu even the Status is not EFI_SUCCESS.
+  @retval EFI_NOT_FOUND The Boot Manager Menu cannot be found.
+  @retval others        Return status of gRT->SetVariable (). BootOption still points
+                        to the Boot Manager Menu even the Status is not EFI_SUCCESS
+                        and EFI_NOT_FOUND.
 **/
 EFI_STATUS
 EFIAPI
@@ -2253,20 +2330,11 @@ EfiBootManagerGetBootManagerMenu (
   UINTN                        BootOptionCount;
   EFI_BOOT_MANAGER_LOAD_OPTION *BootOptions;
   UINTN                        Index;
-  EFI_DEVICE_PATH_PROTOCOL     *Node;
-  EFI_HANDLE                   FvHandle;
   
   BootOptions = EfiBootManagerGetLoadOptions (&BootOptionCount, LoadOptionTypeBoot);
 
   for (Index = 0; Index < BootOptionCount; Index++) {
-    Node   = BootOptions[Index].FilePath;
-    Status = gBS->LocateDevicePath (&gEfiFirmwareVolume2ProtocolGuid, &Node, &FvHandle);
-    if (!EFI_ERROR (Status)) {
-      if (CompareGuid (
-            EfiGetNameGuidFromFwVolDevicePathNode ((CONST MEDIA_FW_VOL_FILEPATH_DEVICE_PATH *) Node),
-            PcdGetPtr (PcdBootManagerMenuFile)
-            )
-          ) {        
+    if (BmIsBootMenuAppFilePath (BootOptions[Index].FilePath)) {
         Status = EfiBootManagerInitializeLoadOption (
                    BootOption,
                    BootOptions[Index].OptionNumber,
@@ -2279,7 +2347,6 @@ EfiBootManagerGetBootManagerMenu (
                    );
         ASSERT_EFI_ERROR (Status);
         break;
-      }
     }
   }
 

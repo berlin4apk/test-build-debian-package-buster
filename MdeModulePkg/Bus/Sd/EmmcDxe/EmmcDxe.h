@@ -4,7 +4,7 @@
   This file defines common data structures, macro definitions and some module
   internal function header files.
 
-  Copyright (c) 2015, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -25,6 +25,7 @@
 #include <Protocol/BlockIo.h>
 #include <Protocol/BlockIo2.h>
 #include <Protocol/StorageSecurityCommand.h>
+#include <Protocol/EraseBlock.h>
 
 #include <Protocol/DevicePath.h>
 
@@ -56,6 +57,9 @@ extern EFI_COMPONENT_NAME2_PROTOCOL     gEmmcDxeComponentName2;
 
 #define EMMC_PARTITION_DATA_FROM_SSP(a) \
     CR(a, EMMC_PARTITION, StorageSecurity, EMMC_PARTITION_SIGNATURE)
+
+#define EMMC_PARTITION_DATA_FROM_ERASEBLK(a) \
+    CR(a, EMMC_PARTITION, EraseBlock, EMMC_PARTITION_SIGNATURE)
 
 //
 // Take 2.5 seconds as generic time out value, 1 microsecond as unit.
@@ -97,6 +101,7 @@ typedef struct {
   EFI_BLOCK_IO2_PROTOCOL                BlockIo2;
   EFI_BLOCK_IO_MEDIA                    BlockMedia;
   EFI_STORAGE_SECURITY_COMMAND_PROTOCOL StorageSecurity;
+  EFI_ERASE_BLOCK_PROTOCOL              EraseBlock;
 
   LIST_ENTRY                            Queue;
 
@@ -460,7 +465,7 @@ EmmcGetCsd (
 
   @param[in]  Device            A pointer to the EMMC_DEVICE instance.
   @param[in]  Rca               The relative device address to use.
-  @param[out] Csd               The buffer to store the EMMC_CSD register data.
+  @param[out] Cid               The buffer to store the EMMC_CID register data.
 
   @retval EFI_SUCCESS           The request is executed successfully.
   @retval EFI_OUT_OF_RESOURCES  The request could not be executed due to a lack of resources.

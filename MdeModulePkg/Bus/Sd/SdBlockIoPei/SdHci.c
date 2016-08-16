@@ -535,9 +535,15 @@ SdPeimHcClockSupply (
   ASSERT (Capability.BaseClkFreq != 0);
 
   BaseClkFreq = Capability.BaseClkFreq;
-  if ((ClockFreq > (BaseClkFreq * 1000)) || (ClockFreq == 0)) {
+
+  if (ClockFreq == 0) {
     return EFI_INVALID_PARAMETER;
   }
+
+  if (ClockFreq > (BaseClkFreq * 1000)) {
+    ClockFreq = BaseClkFreq * 1000;
+  }
+
   //
   // Calculate the divisor of base frequency.
   //
@@ -1026,26 +1032,27 @@ SdPeimCreateTrb (
     goto Error;
   }
 
-  if ((Trb->DataLen % Trb->BlockSize) != 0) {
-    if (Trb->DataLen < Trb->BlockSize) {
-      Trb->BlockSize = (UINT16)Trb->DataLen;
-    }
+  if (Trb->DataLen < Trb->BlockSize) {
+    Trb->BlockSize = (UINT16)Trb->DataLen;
   }
 
-  if (Trb->DataLen == 0) {
-    Trb->Mode = SdNoData;
-  } else if (Capability.Adma2 != 0) {
-    Trb->Mode = SdAdmaMode;
-    Status = BuildAdmaDescTable (Trb);
-    if (EFI_ERROR (Status)) {
-      goto Error;
-    }
-  } else if (Capability.Sdma != 0) {
-    Trb->Mode = SdSdmaMode;
-  } else {
+  if (Packet->SdCmdBlk->CommandIndex == SD_SEND_TUNING_BLOCK) {
     Trb->Mode = SdPioMode;
+  } else {
+    if (Trb->DataLen == 0) {
+      Trb->Mode = SdNoData;
+    } else if (Capability.Adma2 != 0) {
+      Trb->Mode = SdAdmaMode;
+      Status = BuildAdmaDescTable (Trb);
+      if (EFI_ERROR (Status)) {
+        goto Error;
+      }
+    } else if (Capability.Sdma != 0) {
+      Trb->Mode = SdSdmaMode;
+    } else {
+      Trb->Mode = SdPioMode;
+    }
   }
-
   return Trb;
 
 Error:
@@ -1105,9 +1112,6 @@ SdPeimCheckTrbEnv (
     // the Present State register to be 0
     //
     PresentState = BIT0 | BIT1;
-    if (Packet->SdCmdBlk->CommandIndex == SD_SEND_TUNING_BLOCK) {
-      PresentState = BIT0;
-    }
   } else {
     //
     // Wait Command Inhibit (CMD) in the Present State register
@@ -1267,7 +1271,13 @@ SdPeimExecTrb (
     return Status;
   }
 
-  BlkCount = (UINT16)(Trb->DataLen / Trb->BlockSize);
+  BlkCount = 0;
+  if (Trb->Mode != SdNoData) {
+    //
+    // Calcuate Block Count.
+    //
+    BlkCount = (UINT16)(Trb->DataLen / Trb->BlockSize);
+  }
   Status   = SdPeimHcRwMmio (Bar + SD_HC_BLK_COUNT, FALSE, sizeof (BlkCount), &BlkCount);
   if (EFI_ERROR (Status)) {
     return Status;
@@ -1287,9 +1297,12 @@ SdPeimExecTrb (
     if (Trb->Read) {
       TransMode |= BIT4;
     }
-    if (BlkCount != 0) {
+    if (BlkCount > 1) {
       TransMode |= BIT5 | BIT1;
     }
+    //
+    // SD memory card needs to use AUTO CMD12 feature.
+    //
     if (BlkCount > 1) {
       TransMode |= BIT2;
     }
@@ -1362,6 +1375,7 @@ SdPeimCheckTrbResult (
   UINT32                              SdmaAddr;
   UINT8                               Index;
   UINT8                               SwReset;
+  UINT32                              PioLength;
 
   SwReset = 0;
   Packet  = Trb->Packet;
@@ -1494,8 +1508,26 @@ SdPeimCheckTrbResult (
   }
 
   if (Packet->SdCmdBlk->CommandIndex == SD_SEND_TUNING_BLOCK) {
-    Status = EFI_SUCCESS;
-    goto Done;
+    //
+    // When performing tuning procedure (Execute Tuning is set to 1) through PIO mode,
+    // wait Buffer Read Ready bit of Normal Interrupt Status Register to be 1.
+    // Refer to SD Host Controller Simplified Specification 3.0 figure 2-29 for details.
+    //
+    if ((IntStatus & BIT5) == BIT5) {
+      //
+      // Clear Buffer Read Ready interrupt at first.
+      //
+      IntStatus = BIT5;
+      SdPeimHcRwMmio (Bar + SD_HC_NOR_INT_STS, FALSE, sizeof (IntStatus), &IntStatus);
+      //
+      // Read data out from Buffer Port register
+      //
+      for (PioLength = 0; PioLength < Trb->DataLen; PioLength += 4) {
+        SdPeimHcRwMmio (Bar + SD_HC_BUF_DAT_PORT, TRUE, 4, (UINT8*)Trb->Data + PioLength);
+      }
+      Status = EFI_SUCCESS;
+      goto Done;
+    }
   }
 
   Status = EFI_NOT_READY;
@@ -2160,6 +2192,7 @@ SdPeimSetBusWidth (
   @param[in]  DriveStrength The value for drive length group.
   @param[in]  PowerLimit    The value for power limit group.
   @param[in]  Mode          Switch or check function.
+  @param[out] SwitchResp    The return switch function status.
 
   @retval EFI_SUCCESS       The operation is done correctly.
   @retval Others            The operation fails.
@@ -2167,12 +2200,13 @@ SdPeimSetBusWidth (
 **/
 EFI_STATUS
 SdPeimSwitch (
-  IN SD_PEIM_HC_SLOT        *Slot,
-  IN UINT8                  AccessMode,
-  IN UINT8                  CommandSystem,
-  IN UINT8                  DriveStrength,
-  IN UINT8                  PowerLimit,
-  IN BOOLEAN                Mode
+  IN     SD_PEIM_HC_SLOT              *Slot,
+  IN     UINT8                        AccessMode,
+  IN     UINT8                        CommandSystem,
+  IN     UINT8                        DriveStrength,
+  IN     UINT8                        PowerLimit,
+  IN     BOOLEAN                      Mode,
+     OUT UINT8                        *SwitchResp
   )
 {
   SD_COMMAND_BLOCK                    SdCmdBlk;
@@ -2180,7 +2214,6 @@ SdPeimSwitch (
   SD_COMMAND_PACKET                   Packet;
   EFI_STATUS                          Status;
   UINT32                              ModeValue;
-  UINT8                               Data[64];
 
   ZeroMem (&SdCmdBlk, sizeof (SdCmdBlk));
   ZeroMem (&SdStatusBlk, sizeof (SdStatusBlk));
@@ -2198,8 +2231,8 @@ SdPeimSwitch (
   SdCmdBlk.CommandArgument = (AccessMode & 0xF) | ((PowerLimit & 0xF) << 4) | \
                              ((DriveStrength & 0xF) << 8) | ((DriveStrength & 0xF) << 12) | \
                              ModeValue;
-  Packet.InDataBuffer     = Data;
-  Packet.InTransferLength = sizeof (Data);
+  Packet.InDataBuffer     = SwitchResp;
+  Packet.InTransferLength = 64;
 
   Status = SdPeimExecCmd (Slot, &Packet);
 
@@ -2491,15 +2524,25 @@ SdPeimTuningClock (
       return Status;
     }
 
-    if ((HostCtrl2 & (BIT6 | BIT7)) == BIT7) {
+    if ((HostCtrl2 & (BIT6 | BIT7)) == 0) {
       break;
+    }
+
+    if ((HostCtrl2 & (BIT6 | BIT7)) == BIT7) {
+      return EFI_SUCCESS;
     }
   } while (++Retry < 40);
 
-  if (Retry == 40) {
-    Status = EFI_TIMEOUT;
+  DEBUG ((EFI_D_ERROR, "SdPeimTuningClock: Send tuning block fails at %d times with HostCtrl2 %02x\n", Retry, HostCtrl2));
+  //
+  // Abort the tuning procedure and reset the tuning circuit.
+  //
+  HostCtrl2 = (UINT8)~(BIT6 | BIT7);
+  Status = SdPeimHcAndMmio (Slot->SdHcBase + SD_HC_HOST_CTRL2, sizeof (HostCtrl2), &HostCtrl2);
+  if (EFI_ERROR (Status)) {
+    return Status;
   }
-  return Status;
+  return EFI_DEVICE_ERROR;
 }
 
 /**
@@ -2575,6 +2618,7 @@ SdPeimSetBusMode (
   UINT8                        AccessMode;
   UINT8                        HostCtrl1;
   UINT8                        HostCtrl2;
+  UINT8                        SwitchResp[64];
 
   Status = SdPeimGetCsd (Slot, Rca, &Slot->Csd);
   if (EFI_ERROR (Status)) {
@@ -2601,31 +2645,46 @@ SdPeimSetBusMode (
   }
 
   //
-  // Calculate supported bus speed/bus width/clock frequency.
+  // Get the supported bus speed from SWITCH cmd return data group #1.
+  //
+  ZeroMem (SwitchResp, sizeof (SwitchResp));
+  Status = SdPeimSwitch (Slot, 0xF, 0xF, 0xF, 0xF, FALSE, SwitchResp);
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+  //
+  // Calculate supported bus speed/bus width/clock frequency by host and device capability.
   //
   ClockFreq = 0;
-  if (S18a && (Capability.Sdr104 != 0)) {
+  if (S18a && (Capability.Sdr104 != 0) && ((SwitchResp[13] & BIT3) != 0)) {
     ClockFreq = 208;
     AccessMode = 3;
-  } else if (S18a && (Capability.Sdr50 != 0)) {
+  } else if (S18a && (Capability.Sdr50 != 0) && ((SwitchResp[13] & BIT2) != 0)) {
     ClockFreq = 100;
     AccessMode = 2;
-  } else if (S18a && (Capability.Ddr50 != 0)) {
+  } else if (S18a && (Capability.Ddr50 != 0) && ((SwitchResp[13] & BIT4) != 0)) {
     ClockFreq = 50;
     AccessMode = 4;
-  } else {
+  } else if ((SwitchResp[13] & BIT1) != 0) {
     ClockFreq = 50;
     AccessMode = 1;
+  } else {
+    ClockFreq = 25;
+    AccessMode = 0;
   }
 
-  DEBUG ((EFI_D_INFO, "AccessMode %d ClockFreq %d BusWidth %d\n", AccessMode, ClockFreq, BusWidth));
+  DEBUG ((EFI_D_INFO, "SdPeimSetBusMode: AccessMode %d ClockFreq %d BusWidth %d\n", AccessMode, ClockFreq, BusWidth));
 
-  Status = SdPeimSwitch (Slot, AccessMode, 0, 0, 0, TRUE);
+  Status = SdPeimSwitch (Slot, AccessMode, 0xF, 0xF, 0xF, TRUE, SwitchResp);
   if (EFI_ERROR (Status)) {
     DEBUG ((EFI_D_ERROR, "SdPeimSetBusMode: SdPeimSwitch fails with %r\n", Status));
     return Status;
   }
 
+  if ((SwitchResp[16] & 0xF) != AccessMode) {
+    DEBUG ((EFI_D_ERROR, "SdPeimSetBusMode: SdPeimSwitch to AccessMode %d ClockFreq %d BusWidth %d fails! The Switch response is 0x%1x\n", AccessMode, ClockFreq, BusWidth, SwitchResp[16] & 0xF));
+    return EFI_DEVICE_ERROR;
+  }
   //
   // Set to Hight Speed timing
   //
@@ -2832,7 +2891,7 @@ SdPeimIdentification (
 
       SdPeimHcInitClockFreq (Slot->SdHcBase);
 
-      MicroSecondDelay (1);
+      MicroSecondDelay (1000);
 
       SdPeimHcRwMmio (Slot->SdHcBase + SD_HC_PRESENT_STATE, TRUE, sizeof (PresentState), &PresentState);
       if (((PresentState >> 20) & 0xF) != 0xF) {

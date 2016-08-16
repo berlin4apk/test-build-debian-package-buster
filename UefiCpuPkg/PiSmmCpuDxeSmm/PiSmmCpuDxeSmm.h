@@ -1,7 +1,7 @@
 /** @file
 Agent Module to load other modules to deploy SMM Entry Vector for X86 CPU.
 
-Copyright (c) 2009 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -53,6 +53,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <CpuHotPlugData.h>
 
 #include <Register/Cpuid.h>
+#include <Register/Msr.h>
 
 #include "CpuService.h"
 #include "SmmProfile.h"
@@ -294,11 +295,11 @@ SmmRelocationSemaphoreComplete (
 /// The type of SMM CPU Information
 ///
 typedef struct {
-  SPIN_LOCK                         Busy;
+  SPIN_LOCK                         *Busy;
   volatile EFI_AP_PROCEDURE         Procedure;
   volatile VOID                     *Parameter;
-  volatile UINT32                   Run;
-  volatile BOOLEAN                  Present;
+  volatile UINT32                   *Run;
+  volatile BOOLEAN                  *Present;
 } SMM_CPU_DATA_BLOCK;
 
 typedef enum {
@@ -313,17 +314,19 @@ typedef struct {
   // so that UC cache-ability can be set together.
   //
   SMM_CPU_DATA_BLOCK            *CpuData;
-  volatile UINT32               Counter;
+  volatile UINT32               *Counter;
   volatile UINT32               BspIndex;
-  volatile BOOLEAN              InsideSmm;
-  volatile BOOLEAN              AllCpusInSync;
+  volatile BOOLEAN              *InsideSmm;
+  volatile BOOLEAN              *AllCpusInSync;
   volatile SMM_CPU_SYNC_MODE    EffectiveSyncMode;
   volatile BOOLEAN              SwitchBsp;
   volatile BOOLEAN              *CandidateBsp;
 } SMM_DISPATCHER_MP_SYNC_DATA;
 
+#define MSR_SPIN_LOCK_INIT_NUM 15
+
 typedef struct {
-  SPIN_LOCK    SpinLock;
+  SPIN_LOCK    *SpinLock;
   UINT32       MsrIndex;
 } MP_MSR_LOCK;
 
@@ -353,6 +356,45 @@ typedef struct {
   UINT64                            MtrrBaseMaskPtr;        // Offset 0x58
 } PROCESSOR_SMM_DESCRIPTOR;
 
+
+///
+/// All global semaphores' pointer
+///
+typedef struct {
+  volatile UINT32      *Counter;
+  volatile BOOLEAN     *InsideSmm;
+  volatile BOOLEAN     *AllCpusInSync;
+  SPIN_LOCK            *PFLock;
+  SPIN_LOCK            *CodeAccessCheckLock;
+  SPIN_LOCK            *MemoryMappedLock;
+} SMM_CPU_SEMAPHORE_GLOBAL;
+
+///
+/// All semaphores for each processor
+///
+typedef struct {
+  SPIN_LOCK                         *Busy;
+  volatile UINT32                   *Run;
+  volatile BOOLEAN                  *Present;
+} SMM_CPU_SEMAPHORE_CPU;
+
+///
+/// All MSRs semaphores' pointer and counter
+///
+typedef struct {
+  SPIN_LOCK            *Msr;
+  UINTN                AvailableCounter;
+} SMM_CPU_SEMAPHORE_MSR;
+
+///
+/// All semaphores' information
+///
+typedef struct {
+  SMM_CPU_SEMAPHORE_GLOBAL          SemaphoreGlobal;
+  SMM_CPU_SEMAPHORE_CPU             SemaphoreCpu;
+  SMM_CPU_SEMAPHORE_MSR             SemaphoreMsr;
+} SMM_CPU_SEMAPHORES;
+
 extern IA32_DESCRIPTOR                     gcSmiGdtr;
 extern IA32_DESCRIPTOR                     gcSmiIdtr;
 extern VOID                                *gcSmiIdtrPtr;
@@ -368,6 +410,11 @@ extern UINTN                               mSmmStackArrayEnd;
 extern UINTN                               mSmmStackSize;
 extern EFI_SMM_CPU_SERVICE_PROTOCOL        mSmmCpuService;
 extern IA32_DESCRIPTOR                     gcSmiInitGdtr;
+extern SMM_CPU_SEMAPHORES                  mSmmCpuSemaphores;
+extern UINTN                               mSemaphoreSize;
+extern SPIN_LOCK                           *mPFLock;
+extern SPIN_LOCK                           *mConfigSmmCodeAccessCheckLock;
+extern SPIN_LOCK                           *mMemoryMappedLock;
 
 /**
   Create 4G PageTable in SMRAM.

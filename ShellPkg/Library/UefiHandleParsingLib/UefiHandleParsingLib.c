@@ -244,11 +244,15 @@ GraphicsOutputProtocolDumpInformation(
   IN CONST BOOLEAN    Verbose
   )
 {
-  EFI_GRAPHICS_OUTPUT_PROTOCOL      *GraphicsOutput;
-  EFI_STATUS                        Status;
-  CHAR16                            *RetVal;
-  CHAR16                            *Temp;
-  CHAR16                            *Fmt;
+  EFI_GRAPHICS_OUTPUT_PROTOCOL          *GraphicsOutput;
+  EFI_STATUS                            Status;
+  CHAR16                                *RetVal;
+  CHAR16                                *Temp;
+  CHAR16                                *Fmt;
+  CHAR16                                *TempRetVal;
+  UINTN                                 GopInfoSize;
+  UINT32                                Mode;
+  EFI_GRAPHICS_OUTPUT_MODE_INFORMATION  *GopInfo;
 
   if (!Verbose) {
     return (CatSPrint(NULL, L"GraphicsOutput"));
@@ -295,9 +299,186 @@ GraphicsOutputProtocolDumpInformation(
              GraphicsOutput->Mode->Info->PixelFormat!=PixelBitMask?0:GraphicsOutput->Mode->Info->PixelInformation.BlueMask
              );
 
+  SHELL_FREE_NON_NULL (Temp);
+
+  Temp = HiiGetString (mHandleParsingHiiHandle, STRING_TOKEN (STR_GOP_RES_LIST_MAIN), NULL);
+  if (Temp == NULL) {
+    SHELL_FREE_NON_NULL (RetVal);
+    goto EXIT;
+  }
+
+  TempRetVal = CatSPrint (RetVal, Temp);
+  SHELL_FREE_NON_NULL (RetVal);
+  if (TempRetVal == NULL) {
+    goto EXIT;
+  }
+  RetVal = TempRetVal;
+  SHELL_FREE_NON_NULL (Temp);
+
+  Temp = HiiGetString (mHandleParsingHiiHandle, STRING_TOKEN (STR_GOP_RES_LIST_ENTRY), NULL);
+  if (Temp == NULL) {
+    SHELL_FREE_NON_NULL (RetVal);
+    goto EXIT;
+  }
+
+
+  for (Mode = 0; Mode < GraphicsOutput->Mode->MaxMode; Mode++) {
+    Status = GraphicsOutput->QueryMode (
+                               GraphicsOutput,
+                               Mode,
+                               &GopInfoSize,
+                               &GopInfo
+                               );
+    if (EFI_ERROR (Status)) {
+      continue;
+    }
+
+    TempRetVal = CatSPrint (
+                   RetVal,
+                   Temp,
+                   Mode,
+                   GopInfo->HorizontalResolution,
+                   GopInfo->VerticalResolution
+                   );
+
+    SHELL_FREE_NON_NULL (GopInfo);
+    SHELL_FREE_NON_NULL (RetVal);
+    RetVal = TempRetVal;
+  }
+
+
+EXIT:
   SHELL_FREE_NON_NULL(Temp);
   SHELL_FREE_NON_NULL(Fmt);
 
+  return RetVal;
+}
+
+/**
+  Function to dump information about EDID Discovered Protocol.
+
+  This will allocate the return buffer from boot services pool.
+
+  @param[in] TheHandle      The handle that has LoadedImage installed.
+  @param[in] Verbose        TRUE for additional information, FALSE otherwise.
+
+  @retval A pointer to a string containing the information.
+**/
+CHAR16*
+EFIAPI
+EdidDiscoveredProtocolDumpInformation (
+  IN CONST EFI_HANDLE TheHandle,
+  IN CONST BOOLEAN    Verbose
+  )
+{
+  EFI_EDID_DISCOVERED_PROTOCOL          *EdidDiscovered;
+  EFI_STATUS                            Status;
+  CHAR16                                *RetVal;
+  CHAR16                                *Temp;
+  CHAR16                                *TempRetVal;
+
+  if (!Verbose) {
+    return (CatSPrint (NULL, L"EDIDDiscovered"));
+  }
+
+  Status = gBS->OpenProtocol (
+                  TheHandle,
+                  &gEfiEdidDiscoveredProtocolGuid,
+                  (VOID**)&EdidDiscovered,
+                  NULL,
+                  NULL,
+                  EFI_OPEN_PROTOCOL_GET_PROTOCOL
+                  );
+
+  if (EFI_ERROR (Status)) {
+    return NULL;
+  }
+
+  Temp = HiiGetString (mHandleParsingHiiHandle, STRING_TOKEN (STR_EDID_DISCOVERED_MAIN), NULL);
+  if (Temp == NULL) {
+    return NULL;
+  }
+
+  RetVal = CatSPrint (NULL, Temp, EdidDiscovered->SizeOfEdid);
+  SHELL_FREE_NON_NULL (Temp);
+
+  if (EdidDiscovered->SizeOfEdid != 0) {
+    Temp = HiiGetString (mHandleParsingHiiHandle, STRING_TOKEN (STR_EDID_DISCOVERED_DATA), NULL);
+    if (Temp == NULL) {
+      SHELL_FREE_NON_NULL (RetVal);
+      return NULL;
+    }
+    TempRetVal = CatSPrint (RetVal, Temp);
+    SHELL_FREE_NON_NULL (RetVal);
+    RetVal = TempRetVal;
+
+    TempRetVal = CatSDumpHex (RetVal, 7, 0, EdidDiscovered->SizeOfEdid, EdidDiscovered->Edid);
+    RetVal = TempRetVal;
+  }
+  return RetVal;
+}
+
+/**
+  Function to dump information about EDID Active Protocol.
+
+  This will allocate the return buffer from boot services pool.
+
+  @param[in] TheHandle      The handle that has LoadedImage installed.
+  @param[in] Verbose        TRUE for additional information, FALSE otherwise.
+
+  @retval A pointer to a string containing the information.
+**/
+CHAR16*
+EFIAPI
+EdidActiveProtocolDumpInformation (
+  IN CONST EFI_HANDLE TheHandle,
+  IN CONST BOOLEAN    Verbose
+  )
+{
+  EFI_EDID_ACTIVE_PROTOCOL  *EdidActive;
+  EFI_STATUS                Status;
+  CHAR16                    *RetVal;
+  CHAR16                    *Temp;
+  CHAR16                    *TempRetVal;
+
+  if (!Verbose) {
+    return (CatSPrint (NULL, L"EDIDActive"));
+  }
+
+  Status = gBS->OpenProtocol (
+                  TheHandle,
+                  &gEfiEdidActiveProtocolGuid,
+                  (VOID**)&EdidActive,
+                  NULL,
+                  NULL,
+                  EFI_OPEN_PROTOCOL_GET_PROTOCOL
+                  );
+
+  if (EFI_ERROR (Status)) {
+    return NULL;
+  }
+
+  Temp = HiiGetString (mHandleParsingHiiHandle, STRING_TOKEN (STR_EDID_ACTIVE_MAIN), NULL);
+  if (Temp == NULL) {
+    return NULL;
+  }
+
+  RetVal = CatSPrint (NULL, Temp, EdidActive->SizeOfEdid);
+  SHELL_FREE_NON_NULL (Temp);
+
+  if (EdidActive->SizeOfEdid != 0) {
+    Temp = HiiGetString (mHandleParsingHiiHandle, STRING_TOKEN (STR_EDID_ACTIVE_DATA), NULL);
+    if (Temp == NULL) {
+      SHELL_FREE_NON_NULL (RetVal);
+      return NULL;
+    }
+    TempRetVal = CatSPrint (RetVal, Temp);
+    SHELL_FREE_NON_NULL (RetVal);
+    RetVal = TempRetVal;
+
+    TempRetVal = CatSDumpHex (RetVal, 7, 0, EdidActive->SizeOfEdid, EdidActive->Edid);
+    RetVal = TempRetVal;
+  }
   return RetVal;
 }
 
@@ -546,9 +727,46 @@ DriverEfiVersionProtocolDumpInformation(
   ASSERT_EFI_ERROR(Status);
 
   RetVal = AllocateZeroPool(VersionStringSize);
-  ASSERT(RetVal != NULL);
-  UnicodeSPrint(RetVal, VersionStringSize, L"0x%08x", DriverEfiVersion->FirmwareVersion);
+  if (RetVal != NULL) {
+    UnicodeSPrint (RetVal, VersionStringSize, L"0x%08x", DriverEfiVersion->FirmwareVersion);
+  }
   return (RetVal);
+}
+/**
+  Function to convert device path to string.
+
+  This will allocate the return buffer from boot services pool.
+
+  @param[in] DevPath        Pointer to device path instance.
+  @param[in] Verbose        TRUE for additional information, FALSE otherwise.
+  @param[in] Length         Maximum allowed text length of the device path.
+
+  @retval A pointer to a string containing the information.
+**/
+CHAR16*
+ConvertDevicePathToShortText(
+  IN CONST EFI_DEVICE_PATH_PROTOCOL *DevPath,
+  IN CONST BOOLEAN                  Verbose,
+  IN CONST UINTN                    Length
+  )
+{
+  CHAR16                            *Temp;
+  CHAR16                            *Temp2;
+  UINTN                             Size;
+
+  //
+  // I cannot decide whether to allow shortcuts here (the second BOOLEAN on the next line)
+  //
+  Temp = ConvertDevicePathToText(DevPath, TRUE, TRUE);
+  if (!Verbose && Temp != NULL && StrLen(Temp) > Length) {
+    Temp2 = NULL;
+    Size  = 0;
+    Temp2 = StrnCatGrow(&Temp2, &Size, L"..", 0);
+    Temp2 = StrnCatGrow(&Temp2, &Size, Temp+(StrLen(Temp) - (Length - 2)), 0);
+    FreePool(Temp);
+    Temp = Temp2;
+  }
+  return (Temp);
 }
 
 /**
@@ -559,7 +777,7 @@ DriverEfiVersionProtocolDumpInformation(
   @param[in] TheHandle      The handle that has the protocol installed.
   @param[in] Verbose        TRUE for additional information, FALSE otherwise.
 
-  @retval A poitner to a string containing the information.
+  @retval A pointer to a string containing the information.
 **/
 CHAR16*
 EFIAPI
@@ -570,23 +788,43 @@ DevicePathProtocolDumpInformation(
 {
   EFI_DEVICE_PATH_PROTOCOL          *DevPath;
   CHAR16                            *Temp;
-  CHAR16                            *Temp2;
   EFI_STATUS                        Status;
   Temp = NULL;
 
   Status = gBS->OpenProtocol(TheHandle, &gEfiDevicePathProtocolGuid, (VOID**)&DevPath, gImageHandle, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
   if (!EFI_ERROR(Status)) {
-    //
-    // I cannot decide whether to allow shortcuts here (the second BOOLEAN on the next line)
-    //
-    Temp = ConvertDevicePathToText(DevPath, TRUE, TRUE);
+    Temp = ConvertDevicePathToShortText (DevPath, Verbose, 30);
     gBS->CloseProtocol(TheHandle, &gEfiDevicePathProtocolGuid, gImageHandle, NULL);
   }
-  if (!Verbose && Temp != NULL && StrLen(Temp) > 30) {
-    Temp2 = NULL;
-    Temp2 = StrnCatGrow(&Temp2, NULL, Temp+(StrLen(Temp) - 30), 30);
-    FreePool(Temp);
-    Temp = Temp2;
+  return (Temp);
+}
+
+/**
+  Function to dump information about LoadedImageDevicePath protocol.
+
+  This will allocate the return buffer from boot services pool.
+
+  @param[in] TheHandle      The handle that has the protocol installed.
+  @param[in] Verbose        TRUE for additional information, FALSE otherwise.
+
+  @retval A pointer to a string containing the information.
+**/
+CHAR16*
+EFIAPI
+LoadedImageDevicePathProtocolDumpInformation(
+  IN CONST EFI_HANDLE TheHandle,
+  IN CONST BOOLEAN    Verbose
+  )
+{
+  EFI_DEVICE_PATH_PROTOCOL          *DevPath;
+  CHAR16                            *Temp;
+  EFI_STATUS                        Status;
+  Temp = NULL;
+
+  Status = gBS->OpenProtocol(TheHandle, &gEfiLoadedImageDevicePathProtocolGuid, (VOID**)&DevPath, gImageHandle, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+  if (!EFI_ERROR(Status)) {
+    Temp = ConvertDevicePathToShortText (DevPath, Verbose, 30);
+    gBS->CloseProtocol(TheHandle, &gEfiDevicePathProtocolGuid, gImageHandle, NULL);
   }
   return (Temp);
 }
@@ -796,7 +1034,7 @@ AdapterInformationDumpInformation (
                          RetVal,
                          TempStr,
                          ((EFI_ADAPTER_INFO_UNDI_IPV6_SUPPORT *)InformationBlock)->Ipv6Support
-                         );   
+                         );
           SHELL_FREE_NON_NULL (RetVal);
           RetVal = TempRetVal;
         } else {
@@ -1086,7 +1324,7 @@ FirmwareManagementDumpInformation (
                        TempStr,
                        Index,
                        ImageInfoV1[Index].ImageIndex,
-                       ImageInfoV1[Index].ImageTypeId,
+                       &ImageInfoV1[Index].ImageTypeId,
                        ImageInfoV1[Index].ImageId,
                        ImageInfoV1[Index].ImageIdName,
                        ImageInfoV1[Index].Version,
@@ -1113,7 +1351,7 @@ FirmwareManagementDumpInformation (
                        TempStr,
                        Index,
                        ImageInfoV2[Index].ImageIndex,
-                       ImageInfoV2[Index].ImageTypeId,
+                       &ImageInfoV2[Index].ImageTypeId,
                        ImageInfoV2[Index].ImageId,
                        ImageInfoV2[Index].ImageIdName,
                        ImageInfoV2[Index].Version,
@@ -1141,7 +1379,7 @@ FirmwareManagementDumpInformation (
                        TempStr,
                        Index,
                        ImageInfo[Index].ImageIndex,
-                       ImageInfo[Index].ImageTypeId,
+                       &ImageInfo[Index].ImageTypeId,
                        ImageInfo[Index].ImageId,
                        ImageInfo[Index].ImageIdName,
                        ImageInfo[Index].Version,
@@ -1270,7 +1508,7 @@ STATIC CONST GUID_INFO_BLOCK mGuidStringListNT[] = {
 STATIC CONST GUID_INFO_BLOCK mGuidStringList[] = {
   {STRING_TOKEN(STR_LOADED_IMAGE),          &gEfiLoadedImageProtocolGuid,                     LoadedImageProtocolDumpInformation},
   {STRING_TOKEN(STR_DEVICE_PATH),           &gEfiDevicePathProtocolGuid,                      DevicePathProtocolDumpInformation},
-  {STRING_TOKEN(STR_IMAGE_PATH),            &gEfiLoadedImageDevicePathProtocolGuid,           DevicePathProtocolDumpInformation},
+  {STRING_TOKEN(STR_IMAGE_PATH),            &gEfiLoadedImageDevicePathProtocolGuid,           LoadedImageDevicePathProtocolDumpInformation},
   {STRING_TOKEN(STR_DEVICE_PATH_UTIL),      &gEfiDevicePathUtilitiesProtocolGuid,             NULL},
   {STRING_TOKEN(STR_DEVICE_PATH_TXT),       &gEfiDevicePathToTextProtocolGuid,                NULL},
   {STRING_TOKEN(STR_DEVICE_PATH_FTXT),      &gEfiDevicePathFromTextProtocolGuid,              NULL},
@@ -1294,8 +1532,8 @@ STATIC CONST GUID_INFO_BLOCK mGuidStringList[] = {
   {STRING_TOKEN(STR_ABS_POINTER),           &gEfiAbsolutePointerProtocolGuid,                 NULL},
   {STRING_TOKEN(STR_SERIAL_IO),             &gEfiSerialIoProtocolGuid,                        NULL},
   {STRING_TOKEN(STR_GRAPHICS_OUTPUT),       &gEfiGraphicsOutputProtocolGuid,                  GraphicsOutputProtocolDumpInformation},
-  {STRING_TOKEN(STR_EDID_DISCOVERED),       &gEfiEdidDiscoveredProtocolGuid,                  NULL},
-  {STRING_TOKEN(STR_EDID_ACTIVE),           &gEfiEdidActiveProtocolGuid,                      NULL},
+  {STRING_TOKEN(STR_EDID_DISCOVERED),       &gEfiEdidDiscoveredProtocolGuid,                  EdidDiscoveredProtocolDumpInformation},
+  {STRING_TOKEN(STR_EDID_ACTIVE),           &gEfiEdidActiveProtocolGuid,                      EdidActiveProtocolDumpInformation},
   {STRING_TOKEN(STR_EDID_OVERRIDE),         &gEfiEdidOverrideProtocolGuid,                    NULL},
   {STRING_TOKEN(STR_CON_IN),                &gEfiConsoleInDeviceGuid,                         NULL},
   {STRING_TOKEN(STR_CON_OUT),               &gEfiConsoleOutDeviceGuid,                        NULL},
@@ -1980,10 +2218,11 @@ InternalShellInitHandleList(
   }
   for (mHandleList.NextIndex = 1 ; mHandleList.NextIndex <= HandleCount ; mHandleList.NextIndex++){
     ListWalker = AllocateZeroPool(sizeof(HANDLE_LIST));
-    ASSERT(ListWalker != NULL);
-    ListWalker->TheHandle = HandleBuffer[mHandleList.NextIndex-1];
-    ListWalker->TheIndex  = mHandleList.NextIndex;
-    InsertTailList(&mHandleList.List.Link,&ListWalker->Link);
+    if (ListWalker != NULL) {
+      ListWalker->TheHandle = HandleBuffer[mHandleList.NextIndex - 1];
+      ListWalker->TheIndex = mHandleList.NextIndex;
+      InsertTailList (&mHandleList.List.Link, &ListWalker->Link);
+    }
   }
   FreePool(HandleBuffer);
   return (EFI_SUCCESS);
@@ -2051,7 +2290,9 @@ ConvertHandleToHandleIndex(
   FreePool (ProtocolBuffer);
 
   ListWalker = AllocateZeroPool(sizeof(HANDLE_LIST));
-  ASSERT(ListWalker != NULL);
+  if (ListWalker == NULL) {
+    return 0;
+  }
   ListWalker->TheHandle = TheHandle;
   ListWalker->TheIndex  = mHandleList.NextIndex++;
   InsertTailList(&mHandleList.List.Link,&ListWalker->Link);
@@ -2178,7 +2419,11 @@ ParseHandleDatabaseByRelationshipWithType (
   }
 
   *HandleType = AllocateZeroPool (*HandleCount * sizeof (UINTN));
-  ASSERT(*HandleType != NULL);
+  if (*HandleType == NULL) {
+    SHELL_FREE_NON_NULL (*HandleBuffer);
+    *HandleCount = 0;
+    return EFI_OUT_OF_RESOURCES;
+  }
 
   DriverBindingHandleIndex = -1;
   for (HandleIndex = 0; HandleIndex < *HandleCount; HandleIndex++) {
@@ -2223,10 +2468,6 @@ ParseHandleDatabaseByRelationshipWithType (
         (*HandleType)[HandleIndex] |= (UINTN)HR_COMPONENT_NAME_HANDLE;
       } else if (CompareGuid (ProtocolGuidArray[ProtocolIndex], &gEfiDevicePathProtocolGuid)          ) {
         (*HandleType)[HandleIndex] |= (UINTN)HR_DEVICE_HANDLE;
-      } else {
-        DEBUG_CODE_BEGIN();
-        ASSERT((*HandleType)[HandleIndex] == (*HandleType)[HandleIndex]);
-        DEBUG_CODE_END();
       }
       //
       // Retrieve the list of agents that have opened each protocol
@@ -2438,26 +2679,28 @@ ParseHandleDatabaseByRelationship (
         // Allocate a handle buffer for the number of handles that matched the attributes in Mask
         //
         *MatchingHandleBuffer = AllocateZeroPool ((*MatchingHandleCount +1)* sizeof (EFI_HANDLE));
-        ASSERT(*MatchingHandleBuffer != NULL);
-
-        for (HandleIndex = 0,*MatchingHandleCount = 0
-          ;  HandleIndex < HandleCount
-          ;  HandleIndex++
-         ){
-          //
-          // Fill the allocated buffer with the handles that matched the attributes in Mask
-          //
-          if ((HandleType[HandleIndex] & Mask) == Mask) {
-            (*MatchingHandleBuffer)[(*MatchingHandleCount)++] = HandleBuffer[HandleIndex];
+        if (*MatchingHandleBuffer == NULL) {
+          Status = EFI_OUT_OF_RESOURCES;
+        } else {
+          for (HandleIndex = 0, *MatchingHandleCount = 0
+               ;  HandleIndex < HandleCount
+               ;  HandleIndex++
+               ) {
+            //
+            // Fill the allocated buffer with the handles that matched the attributes in Mask
+            //
+            if ((HandleType[HandleIndex] & Mask) == Mask) {
+              (*MatchingHandleBuffer)[(*MatchingHandleCount)++] = HandleBuffer[HandleIndex];
+            }
           }
-        }
 
-        //
-        // Make the last one NULL
-        //
-        (*MatchingHandleBuffer)[*MatchingHandleCount] = NULL;
+          //
+          // Make the last one NULL
+          //
+          (*MatchingHandleBuffer)[*MatchingHandleCount] = NULL;
 
-        Status = EFI_SUCCESS;
+          Status = EFI_SUCCESS;
+        } // *MatchingHandleBuffer == NULL (ELSE)
       } // MacthingHandleBuffer == NULL (ELSE)
     } // *MatchingHandleCount  == 0 (ELSE)
   } // no error on ParseHandleDatabaseByRelationshipWithType
@@ -2470,6 +2713,9 @@ ParseHandleDatabaseByRelationship (
     FreePool (HandleType);
   }
 
+  ASSERT ((MatchingHandleBuffer == NULL) ||
+          (*MatchingHandleCount == 0 && *MatchingHandleBuffer == NULL) ||
+          (*MatchingHandleCount != 0 && *MatchingHandleBuffer != NULL));
   return Status;
 }
 
@@ -2561,6 +2807,9 @@ ParseHandleDatabaseForChildControllers(
   } else {
     FreePool(HandleBufferForReturn);
   }
+  ASSERT ((MatchingHandleBuffer == NULL) ||
+          (*MatchingHandleCount == 0 && *MatchingHandleBuffer == NULL) ||
+          (*MatchingHandleCount != 0 && *MatchingHandleBuffer != NULL));
 
   return (EFI_SUCCESS);
 }
@@ -2791,7 +3040,7 @@ GetHandleListByProtocolList (
   }
 
   //
-  // No handles were found... 
+  // No handles were found...
   //
   if (TotalSize == sizeof(EFI_HANDLE)) {
     return (NULL);
@@ -2829,13 +3078,3 @@ GetHandleListByProtocolList (
 
   return (HandleList);
 }
-
-
-
-
-
-
-
-
-
-

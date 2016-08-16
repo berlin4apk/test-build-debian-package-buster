@@ -14,30 +14,6 @@
 
 #include "CpuMpPei.h"
 
-//
-// Global Descriptor Table (GDT)
-//
-GLOBAL_REMOVE_IF_UNREFERENCED IA32_GDT mGdtEntries[] = {
-/* selector { Global Segment Descriptor                              } */
-/* 0x00 */  {{0,      0,  0,  0,    0,  0,  0,  0,    0,  0, 0,  0,  0}}, //null descriptor
-/* 0x08 */  {{0xffff, 0,  0,  0x2,  1,  0,  1,  0xf,  0,  0, 1,  1,  0}}, //linear data segment descriptor
-/* 0x10 */  {{0xffff, 0,  0,  0xf,  1,  0,  1,  0xf,  0,  0, 1,  1,  0}}, //linear code segment descriptor
-/* 0x18 */  {{0xffff, 0,  0,  0x3,  1,  0,  1,  0xf,  0,  0, 1,  1,  0}}, //system data segment descriptor
-/* 0x20 */  {{0xffff, 0,  0,  0xa,  1,  0,  1,  0xf,  0,  0, 1,  1,  0}}, //system code segment descriptor
-/* 0x28 */  {{0,      0,  0,  0,    0,  0,  0,  0,    0,  0, 0,  0,  0}}, //spare segment descriptor
-/* 0x30 */  {{0xffff, 0,  0,  0x2,  1,  0,  1,  0xf,  0,  0, 1,  1,  0}}, //system data segment descriptor
-/* 0x38 */  {{0xffff, 0,  0,  0xa,  1,  0,  1,  0xf,  0,  1, 0,  1,  0}}, //system code segment descriptor
-/* 0x40 */  {{0,      0,  0,  0,    0,  0,  0,  0,    0,  0, 0,  0,  0}}, //spare segment descriptor
-};
-
-//
-// IA32 Gdt register
-//
-GLOBAL_REMOVE_IF_UNREFERENCED IA32_DESCRIPTOR mGdt = {
-  sizeof (mGdtEntries) - 1,
-  (UINTN) mGdtEntries
-  };
-
 GLOBAL_REMOVE_IF_UNREFERENCED EFI_PEI_NOTIFY_DESCRIPTOR mNotifyList = {
   (EFI_PEI_PPI_DESCRIPTOR_NOTIFY_CALLBACK | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST),
   &gEfiEndOfPeiSignalPpiGuid,
@@ -302,7 +278,7 @@ ApCFunction (
       // Sync BSP's Mtrr table to all wakeup APs and load microcode on APs.
       //
       MtrrSetAllMtrrs (&PeiCpuMpData->MtrrTable);
-      MicrocodeDetect ();
+      MicrocodeDetect (PeiCpuMpData);
       PeiCpuMpData->CpuData[ProcessorNumber].State = CpuStateIdle;
     } else {
       //
@@ -452,9 +428,10 @@ WakeUpAP (
   ExchangeInfo->StackStart         = PeiCpuMpData->Buffer;
   ExchangeInfo->StackSize          = PeiCpuMpData->CpuApStackSize;
   ExchangeInfo->BufferStart        = PeiCpuMpData->WakeupBuffer;
-  ExchangeInfo->PmodeOffset        = PeiCpuMpData->AddressMap.PModeEntryOffset;
-  ExchangeInfo->LmodeOffset        = PeiCpuMpData->AddressMap.LModeEntryOffset;
+  ExchangeInfo->ModeOffset         = PeiCpuMpData->AddressMap.ModeEntryOffset;
   ExchangeInfo->Cr3                = AsmReadCr3 ();
+  ExchangeInfo->CodeSegment        = AsmReadCs ();
+  ExchangeInfo->DataSegment        = AsmReadDs ();
   ExchangeInfo->CFunction          = (UINTN) ApCFunction;
   ExchangeInfo->NumApsExecuting    = 0;
   ExchangeInfo->PeiCpuMpData       = PeiCpuMpData;
@@ -462,7 +439,7 @@ WakeUpAP (
   //
   // Get the BSP's data of GDT and IDT
   //
-  CopyMem ((VOID *)&ExchangeInfo->GdtrProfile, &mGdt, sizeof(mGdt));
+  AsmReadGdtr ((IA32_DESCRIPTOR *) &ExchangeInfo->GdtrProfile);
   AsmReadIdtr ((IA32_DESCRIPTOR *) &ExchangeInfo->IdtrProfile);
 
   if (PeiCpuMpData->ApLoopMode == ApInMwaitLoop) {
@@ -624,7 +601,7 @@ CountProcessorNumber (
   //
   // Load Microcode on BSP
   //
-  MicrocodeDetect ();
+  MicrocodeDetect (PeiCpuMpData);
   //
   // Store BSP's MTRR setting
   //
@@ -852,13 +829,26 @@ CpuMpPeimInit (
   IN CONST EFI_PEI_SERVICES     **PeiServices
   )
 {
-  EFI_STATUS           Status;
-  PEI_CPU_MP_DATA      *PeiCpuMpData;
+  EFI_STATUS                       Status;
+  PEI_CPU_MP_DATA                 *PeiCpuMpData;
+  EFI_VECTOR_HANDOFF_INFO         *VectorInfo;
+  EFI_PEI_VECTOR_HANDOFF_INFO_PPI *VectorHandoffInfoPpi;
 
   //
-  // Load new GDT table on BSP
+  // Get Vector Hand-off Info PPI
   //
-  AsmInitializeGdt (&mGdt);
+  VectorInfo = NULL;
+  Status = PeiServicesLocatePpi (
+             &gEfiVectorHandoffInfoPpiGuid,
+             0,
+             NULL,
+             (VOID **)&VectorHandoffInfoPpi
+             );
+  if (Status == EFI_SUCCESS) {
+    VectorInfo = VectorHandoffInfoPpi->Info;
+  }
+  Status = InitializeCpuExceptionHandlers (VectorInfo);
+  ASSERT_EFI_ERROR (Status);
   //
   // Get wakeup buffer and copy AP reset code in it
   //

@@ -1,7 +1,7 @@
 /** @file
   SMM Core Main Entry Point
 
-  Copyright (c) 2009 - 2015, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials are licensed and made available 
   under the terms and conditions of the BSD License which accompanies this 
   distribution.  The full text of the license may be found at        
@@ -256,7 +256,7 @@ SmmReadyToBootHandler (
   or if gEfiEventReadyToBootGuid is signalled.  This function unregisters the 
   Software SMIs that are nor required after SMRAM is locked and installs the 
   SMM Ready To Lock Protocol so SMM Drivers are informed that SMRAM is about 
-  to be locked.  It also verifies the the SMM CPU I/O 2 Protocol has been installed
+  to be locked.  It also verifies the SMM CPU I/O 2 Protocol has been installed
   and NULLs gBS and gST because they can not longer be used after SMRAM is locked.
 
   @param  DispatchHandle  The unique handle assigned to this handler by SmiHandlerRegister().
@@ -632,6 +632,7 @@ SmmMain (
   }
 
   RegisterSmramProfileHandler ();
+  SmramProfileInstallProtocol ();
 
   SmmCoreInstallLoadedImage ();
 

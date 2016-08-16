@@ -1,7 +1,7 @@
 /** @file
   The implementation of the Udp4 protocol.
   
-Copyright (c) 2006 - 2016 Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -200,10 +200,10 @@ Udp4DeliverDgram (
   );
 
 /**
-  This function demultiplexes the received udp datagram to the apropriate instances.
+  This function demultiplexes the received udp datagram to the appropriate instances.
 
   @param[in]  Udp4Service            Pointer to the udp service context data.
-  @param[in]  NetSession             Pointer to the EFI_NET_SESSION_DATA abstrated from
+  @param[in]  NetSession             Pointer to the EFI_NET_SESSION_DATA abstracted from
                                      the received datagram.
   @param[in]  Packet                 Pointer to the buffer containing the received udp
                                      datagram.
@@ -1586,10 +1586,10 @@ Udp4DeliverDgram (
 
 
 /**
-  This function demultiplexes the received udp datagram to the apropriate instances.
+  This function demultiplexes the received udp datagram to the appropriate instances.
 
   @param[in]  Udp4Service            Pointer to the udp service context data.
-  @param[in]  NetSession             Pointer to the EFI_NET_SESSION_DATA abstrated from
+  @param[in]  NetSession             Pointer to the EFI_NET_SESSION_DATA abstracted from
                                      the received datagram.
   @param[in]  Packet                 Pointer to the buffer containing the received udp
                                      datagram.
@@ -1707,7 +1707,7 @@ Udp4SendPortUnreach (
   IpSender = IpIoFindSender (&IpIo, NetSession->IpVersion, &NetSession->Dest);
   if (IpSender == NULL) {
     //
-    // No apropriate sender, since we cannot send out the ICMP message through
+    // No appropriate sender, since we cannot send out the ICMP message through
     // the default zero station address IP instance, abort.
     //
     return;
@@ -1716,7 +1716,7 @@ Udp4SendPortUnreach (
   IpHdr = NetSession->IpHdr.Ip4Hdr;
 
   //
-  // Calculate the requried length of the icmp error message.
+  // Calculate the required length of the icmp error message.
   //
   Len = sizeof (IP4_ICMP_ERROR_HEAD) + (EFI_IP4_HEADER_LEN (IpHdr) -
         sizeof (IP4_HEAD)) + ICMP_ERROR_PACKET_LENGTH;

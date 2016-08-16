@@ -1,7 +1,7 @@
 /** @file
 Agent Module to load other modules to deploy SMM Entry Vector for X86 CPU.
 
-Copyright (c) 2009 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -97,6 +97,11 @@ UINTN mNumberOfCpus = 1;
 BOOLEAN mSmmReadyToLock = FALSE;
 
 //
+// S3 boot flag
+//
+BOOLEAN mSmmS3Flag = FALSE;
+
+//
 // Global used to cache PCD for SMM Code Access Check enable
 //
 BOOLEAN                  mSmmCodeAccessCheckEnable = FALSE;
@@ -104,7 +109,7 @@ BOOLEAN                  mSmmCodeAccessCheckEnable = FALSE;
 //
 // Spin lock used to serialize setting of SMM Code Access Check feature
 //
-SPIN_LOCK                mConfigSmmCodeAccessCheckLock;
+SPIN_LOCK                *mConfigSmmCodeAccessCheckLock = NULL;
 
 /**
   Initialize IDT to setup exception handlers for SMM.
@@ -246,7 +251,7 @@ SmmReadSaveState (
     // the pseudo register value for EFI_SMM_SAVE_STATE_REGISTER_PROCESSOR_ID is returned in Buffer.
     // Otherwise, EFI_NOT_FOUND is returned.
     //
-    if (mSmmMpSyncData->CpuData[CpuIndex].Present) {
+    if (*(mSmmMpSyncData->CpuData[CpuIndex].Present)) {
       *(UINT64 *)Buffer = gSmmCpuPrivate->ProcessorInfo[CpuIndex].ProcessorId;
       return EFI_SUCCESS;
     } else {
@@ -254,7 +259,7 @@ SmmReadSaveState (
     }
   }
 
-  if (!mSmmMpSyncData->CpuData[CpuIndex].Present) {
+  if (!(*(mSmmMpSyncData->CpuData[CpuIndex].Present))) {
     return EFI_INVALID_PARAMETER;
   }
 
@@ -349,6 +354,13 @@ SmmInitHandler (
         gSmmCpuPrivate->ProcessorInfo,
         &mCpuHotPlugData
         );
+
+      if (!mSmmS3Flag) {
+        //
+        // Check XD and BTS features on each processor on normal boot
+        //
+        CheckFeatureSupported ();
+      }
 
       if (mIsBsp) {
         //
@@ -484,6 +496,10 @@ SmmRestoreCpu (
   EFI_STATUS                    Status;
 
   DEBUG ((EFI_D_INFO, "SmmRestoreCpu()\n"));
+
+  mSmmS3Flag = TRUE;
+
+  InitializeSpinLock (mMemoryMappedLock);
 
   //
   // See if there is enough context to resume PEI Phase
@@ -1183,11 +1199,6 @@ PiCpuSmmEntry (
   }
 
   //
-  // Check XD and BTS features
-  //
-  CheckProcessorFeature ();
-
-  //
   // Initialize SMM Profile feature
   //
   InitSmmProfile (Cr3);
@@ -1338,7 +1349,7 @@ ConfigSmmCodeAccessCheckOnCurrentProcessor (
   //
   // Release the spin lock user to serialize the updates to the SMM Feature Control MSR
   //
-  ReleaseSpinLock (&mConfigSmmCodeAccessCheckLock);
+  ReleaseSpinLock (mConfigSmmCodeAccessCheckLock);
 }
 
 /**
@@ -1374,13 +1385,13 @@ ConfigSmmCodeAccessCheck (
   //
   // Initialize the lock used to serialize the MSR programming in BSP and all APs
   //
-  InitializeSpinLock (&mConfigSmmCodeAccessCheckLock);
+  InitializeSpinLock (mConfigSmmCodeAccessCheckLock);
 
   //
   // Acquire Config SMM Code Access Check spin lock.  The BSP will release the
   // spin lock when it is done executing ConfigSmmCodeAccessCheckOnCurrentProcessor().
   //
-  AcquireSpinLock (&mConfigSmmCodeAccessCheckLock);
+  AcquireSpinLock (mConfigSmmCodeAccessCheckLock);
 
   //
   // Enable SMM Code Access Check feature on the BSP.
@@ -1397,7 +1408,7 @@ ConfigSmmCodeAccessCheck (
       // Acquire Config SMM Code Access Check spin lock.  The AP will release the
       // spin lock when it is done executing ConfigSmmCodeAccessCheckOnCurrentProcessor().
       //
-      AcquireSpinLock (&mConfigSmmCodeAccessCheckLock);
+      AcquireSpinLock (mConfigSmmCodeAccessCheckLock);
 
       //
       // Call SmmStartupThisAp() to enable SMM Code Access Check on an AP.
@@ -1408,14 +1419,14 @@ ConfigSmmCodeAccessCheck (
       //
       // Wait for the AP to release the Config SMM Code Access Check spin lock.
       //
-      while (!AcquireSpinLockOrFail (&mConfigSmmCodeAccessCheckLock)) {
+      while (!AcquireSpinLockOrFail (mConfigSmmCodeAccessCheckLock)) {
         CpuPause ();
       }
 
       //
       // Release the Config SMM Code Access Check spin lock.
       //
-      ReleaseSpinLock (&mConfigSmmCodeAccessCheckLock);
+      ReleaseSpinLock (mConfigSmmCodeAccessCheckLock);
     }
   }
 }

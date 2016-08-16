@@ -2,6 +2,7 @@
   HII Config Access protocol implementation of RamDiskDxe driver.
 
   Copyright (c) 2016, Intel Corporation. All rights reserved.<BR>
+  (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -18,6 +19,10 @@ CHAR16  mRamDiskStorageName[] = L"RAM_DISK_CONFIGURATION";
 
 RAM_DISK_CONFIG_PRIVATE_DATA mRamDiskConfigPrivateDataTemplate = {
   RAM_DISK_CONFIG_PRIVATE_DATA_SIGNATURE,
+  {
+    EFI_PAGE_SIZE,
+    RAM_DISK_BOOT_SERVICE_DATA_MEMORY
+  },
   {
     RamDiskExtractConfig,
     RamDiskRouteConfig,
@@ -193,7 +198,6 @@ UnregisterAllRamDisks (
 
       FreePool (PrivateData->DevicePath);
       FreePool (PrivateData);
-      ListEntryNum--;
     }
   }
 }
@@ -235,87 +239,11 @@ RamDiskExtractConfig (
        OUT EFI_STRING                       *Results
   )
 {
-  EFI_STATUS                       Status;
-  UINTN                            BufferSize;
-  RAM_DISK_CONFIGURATION           *Configuration;
-  EFI_STRING                       ConfigRequest;
-  EFI_STRING                       ConfigRequestHdr;
-  RAM_DISK_CONFIG_PRIVATE_DATA     *ConfigPrivate;
-  UINTN                            Size;
-  BOOLEAN                          AllocatedRequest;
-
   if (Progress == NULL || Results == NULL) {
     return EFI_INVALID_PARAMETER;
   }
-
   *Progress = Request;
-  if ((Request != NULL) &&
-    !HiiIsConfigHdrMatch (Request, &gRamDiskFormSetGuid, mRamDiskStorageName)) {
-    return EFI_NOT_FOUND;
-  }
-
-  ConfigRequestHdr = NULL;
-  ConfigRequest    = NULL;
-  AllocatedRequest = FALSE;
-  Size             = 0;
-
-  //
-  // Convert buffer data to <ConfigResp> by helper function BlockToConfig()
-  //
-  ConfigPrivate = RAM_DISK_CONFIG_PRIVATE_FROM_THIS (This);
-  BufferSize = sizeof (RAM_DISK_CONFIGURATION) + ListEntryNum;
-  Configuration = AllocateZeroPool (BufferSize);
-  if (Configuration == NULL) {
-    return EFI_OUT_OF_RESOURCES;
-  }
-
-  ConfigRequest = Request;
-  if ((Request == NULL) || (StrStr (Request, L"OFFSET") == NULL)) {
-    //
-    // Request has no request element, construct full request string.
-    // Allocate and fill a buffer large enough to hold the <ConfigHdr> template
-    // followed by "&OFFSET=0&WIDTH=WWWWWWWWWWWWWWWW" followed by a Null-terminator
-    //
-    ConfigRequestHdr = HiiConstructConfigHdr (
-                         &gRamDiskFormSetGuid,
-                         mRamDiskStorageName,
-                         ConfigPrivate->DriverHandle
-                         );
-    Size = (StrLen (ConfigRequestHdr) + 32 + 1) * sizeof (CHAR16);
-    ConfigRequest = AllocateZeroPool (Size);
-    ASSERT (ConfigRequest != NULL);
-    AllocatedRequest = TRUE;
-    UnicodeSPrint (ConfigRequest, Size, L"%s&OFFSET=0&WIDTH=%016LX", ConfigRequestHdr, (UINT64)BufferSize);
-    FreePool (ConfigRequestHdr);
-  }
-
-  Status = gHiiConfigRouting->BlockToConfig (
-                                gHiiConfigRouting,
-                                ConfigRequest,
-                                (UINT8 *) &Configuration,
-                                BufferSize,
-                                Results,
-                                Progress
-                                );
-  //
-  // Free the allocated config request string and RAM disk configuration data.
-  //
-  if (AllocatedRequest) {
-    FreePool (ConfigRequest);
-    ConfigRequest = NULL;
-  }
-  FreePool (Configuration);
-
-  //
-  // Set Progress string to the original request string.
-  //
-  if (Request == NULL) {
-    *Progress = NULL;
-  } else if (StrStr (Request, L"OFFSET") == NULL) {
-    *Progress = Request + StrLen (Request);
-  }
-
-  return Status;
+  return EFI_NOT_FOUND;
 }
 
 
@@ -349,14 +277,7 @@ RamDiskRouteConfig (
     return EFI_INVALID_PARAMETER;
   }
 
-  *Progress = Configuration;
-  if (!HiiIsConfigHdrMatch (Configuration, &gRamDiskFormSetGuid, mRamDiskStorageName)) {
-    return EFI_NOT_FOUND;
-  }
-
-  *Progress = Configuration + StrLen (Configuration);
-
-  return EFI_SUCCESS;
+  return EFI_NOT_FOUND;
 }
 
 
@@ -368,6 +289,7 @@ RamDiskRouteConfig (
                              If creating from file, zero.
   @param[in] FileHandle      If creating raw, NULL. If creating from file, the
                              file handle.
+  @param[in] MemoryType      Type of memory to be used to create RAM Disk.
 
   @retval EFI_SUCCESS             RAM disk is created and registered.
   @retval EFI_OUT_OF_RESOURCES    Not enough storage is available to match the
@@ -377,18 +299,20 @@ RamDiskRouteConfig (
 EFI_STATUS
 HiiCreateRamDisk (
   IN UINT64                                 Size,
-  IN EFI_FILE_HANDLE                        FileHandle
+  IN EFI_FILE_HANDLE                        FileHandle,
+  IN UINT8                                  MemoryType
   )
 {
   EFI_STATUS                      Status;
   UINTN                           BufferSize;
-  UINT64                          StartingAddr;
+  UINT64                          *StartingAddr;
   EFI_INPUT_KEY                   Key;
   EFI_DEVICE_PATH_PROTOCOL        *DevicePath;
   RAM_DISK_PRIVATE_DATA           *PrivateData;
   EFI_FILE_INFO                   *FileInformation;
 
   FileInformation = NULL;
+  StartingAddr    = NULL;
 
   if (FileHandle != NULL) {
     //
@@ -417,8 +341,39 @@ HiiCreateRamDisk (
     Size = FileInformation->FileSize;
   }
 
-  StartingAddr = (UINTN) AllocatePool ((UINTN) Size);
-  if (0 == StartingAddr) {
+  if (Size > (UINTN) -1) {
+    do {
+      CreatePopUp (
+        EFI_LIGHTGRAY | EFI_BACKGROUND_BLUE,
+        &Key,
+        L"",
+        L"The given RAM disk size is too large!",
+        L"Press ENTER to continue ...",
+        L"",
+        NULL
+        );
+    } while (Key.UnicodeChar != CHAR_CARRIAGE_RETURN);
+
+    return EFI_OUT_OF_RESOURCES;
+  }
+
+  if (MemoryType == RAM_DISK_BOOT_SERVICE_DATA_MEMORY) {
+    Status = gBS->AllocatePool (
+                    EfiBootServicesData,
+                    (UINTN)Size,
+                    (VOID**)&StartingAddr
+                    );
+  } else if (MemoryType == RAM_DISK_RESERVED_MEMORY) {
+    Status = gBS->AllocatePool (
+                    EfiReservedMemoryType,
+                    (UINTN)Size,
+                    (VOID**)&StartingAddr
+                    );
+  } else {
+    Status = EFI_INVALID_PARAMETER;
+  }
+
+  if ((StartingAddr == NULL) || EFI_ERROR(Status)) {
     do {
       CreatePopUp (
         EFI_LIGHTGRAY | EFI_BACKGROUND_BLUE,
@@ -465,7 +420,7 @@ HiiCreateRamDisk (
   // Register the newly created RAM disk.
   //
   Status = RamDiskRegister (
-             StartingAddr,
+             ((UINT64)(UINTN) StartingAddr),
              Size,
              &gEfiVirtualDiskGuid,
              NULL,
@@ -557,8 +512,14 @@ UpdateMainForm (
 
   Index = 0;
   EFI_LIST_FOR_EACH (Entry, &RegisteredRamDisks) {
-    PrivateData = RAM_DISK_PRIVATE_FROM_THIS (Entry);
-    String      = RamDiskStr;
+    PrivateData                  = RAM_DISK_PRIVATE_FROM_THIS (Entry);
+    PrivateData->CheckBoxId      = (EFI_QUESTION_ID)
+                                   (MAIN_CHECKBOX_QUESTION_ID_START + Index);
+    //
+    // CheckBox is unchecked by default.
+    //
+    PrivateData->CheckBoxChecked = FALSE;
+    String                       = RamDiskStr;
 
     UnicodeSPrint (
       String,
@@ -574,12 +535,12 @@ UpdateMainForm (
 
     HiiCreateCheckBoxOpCode (
       StartOpCodeHandle,
-      (EFI_QUESTION_ID) (MAIN_CHECKBOX_QUESTION_ID_START + Index),
-      RAM_DISK_CONFIGURATION_VARSTORE_ID,
-      (UINT16) (RAM_DISK_LIST_VAR_OFFSET + Index),
+      PrivateData->CheckBoxId,
+      0,
+      0,
       StringId,
       STRING_TOKEN (STR_RAM_DISK_LIST_HELP),
-      0,
+      EFI_IFR_FLAG_CALLBACK,
       0,
       NULL
       );
@@ -634,10 +595,8 @@ RamDiskCallback (
   )
 {
   EFI_STATUS                      Status;
-  UINTN                           Index;
   RAM_DISK_PRIVATE_DATA           *PrivateData;
   RAM_DISK_CONFIG_PRIVATE_DATA    *ConfigPrivate;
-  RAM_DISK_CONFIGURATION          *Configuration;
   EFI_DEVICE_PATH_PROTOCOL        *FileDevPath;
   EFI_FILE_HANDLE                 FileHandle;
   LIST_ENTRY                      *Entry;
@@ -647,10 +606,17 @@ RamDiskCallback (
     return EFI_INVALID_PARAMETER;
   }
 
+  ConfigPrivate = RAM_DISK_CONFIG_PRIVATE_FROM_THIS (This);
+
   if (Action == EFI_BROWSER_ACTION_RETRIEVE) {
     Status = EFI_UNSUPPORTED;
     if (QuestionId == CREATE_RAW_SIZE_QUESTION_ID) {
       Value->u64 = EFI_PAGE_SIZE;
+      ConfigPrivate->ConfigStore.Size = EFI_PAGE_SIZE;
+      Status = EFI_SUCCESS;
+    } else if (QuestionId == CREATE_RAW_MEMORY_TYPE_QUESTION_ID) {
+      Value->u8 = RAM_DISK_BOOT_SERVICE_DATA_MEMORY;
+      ConfigPrivate->ConfigStore.MemType = RAM_DISK_BOOT_SERVICE_DATA_MEMORY;
       Status = EFI_SUCCESS;
     }
     return Status;
@@ -661,8 +627,6 @@ RamDiskCallback (
       (Action != EFI_BROWSER_ACTION_FORM_OPEN)) {
     return EFI_UNSUPPORTED;
   }
-
-  ConfigPrivate = RAM_DISK_CONFIG_PRIVATE_FROM_THIS (This);
 
   //
   // Update the RAM disk list show at the main form first.
@@ -676,22 +640,7 @@ RamDiskCallback (
     return Status;
   }
 
-  //
-  // Get Browser data
-  //
-  Configuration = AllocateZeroPool (sizeof (RAM_DISK_CONFIGURATION) + ListEntryNum);
-  if (Configuration == NULL) {
-    return EFI_OUT_OF_RESOURCES;
-  }
-
   Status = EFI_SUCCESS;
-
-  HiiGetBrowserData (
-    &gRamDiskFormSetGuid,
-    mRamDiskStorageName,
-    sizeof (RAM_DISK_CONFIGURATION) + ListEntryNum,
-    (UINT8 *) Configuration
-    );
 
   if (Action == EFI_BROWSER_ACTION_CHANGING) {
     switch (QuestionId) {
@@ -719,7 +668,11 @@ RamDiskCallback (
         // Create from file, RAM disk size is zero. It will be updated
         // according to the file size.
         //
-        Status = HiiCreateRamDisk (0, FileHandle);
+        Status = HiiCreateRamDisk (
+                   0,
+                   FileHandle,
+                   ConfigPrivate->ConfigStore.MemType
+                   );
         if (EFI_ERROR (Status)) {
           break;
         }
@@ -729,8 +682,6 @@ RamDiskCallback (
         //
         UpdateMainForm (ConfigPrivate);
       }
-
-      *ActionRequest = EFI_BROWSER_ACTION_REQUEST_FORM_DISCARD_EXIT;
       break;
 
     default:
@@ -742,11 +693,9 @@ RamDiskCallback (
       //
       // Remove the selected RAM disks
       //
-      Index = 0;
       EFI_LIST_FOR_EACH_SAFE (Entry, NextEntry, &RegisteredRamDisks) {
-        if (Configuration->RamDiskList[Index++] != 0) {
-          PrivateData = RAM_DISK_PRIVATE_FROM_THIS (Entry);
-
+        PrivateData = RAM_DISK_PRIVATE_FROM_THIS (Entry);
+        if (PrivateData->CheckBoxChecked) {
           RamDiskUnregister (
             (EFI_DEVICE_PATH_PROTOCOL *) PrivateData->DevicePath
             );
@@ -756,14 +705,25 @@ RamDiskCallback (
       UpdateMainForm (ConfigPrivate);
 
       *ActionRequest = EFI_BROWSER_ACTION_REQUEST_FORM_APPLY;
-      ZeroMem (Configuration->RamDiskList, ListEntryNum);
+      break;
+
+    case CREATE_RAW_SIZE_QUESTION_ID:
+      ConfigPrivate->ConfigStore.Size = Value->u64;
+      break;
+
+    case CREATE_RAW_MEMORY_TYPE_QUESTION_ID:
+      ConfigPrivate->ConfigStore.MemType = Value->u8;
       break;
 
     case CREATE_RAW_SUBMIT_QUESTION_ID:
       //
       // Create raw, FileHandle is NULL.
       //
-      Status = HiiCreateRamDisk (Configuration->Size, NULL);
+      Status = HiiCreateRamDisk (
+                 ConfigPrivate->ConfigStore.Size,
+                 NULL,
+                 ConfigPrivate->ConfigStore.MemType
+                 );
       if (EFI_ERROR (Status)) {
         break;
       }
@@ -781,20 +741,21 @@ RamDiskCallback (
       break;
 
     default:
+      //
+      // QuestionIds for checkboxes
+      //
+      if ((QuestionId >= MAIN_CHECKBOX_QUESTION_ID_START) &&
+          (QuestionId < CREATE_RAW_RAM_DISK_FORM_ID)) {
+        EFI_LIST_FOR_EACH (Entry, &RegisteredRamDisks) {
+          PrivateData = RAM_DISK_PRIVATE_FROM_THIS (Entry);
+          if (PrivateData->CheckBoxId == QuestionId) {
+            PrivateData->CheckBoxChecked = (BOOLEAN) (Value->u8 != 0);
+          }
+        }
+      }
       break;
     }
   }
-
-  if (!EFI_ERROR (Status)) {
-    HiiSetBrowserData (
-      &gRamDiskFormSetGuid,
-      mRamDiskStorageName,
-      sizeof (RAM_DISK_CONFIGURATION) + ListEntryNum,
-      (UINT8 *) Configuration,
-      NULL
-      );
-  }
-  FreePool (Configuration);
 
   return EFI_SUCCESS;
 }

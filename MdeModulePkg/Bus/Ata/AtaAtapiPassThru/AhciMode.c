@@ -1,7 +1,7 @@
 /** @file
   The file for AHCI mode of ATA host controller.
 
-  Copyright (c) 2010 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2010 - 2016, Intel Corporation. All rights reserved.<BR>
   (C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -427,13 +427,7 @@ AhciEnableFisReceive (
   Offset = EFI_AHCI_PORT_START + Port * EFI_AHCI_PORT_REG_WIDTH + EFI_AHCI_PORT_CMD;
   AhciOrReg (PciIo, Offset, EFI_AHCI_PORT_CMD_FRE);
 
-  return AhciWaitMmioSet (
-           PciIo,
-           Offset,
-           EFI_AHCI_PORT_CMD_FR,
-           EFI_AHCI_PORT_CMD_FR,
-           Timeout
-           );
+  return EFI_SUCCESS;
 }
 
 /**
@@ -1484,7 +1478,7 @@ AhciReset (
   @param  PciIo               The PCI IO protocol instance.
   @param  AhciRegisters       The pointer to the EFI_AHCI_REGISTERS.
   @param  Port                The number of port.
-  @param  PortMultiplier      The timeout value of stop.
+  @param  PortMultiplier      The port multiplier port number.
   @param  AtaStatusBlock      A pointer to EFI_ATA_STATUS_BLOCK data structure.
 
   @retval EFI_SUCCESS     Successfully get the return status of S.M.A.R.T command execution.
@@ -1582,7 +1576,7 @@ AhciAtaSmartReturnStatusCheck (
   @param  PciIo               The PCI IO protocol instance.
   @param  AhciRegisters       The pointer to the EFI_AHCI_REGISTERS.
   @param  Port                The number of port.
-  @param  PortMultiplier      The timeout value of stop.
+  @param  PortMultiplier      The port multiplier port number.
   @param  IdentifyData        A pointer to data buffer which is used to contain IDENTIFY data.
   @param  AtaStatusBlock      A pointer to EFI_ATA_STATUS_BLOCK data structure.
 
@@ -1698,7 +1692,7 @@ AhciAtaSmartSupport (
   @param  PciIo               The PCI IO protocol instance.
   @param  AhciRegisters       The pointer to the EFI_AHCI_REGISTERS.
   @param  Port                The number of port.
-  @param  PortMultiplier      The timeout value of stop.
+  @param  PortMultiplier      The port multiplier port number.
   @param  Buffer              The data buffer to store IDENTIFY PACKET data.
 
   @retval EFI_DEVICE_ERROR    The cmd abort with error occurs.
@@ -1756,7 +1750,7 @@ AhciIdentify (
   @param  PciIo               The PCI IO protocol instance.
   @param  AhciRegisters       The pointer to the EFI_AHCI_REGISTERS.
   @param  Port                The number of port.
-  @param  PortMultiplier      The timeout value of stop.
+  @param  PortMultiplier      The port multiplier port number.
   @param  Buffer              The data buffer to store IDENTIFY PACKET data.
 
   @retval EFI_DEVICE_ERROR    The cmd abort with error occurs.
@@ -1814,7 +1808,7 @@ AhciIdentifyPacket (
   @param  PciIo               The PCI IO protocol instance.
   @param  AhciRegisters       The pointer to the EFI_AHCI_REGISTERS.
   @param  Port                The number of port.
-  @param  PortMultiplier      The timeout value of stop.
+  @param  PortMultiplier      The port multiplier port number.
   @param  Feature             The data to send Feature register.
   @param  FeatureSpecificData The specific data for SET FEATURE cmd.
 
@@ -2344,16 +2338,6 @@ AhciModeInitialization (
       //
       Offset = EFI_AHCI_PORT_START + Port * EFI_AHCI_PORT_REG_WIDTH + EFI_AHCI_PORT_CMD;
       AhciOrReg (PciIo, Offset, EFI_AHCI_PORT_CMD_FRE);
-      Status = AhciWaitMmioSet (
-                 PciIo,
-                 Offset,
-                 EFI_AHCI_PORT_CMD_FR,
-                 EFI_AHCI_PORT_CMD_FR,
-                 EFI_AHCI_PORT_CMD_FR_CLEAR_TIMEOUT
-                 );
-      if (EFI_ERROR (Status)) {
-        continue;
-      }
 
       //
       // Wait no longer than 10 ms to wait the Phy to detect the presence of a device.
@@ -2513,7 +2497,7 @@ AhciModeInitialization (
       //
       // Found a ATA or ATAPI device, add it into the device list.
       //
-      CreateNewDeviceInfo (Instance, Port, 0, DeviceType, &Buffer);
+      CreateNewDeviceInfo (Instance, Port, 0xFFFF, DeviceType, &Buffer);
       if (DeviceType == EfiIdeHarddisk) {
         REPORT_STATUS_CODE (EFI_PROGRESS_CODE, (EFI_PERIPHERAL_FIXED_MEDIA | EFI_P_PC_ENABLE));
       }

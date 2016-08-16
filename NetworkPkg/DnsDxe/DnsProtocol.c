@@ -88,8 +88,8 @@ Dns4GetModeData (
     
   Instance = DNS_INSTANCE_FROM_THIS_PROTOCOL4 (This);
   if (Instance->State == DNS_STATE_UNCONFIGED) {
-    gBS->RestoreTPL (OldTpl);
-    return  EFI_NOT_STARTED;
+    Status = EFI_NOT_STARTED;
+    goto ON_EXIT;
   }
   
   ZeroMem (DnsModeData, sizeof (EFI_DNS4_MODE_DATA));
@@ -99,8 +99,7 @@ Dns4GetModeData (
   //
   Status = Dns4CopyConfigure (&DnsModeData->DnsConfigData, &Instance->Dns4CfgData);
   if (EFI_ERROR (Status)) {
-    gBS->RestoreTPL (OldTpl);
-    return Status;
+    goto ON_EXIT;
   }
 
   //
@@ -112,7 +111,12 @@ Dns4GetModeData (
   }
   DnsModeData->DnsServerCount = (UINT32) Index;
   ServerList = AllocatePool (sizeof (EFI_IPv4_ADDRESS) * DnsModeData->DnsServerCount);
-  ASSERT (ServerList != NULL);
+  if (ServerList == NULL) {
+    Status = EFI_OUT_OF_RESOURCES;
+    Dns4CleanConfigure (&DnsModeData->DnsConfigData);
+    goto ON_EXIT;
+  }
+  
   Index = 0;
   NET_LIST_FOR_EACH_SAFE (Entry, Next, &mDriverData->Dns4ServerList) {
     ServerItem = NET_LIST_USER_STRUCT (Entry, DNS4_SERVER_IP, AllServerLink);
@@ -130,7 +134,13 @@ Dns4GetModeData (
   }
   DnsModeData->DnsCacheCount = (UINT32) Index;
   CacheList = AllocatePool (sizeof (EFI_DNS4_CACHE_ENTRY) * DnsModeData->DnsCacheCount);
-  ASSERT (CacheList != NULL);
+  if (CacheList == NULL) {
+    Status = EFI_OUT_OF_RESOURCES;
+    Dns4CleanConfigure (&DnsModeData->DnsConfigData);
+    FreePool (ServerList);
+    goto ON_EXIT;
+  }
+  
   Index =0;
   NET_LIST_FOR_EACH_SAFE (Entry, Next, &mDriverData->Dns4CacheList) {
     CacheItem = NET_LIST_USER_STRUCT (Entry, DNS4_CACHE, AllCacheLink);
@@ -139,9 +149,9 @@ Dns4GetModeData (
   }
   DnsModeData->DnsCacheList = CacheList;
 
+ON_EXIT:
   gBS->RestoreTPL (OldTpl);
-  
-  return EFI_SUCCESS;
+  return Status;
 }
 
 /**
@@ -493,6 +503,8 @@ Dns4HostNameToIp (
   //
   Status = DoDnsQuery (Instance, Packet);
   if (EFI_ERROR (Status)) {
+    Dns4RemoveTokenEntry (&Instance->Dns4TxTokens, TokenEntry);
+
     if (TokenEntry != NULL) {
       FreePool (TokenEntry);
     }
@@ -675,6 +687,8 @@ Dns4GeneralLookUp (
   //
   Status = DoDnsQuery (Instance, Packet);
   if (EFI_ERROR (Status)) {
+    Dns4RemoveTokenEntry (&Instance->Dns4TxTokens, TokenEntry);
+
     if (TokenEntry != NULL) {
       FreePool (TokenEntry);
     }
@@ -905,8 +919,8 @@ Dns6GetModeData (
     
   Instance  = DNS_INSTANCE_FROM_THIS_PROTOCOL6 (This);
   if (Instance->State == DNS_STATE_UNCONFIGED) {
-    gBS->RestoreTPL (OldTpl);
-    return  EFI_NOT_STARTED;
+    Status =  EFI_NOT_STARTED;
+    goto ON_EXIT;
   }
 
   ZeroMem (DnsModeData, sizeof (EFI_DNS6_MODE_DATA));
@@ -914,10 +928,9 @@ Dns6GetModeData (
   //
   // Get the current configuration data of this instance. 
   //
-  Status = Dns6CopyConfigure(&DnsModeData->DnsConfigData, &Instance->Dns6CfgData);
+  Status = Dns6CopyConfigure (&DnsModeData->DnsConfigData, &Instance->Dns6CfgData);
   if (EFI_ERROR (Status)) {
-    gBS->RestoreTPL (OldTpl);
-    return Status;
+    goto ON_EXIT;
   }
   
   //
@@ -929,7 +942,12 @@ Dns6GetModeData (
   }
   DnsModeData->DnsServerCount = (UINT32) Index;
   ServerList = AllocatePool (sizeof(EFI_IPv6_ADDRESS) * DnsModeData->DnsServerCount);
-  ASSERT (ServerList != NULL);
+  if (ServerList == NULL) {
+    Status = EFI_OUT_OF_RESOURCES;
+    Dns6CleanConfigure (&DnsModeData->DnsConfigData);
+    goto ON_EXIT;
+  }
+  
   Index = 0;
   NET_LIST_FOR_EACH_SAFE (Entry, Next, &mDriverData->Dns6ServerList) {
     ServerItem = NET_LIST_USER_STRUCT (Entry, DNS6_SERVER_IP, AllServerLink);
@@ -947,7 +965,13 @@ Dns6GetModeData (
   }
   DnsModeData->DnsCacheCount = (UINT32) Index;
   CacheList = AllocatePool (sizeof(EFI_DNS6_CACHE_ENTRY) * DnsModeData->DnsCacheCount);
-  ASSERT (CacheList != NULL);
+  if (CacheList == NULL) {
+    Status = EFI_OUT_OF_RESOURCES;
+    Dns6CleanConfigure (&DnsModeData->DnsConfigData);
+    FreePool (ServerList);
+    goto ON_EXIT;
+  }
+  
   Index =0;
   NET_LIST_FOR_EACH_SAFE (Entry, Next, &mDriverData->Dns6CacheList) {
     CacheItem = NET_LIST_USER_STRUCT (Entry, DNS6_CACHE, AllCacheLink);
@@ -955,10 +979,10 @@ Dns6GetModeData (
     Index++;
   }
   DnsModeData->DnsCacheList = CacheList;
-
-  gBS->RestoreTPL (OldTpl);
   
-  return EFI_SUCCESS;
+ON_EXIT:
+  gBS->RestoreTPL (OldTpl);
+  return Status;
 }
 
 /**
@@ -1303,6 +1327,8 @@ Dns6HostNameToIp (
   //
   Status = DoDnsQuery (Instance, Packet);
   if (EFI_ERROR (Status)) {
+    Dns6RemoveTokenEntry (&Instance->Dns6TxTokens, TokenEntry);
+    
     if (TokenEntry != NULL) {
       FreePool (TokenEntry);
     }
@@ -1488,6 +1514,8 @@ Dns6GeneralLookUp (
   //
   Status = DoDnsQuery (Instance, Packet);
   if (EFI_ERROR (Status)) {
+    Dns6RemoveTokenEntry (&Instance->Dns6TxTokens, TokenEntry);
+
     if (TokenEntry != NULL) {
       FreePool (TokenEntry);
     }

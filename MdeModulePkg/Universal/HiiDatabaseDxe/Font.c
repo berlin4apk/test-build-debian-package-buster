@@ -704,10 +704,6 @@ FindGlyphBlock (
       (UINT8 *) FontPackage->FontPkgHdr + 3 * sizeof (UINT32),
       sizeof (EFI_HII_GLYPH_INFO)
       );
-    BaseLine = (UINT16) (LocalCell.Height + LocalCell.OffsetY);
-    if (MinOffsetY > LocalCell.OffsetY) {
-      MinOffsetY = LocalCell.OffsetY;
-    }
   }
 
   BlockPtr    = FontPackage->GlyphBlock;
@@ -843,6 +839,14 @@ FindGlyphBlock (
       if (EFI_ERROR (Status)) {
         return Status;
       }
+      if (CharValue == (CHAR16) (-1)) {
+        if (BaseLine < DefaultCell.Height + DefaultCell.OffsetY) {
+          BaseLine = (UINT16) (DefaultCell.Height + DefaultCell.OffsetY);
+        }
+        if (MinOffsetY > DefaultCell.OffsetY) {
+          MinOffsetY = DefaultCell.OffsetY;
+        }
+      }
       BufferLen = BITMAP_LEN_1_BIT (DefaultCell.Width, DefaultCell.Height);
 
       if (CharCurrent == CharValue) {
@@ -864,6 +868,14 @@ FindGlyphBlock (
       Status = GetCell (CharCurrent, &FontPackage->GlyphInfoList, &DefaultCell);
       if (EFI_ERROR (Status)) {
         return Status;
+      }
+      if (CharValue == (CHAR16) (-1)) {
+        if (BaseLine < DefaultCell.Height + DefaultCell.OffsetY) {
+          BaseLine = (UINT16) (DefaultCell.Height + DefaultCell.OffsetY);
+        }
+        if (MinOffsetY > DefaultCell.OffsetY) {
+          MinOffsetY = DefaultCell.OffsetY;
+        }
       }
       BufferLen = BITMAP_LEN_1_BIT (DefaultCell.Width, DefaultCell.Height);
       BlockPtr += sizeof (EFI_HII_GIBT_GLYPHS_DEFAULT_BLOCK) - sizeof (UINT8);
@@ -1613,6 +1625,7 @@ HiiStringToImage (
   UINTN                               StrLength;
   EFI_GRAPHICS_OUTPUT_BLT_PIXEL       *RowBufferPtr;
   HII_GLOBAL_FONT_INFO                *GlobalFont;
+  UINT32                              PreInitBkgnd;
 
   //
   // Check incoming parameters.
@@ -2048,6 +2061,11 @@ HiiStringToImage (
           Status = EFI_OUT_OF_RESOURCES;
           goto Exit;
         }
+        //
+        // Initialize the background color.
+        //
+        PreInitBkgnd = Background.Blue | Background.Green << 8 | Background.Red << 16;
+        SetMem32 (BltBuffer,RowInfo[RowIndex].LineWidth * RowInfo[RowIndex].LineHeight * sizeof (EFI_GRAPHICS_OUTPUT_BLT_PIXEL),PreInitBkgnd);
         //
         // Set BufferPtr to Origin by adding baseline to the starting position.
         //

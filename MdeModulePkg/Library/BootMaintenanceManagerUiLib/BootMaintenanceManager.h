@@ -41,6 +41,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Library/UefiHiiServicesLib.h>
 #include <Library/UefiBootManagerLib.h>
 #include <Library/FileExplorerLib.h>
+#include "BootMaintenanceManagerCustomizedUi.h"
 
 #pragma pack(1)
 
@@ -918,26 +919,6 @@ UpdatePageBody (
   );
 
 /**
-  Create the dynamic page to allow user to set the "BootNext" vaule.
-
-  @param CallbackData    The BMM context data.
-**/
-VOID
-UpdateBootNextPage (
-  IN BMM_CALLBACK_DATA                *CallbackData
-  );
-
-/**
-  Create the dynamic page to allow user to set the "TimeOut" vaule.
-
-  @param CallbackData    The BMM context data.
-**/
-VOID
-UpdateTimeOutPage (
-  IN BMM_CALLBACK_DATA                *CallbackData
-  );
-
-/**
   Create the dynamic page which allows user to set the property such as Baud Rate, Data Bits,
   Parity, Stop Bits, Terminal Type.
 
@@ -1162,8 +1143,7 @@ GetTerminalAttribute (
 
 **/
 EFI_STATUS
-EFIAPI
-BmmBdsSetConsoleMode (
+BmmSetConsoleMode (
   BOOLEAN  IsSetupMode
   );
 

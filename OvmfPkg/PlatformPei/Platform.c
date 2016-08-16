@@ -152,39 +152,16 @@ AddMemoryRangeHob (
 
 
 VOID
-AddUntestedMemoryBaseSizeHob (
-  EFI_PHYSICAL_ADDRESS        MemoryBase,
-  UINT64                      MemorySize
-  )
-{
-  BuildResourceDescriptorHob (
-    EFI_RESOURCE_SYSTEM_MEMORY,
-      EFI_RESOURCE_ATTRIBUTE_PRESENT |
-      EFI_RESOURCE_ATTRIBUTE_INITIALIZED |
-      EFI_RESOURCE_ATTRIBUTE_UNCACHEABLE |
-      EFI_RESOURCE_ATTRIBUTE_WRITE_COMBINEABLE |
-      EFI_RESOURCE_ATTRIBUTE_WRITE_THROUGH_CACHEABLE |
-      EFI_RESOURCE_ATTRIBUTE_WRITE_BACK_CACHEABLE,
-    MemoryBase,
-    MemorySize
-    );
-}
-
-
-VOID
-AddUntestedMemoryRangeHob (
-  EFI_PHYSICAL_ADDRESS        MemoryBase,
-  EFI_PHYSICAL_ADDRESS        MemoryLimit
-  )
-{
-  AddUntestedMemoryBaseSizeHob (MemoryBase, (UINT64)(MemoryLimit - MemoryBase));
-}
-
-VOID
 MemMapInitialization (
   VOID
   )
 {
+  UINT64 PciIoBase;
+  UINT64 PciIoSize;
+
+  PciIoBase = 0xC000;
+  PciIoSize = 0x4000;
+
   //
   // Create Memory Type Information HOB
   //
@@ -192,17 +169,6 @@ MemMapInitialization (
     &gEfiMemoryTypeInformationGuid,
     mDefaultMemoryTypeInformation,
     sizeof(mDefaultMemoryTypeInformation)
-    );
-
-  //
-  // Add PCI IO Port space available for PCI resource allocations.
-  //
-  BuildResourceDescriptorHob (
-    EFI_RESOURCE_IO,
-    EFI_RESOURCE_ATTRIBUTE_PRESENT     |
-    EFI_RESOURCE_ATTRIBUTE_INITIALIZED,
-    PcdGet64 (PcdPciIoBase),
-    PcdGet64 (PcdPciIoSize)
     );
 
   //
@@ -278,7 +244,30 @@ MemMapInitialization (
         EfiReservedMemoryType);
     }
     AddIoMemoryBaseSizeHob (PcdGet32(PcdCpuLocalApicBaseAddress), SIZE_1MB);
+
+    //
+    // On Q35, the IO Port space is available for PCI resource allocations from
+    // 0x6000 up.
+    //
+    if (mHostBridgeDevId == INTEL_Q35_MCH_DEVICE_ID) {
+      PciIoBase = 0x6000;
+      PciIoSize = 0xA000;
+      ASSERT ((ICH9_PMBASE_VALUE & 0xF000) < PciIoBase);
+    }
   }
+
+  //
+  // Add PCI IO Port space available for PCI resource allocations.
+  //
+  BuildResourceDescriptorHob (
+    EFI_RESOURCE_IO,
+    EFI_RESOURCE_ATTRIBUTE_PRESENT     |
+    EFI_RESOURCE_ATTRIBUTE_INITIALIZED,
+    PciIoBase,
+    PciIoSize
+    );
+  PcdSet64 (PcdPciIoBase, PciIoBase);
+  PcdSet64 (PcdPciIoSize, PciIoSize);
 }
 
 EFI_STATUS
@@ -392,6 +381,8 @@ MiscInitialization (
 {
   UINTN  PmCmd;
   UINTN  Pmba;
+  UINT32 PmbaAndVal;
+  UINT32 PmbaOrVal;
   UINTN  AcpiCtlReg;
   UINT8  AcpiEnBit;
 
@@ -414,12 +405,16 @@ MiscInitialization (
     case INTEL_82441_DEVICE_ID:
       PmCmd      = POWER_MGMT_REGISTER_PIIX4 (PCI_COMMAND_OFFSET);
       Pmba       = POWER_MGMT_REGISTER_PIIX4 (PIIX4_PMBA);
+      PmbaAndVal = ~(UINT32)PIIX4_PMBA_MASK;
+      PmbaOrVal  = PIIX4_PMBA_VALUE;
       AcpiCtlReg = POWER_MGMT_REGISTER_PIIX4 (PIIX4_PMREGMISC);
       AcpiEnBit  = PIIX4_PMREGMISC_PMIOSE;
       break;
     case INTEL_Q35_MCH_DEVICE_ID:
       PmCmd      = POWER_MGMT_REGISTER_Q35 (PCI_COMMAND_OFFSET);
       Pmba       = POWER_MGMT_REGISTER_Q35 (ICH9_PMBASE);
+      PmbaAndVal = ~(UINT32)ICH9_PMBASE_MASK;
+      PmbaOrVal  = ICH9_PMBASE_VALUE;
       AcpiCtlReg = POWER_MGMT_REGISTER_Q35 (ICH9_ACPI_CNTL);
       AcpiEnBit  = ICH9_ACPI_CNTL_ACPI_EN;
       break;
@@ -441,7 +436,7 @@ MiscInitialization (
     // The PEI phase should be exited with fully accessibe ACPI PM IO space:
     // 1. set PMBA
     //
-    PciAndThenOr32 (Pmba, (UINT32) ~0xFFC0, PcdGet16 (PcdAcpiPmBaseAddress));
+    PciAndThenOr32 (Pmba, PmbaAndVal, PmbaOrVal);
 
     //
     // 2. set PCICMD/IOSE
@@ -617,6 +612,7 @@ InitializePlatform (
   }
 
   MiscInitialization ();
+  InstallFeatureControlCallback ();
 
   return EFI_SUCCESS;
 }

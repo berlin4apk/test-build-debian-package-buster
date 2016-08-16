@@ -110,6 +110,12 @@ def CheckEnvVariable():
     # set multiple workspace
     PackagesPath = os.getenv("PACKAGES_PATH")
     mws.setWs(WorkspaceDir, PackagesPath)
+    if mws.PACKAGES_PATH:
+        for Path in mws.PACKAGES_PATH:
+            if not os.path.exists(Path):
+                EdkLogger.error("build", FILE_NOT_FOUND, "One Path in PACKAGES_PATH doesn't exist", ExtraData="%s" % Path)
+            elif ' ' in Path:
+                EdkLogger.error("build", FORMAT_NOT_SUPPORTED, "No space is allowed in PACKAGES_PATH", ExtraData=Path)
 
     #
     # Check EFI_SOURCE (Edk build convention). EDK_SOURCE will always point to ECP
@@ -780,6 +786,7 @@ class Build():
             self.Db = WorkspaceDatabase(GlobalData.gDatabasePath, self.Reparse)
         self.BuildDatabase = self.Db.BuildObject
         self.Platform = None
+        self.ToolChainFamily = None
         self.LoadFixAddress = 0
         self.UniFlag        = BuildOptions.Flag
         self.BuildModules = []
@@ -872,6 +879,17 @@ class Build():
         else:
             self.ToolChainList = NewToolChainList
 
+        ToolChainFamily = []
+        ToolDefinition = self.ToolDef.ToolsDefTxtDatabase
+        for Tool in self.ToolChainList:
+            if TAB_TOD_DEFINES_FAMILY not in ToolDefinition or Tool not in ToolDefinition[TAB_TOD_DEFINES_FAMILY] \
+               or not ToolDefinition[TAB_TOD_DEFINES_FAMILY][Tool]:
+                EdkLogger.warn("No tool chain family found in configuration for %s. Default to MSFT." % Tool)
+                ToolChainFamily.append("MSFT")
+            else:
+                ToolChainFamily.append(ToolDefinition[TAB_TOD_DEFINES_FAMILY][Tool])
+        self.ToolChainFamily = ToolChainFamily
+
         if self.ThreadNumber == None:
             self.ThreadNumber = self.TargetTxt.TargetTxtDictionary[DataType.TAB_TAT_DEFINES_MAX_CONCURRENT_THREAD_NUMBER]
             if self.ThreadNumber == '':
@@ -920,6 +938,9 @@ class Build():
 
     def InitPreBuild(self):
         self.LoadConfiguration()
+        ErrorCode, ErrorInfo = self.PlatformFile.Validate(".dsc", False)
+        if ErrorCode != 0:
+            EdkLogger.error("build", ErrorCode, ExtraData=ErrorInfo)
         if self.BuildTargetList:
             GlobalData.gGlobalDefines['TARGET'] = self.BuildTargetList[0]
         if self.ArchList:
@@ -927,6 +948,8 @@ class Build():
         if self.ToolChainList:
             GlobalData.gGlobalDefines['TOOLCHAIN'] = self.ToolChainList[0]
             GlobalData.gGlobalDefines['TOOL_CHAIN_TAG'] = self.ToolChainList[0]
+        if self.ToolChainFamily:
+            GlobalData.gGlobalDefines['FAMILY'] = self.ToolChainFamily[0]
         if 'PREBUILD' in GlobalData.gCommandLineDefines.keys():
             self.Prebuild   = GlobalData.gCommandLineDefines.get('PREBUILD')
         else:
@@ -1590,9 +1613,12 @@ class Build():
         SaveFileOnChange(self.PlatformBuildPath, '# DO NOT EDIT \n# FILE auto-generated\n', False)
         for BuildTarget in self.BuildTargetList:
             GlobalData.gGlobalDefines['TARGET'] = BuildTarget
+            index = 0
             for ToolChain in self.ToolChainList:
                 GlobalData.gGlobalDefines['TOOLCHAIN'] = ToolChain
                 GlobalData.gGlobalDefines['TOOL_CHAIN_TAG'] = ToolChain
+                GlobalData.gGlobalDefines['FAMILY'] = self.ToolChainFamily[index]
+                index += 1
                 Wa = WorkspaceAutoGen(
                         self.WorkspaceDir,
                         self.PlatformFile,
@@ -1670,9 +1696,12 @@ class Build():
     def _BuildModule(self):
         for BuildTarget in self.BuildTargetList:
             GlobalData.gGlobalDefines['TARGET'] = BuildTarget
+            index = 0
             for ToolChain in self.ToolChainList:
                 GlobalData.gGlobalDefines['TOOLCHAIN'] = ToolChain
                 GlobalData.gGlobalDefines['TOOL_CHAIN_TAG'] = ToolChain
+                GlobalData.gGlobalDefines['FAMILY'] = self.ToolChainFamily[index]
+                index += 1
                 #
                 # module build needs platform build information, so get platform
                 # AutoGen first
@@ -1764,9 +1793,12 @@ class Build():
         SaveFileOnChange(self.PlatformBuildPath, '# DO NOT EDIT \n# FILE auto-generated\n', False)
         for BuildTarget in self.BuildTargetList:
             GlobalData.gGlobalDefines['TARGET'] = BuildTarget
+            index = 0
             for ToolChain in self.ToolChainList:
                 GlobalData.gGlobalDefines['TOOLCHAIN'] = ToolChain
                 GlobalData.gGlobalDefines['TOOL_CHAIN_TAG'] = ToolChain
+                GlobalData.gGlobalDefines['FAMILY'] = self.ToolChainFamily[index]
+                index += 1
                 Wa = WorkspaceAutoGen(
                         self.WorkspaceDir,
                         self.PlatformFile,

@@ -1,7 +1,7 @@
 /** @file
   SMM IPL that produces SMM related runtime protocols and load the SMM Core into SMRAM
 
-  Copyright (c) 2009 - 2015, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials are licensed and made available 
   under the terms and conditions of the BSD License which accompanies this 
   distribution.  The full text of the license may be found at        
@@ -38,6 +38,7 @@
 #include <Library/UefiLib.h>
 #include <Library/UefiRuntimeLib.h>
 #include <Library/PcdLib.h>
+#include <Library/ReportStatusCodeLib.h>
 
 #include "PiSmmCorePrivateData.h"
 
@@ -163,6 +164,20 @@ SmmIplGuidedEventNotify (
   );
 
 /**
+  Event notification that is fired when EndOfDxe Event Group is signaled.
+
+  @param  Event                 The Event that is being processed, not used.
+  @param  Context               Event Context, not used.
+
+**/
+VOID
+EFIAPI
+SmmIplEndOfDxeEventNotify (
+  IN EFI_EVENT  Event,
+  IN VOID       *Context
+  );
+
+/**
   Notification function of EVT_SIGNAL_VIRTUAL_ADDRESS_CHANGE.
 
   This is a notification function registered on EVT_SIGNAL_VIRTUAL_ADDRESS_CHANGE event.
@@ -243,6 +258,7 @@ EFI_SMM_CONTROL2_PROTOCOL  *mSmmControl2;
 EFI_SMM_ACCESS2_PROTOCOL   *mSmmAccess;
 EFI_SMRAM_DESCRIPTOR       *mCurrentSmramRange;
 BOOLEAN                    mSmmLocked = FALSE;
+BOOLEAN                    mEndOfDxe  = FALSE;
 EFI_PHYSICAL_ADDRESS       mSmramCacheBase;
 UINT64                     mSmramCacheSize;
 
@@ -253,7 +269,7 @@ EFI_SMM_COMMUNICATE_HEADER mCommunicateHeader;
 //
 SMM_IPL_EVENT_NOTIFICATION  mSmmIplEvents[] = {
   //
-  // Declare protocol notification on the SMM Configuration protocol.  When this notification is etablished, 
+  // Declare protocol notification on the SMM Configuration protocol.  When this notification is established,
   // the associated event is immediately signalled, so the notification function will be executed and the 
   // SMM Configuration Protocol will be found if it is already in the handle database.
   //
@@ -265,11 +281,15 @@ SMM_IPL_EVENT_NOTIFICATION  mSmmIplEvents[] = {
   //
   { TRUE,  TRUE,  &gEfiDxeSmmReadyToLockProtocolGuid, SmmIplReadyToLockEventNotify,      &gEfiDxeSmmReadyToLockProtocolGuid, TPL_CALLBACK, NULL },
   //
-  // Declare event notification on EndOfDxe event.  When this notification is etablished, 
+  // Declare event notification on EndOfDxe event.  When this notification is established,
   // the associated event is immediately signalled, so the notification function will be executed and the 
   // SMM End Of Dxe Protocol will be found if it is already in the handle database.
   //
   { FALSE, TRUE,  &gEfiEndOfDxeEventGroupGuid,        SmmIplGuidedEventNotify,           &gEfiEndOfDxeEventGroupGuid,        TPL_CALLBACK, NULL },
+  //
+  // Declare event notification on EndOfDxe event.  This is used to set EndOfDxe event signaled flag.
+  //
+  { FALSE, TRUE,  &gEfiEndOfDxeEventGroupGuid,        SmmIplEndOfDxeEventNotify,         &gEfiEndOfDxeEventGroupGuid,        TPL_CALLBACK, NULL },
   //
   // Declare event notification on the DXE Dispatch Event Group.  This event is signaled by the DXE Core
   // each time the DXE Core dispatcher has completed its work.  When this event is signalled, the SMM Core
@@ -557,6 +577,23 @@ SmmIplGuidedEventNotify (
 }
 
 /**
+  Event notification that is fired when EndOfDxe Event Group is signaled.
+
+  @param  Event                 The Event that is being processed, not used.
+  @param  Context               Event Context, not used.
+
+**/
+VOID
+EFIAPI
+SmmIplEndOfDxeEventNotify (
+  IN EFI_EVENT  Event,
+  IN VOID       *Context
+  )
+{
+  mEndOfDxe = TRUE;
+}
+
+/**
   Event notification that is fired when DxeDispatch Event Group is signaled.
 
   @param  Event                 The Event that is being processed, not used.
@@ -711,6 +748,15 @@ SmmIplReadyToLockEventNotify (
     DEBUG ((DEBUG_WARN, "SMM IPL!  DXE SMM Ready To Lock Protocol not installed before Ready To Boot signal\n"));
   }
 
+  if (!mEndOfDxe) {
+    DEBUG ((DEBUG_ERROR, "EndOfDxe Event must be signaled before DxeSmmReadyToLock Protocol installation!\n"));
+    REPORT_STATUS_CODE (
+      EFI_ERROR_CODE | EFI_ERROR_UNRECOVERED,
+      (EFI_SOFTWARE_SMM_DRIVER | EFI_SW_EC_ILLEGAL_SOFTWARE_STATE)
+      );
+    ASSERT (FALSE);
+  }
+
   //
   // Lock the SMRAM (Note: Locking SMRAM may not be supported on all platforms)
   //
@@ -764,13 +810,13 @@ SmmIplSetVirtualAddressNotify (
 }
 
 /**
-  Get the fixed loadding address from image header assigned by build tool. This function only be called
+  Get the fixed loading address from image header assigned by build tool. This function only be called
   when Loading module at Fixed address feature enabled.
 
   @param  ImageContext              Pointer to the image context structure that describes the PE/COFF
                                     image that needs to be examined by this function.
   @retval EFI_SUCCESS               An fixed loading address is assigned to this image by build tools .
-  @retval EFI_NOT_FOUND             The image has no assigned fixed loadding address.
+  @retval EFI_NOT_FOUND             The image has no assigned fixed loading address.
 **/
 EFI_STATUS
 GetPeCoffImageFixLoadingAssignedAddress(
@@ -781,7 +827,7 @@ GetPeCoffImageFixLoadingAssignedAddress(
    EFI_STATUS                         Status;
    EFI_IMAGE_SECTION_HEADER           SectionHeader;
    EFI_IMAGE_OPTIONAL_HEADER_UNION    *ImgHdr;
-   EFI_PHYSICAL_ADDRESS               FixLoaddingAddress;
+   EFI_PHYSICAL_ADDRESS               FixLoadingAddress;
    UINT16                             Index;
    UINTN                              Size;
    UINT16                             NumberOfSections;
@@ -793,7 +839,7 @@ GetPeCoffImageFixLoadingAssignedAddress(
    //
    SmmCodeSize = EFI_PAGES_TO_SIZE (PcdGet32(PcdLoadFixAddressSmmCodePageNumber));
  
-   FixLoaddingAddress = 0;
+   FixLoadingAddress = 0;
    Status = EFI_NOT_FOUND;
    SmramBase = mCurrentSmramRange->CpuStart;
    //
@@ -833,21 +879,21 @@ GetPeCoffImageFixLoadingAssignedAddress(
        // Build tool saves the offset to SMRAM base as image base in PointerToRelocations & PointerToLineNumbers fields in the
        // first section header that doesn't point to code section in image header. And there is an assumption that when the
        // feature is enabled, if a module is assigned a loading address by tools, PointerToRelocations & PointerToLineNumbers
-       // fields should NOT be Zero, or else, these 2 fileds should be set to Zero
+       // fields should NOT be Zero, or else, these 2 fields should be set to Zero
        //
        ValueInSectionHeader = ReadUnaligned64((UINT64*)&SectionHeader.PointerToRelocations);
        if (ValueInSectionHeader != 0) {
          //
-         // Found first section header that doesn't point to code section in which uild tool saves the
+         // Found first section header that doesn't point to code section in which build tool saves the
          // offset to SMRAM base as image base in PointerToRelocations & PointerToLineNumbers fields
          //
-         FixLoaddingAddress = (EFI_PHYSICAL_ADDRESS)(SmramBase + (INT64)ValueInSectionHeader);
+         FixLoadingAddress = (EFI_PHYSICAL_ADDRESS)(SmramBase + (INT64)ValueInSectionHeader);
 
-         if (SmramBase + SmmCodeSize > FixLoaddingAddress && SmramBase <=  FixLoaddingAddress) {
+         if (SmramBase + SmmCodeSize > FixLoadingAddress && SmramBase <=  FixLoadingAddress) {
            //
-           // The assigned address is valid. Return the specified loadding address
+           // The assigned address is valid. Return the specified loading address
            //
-           ImageContext->ImageAddress = FixLoaddingAddress;
+           ImageContext->ImageAddress = FixLoadingAddress;
            Status = EFI_SUCCESS;
          }
        }
@@ -855,7 +901,7 @@ GetPeCoffImageFixLoadingAssignedAddress(
      }
      SectionHeaderOffset += sizeof (EFI_IMAGE_SECTION_HEADER);
    }
-   DEBUG ((EFI_D_INFO|EFI_D_LOAD, "LOADING MODULE FIXED INFO: Loading module at fixed address %x, Status = %r \n", FixLoaddingAddress, Status));
+   DEBUG ((EFI_D_INFO|EFI_D_LOAD, "LOADING MODULE FIXED INFO: Loading module at fixed address %x, Status = %r \n", FixLoadingAddress, Status));
    return Status;
 }
 /**
@@ -1510,7 +1556,7 @@ SmmIplEntry (
     }
 
     if (gSmmCorePrivate->SmramRanges[Index].CpuStart >= BASE_1MB) {
-      if ((gSmmCorePrivate->SmramRanges[Index].CpuStart + gSmmCorePrivate->SmramRanges[Index].PhysicalSize) <= BASE_4GB) {
+      if ((gSmmCorePrivate->SmramRanges[Index].CpuStart + gSmmCorePrivate->SmramRanges[Index].PhysicalSize - 1) <= MAX_ADDRESS) {
         if (gSmmCorePrivate->SmramRanges[Index].PhysicalSize >= MaxSize) {
           MaxSize = gSmmCorePrivate->SmramRanges[Index].PhysicalSize;
           mCurrentSmramRange = &gSmmCorePrivate->SmramRanges[Index];

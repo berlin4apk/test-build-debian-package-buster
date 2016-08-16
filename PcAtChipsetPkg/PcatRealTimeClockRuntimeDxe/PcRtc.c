@@ -1239,6 +1239,62 @@ ScanTableInSDT (
 }
 
 /**
+  Get the century RTC address from the ACPI FADT table.
+
+  @return  The century RTC address or 0 if not found.
+**/
+UINT8
+GetCenturyRtcAddress (
+  VOID
+  )
+{
+  EFI_STATUS                                    Status;
+  EFI_ACPI_2_0_ROOT_SYSTEM_DESCRIPTION_POINTER  *Rsdp;
+  EFI_ACPI_2_0_FIXED_ACPI_DESCRIPTION_TABLE     *Fadt;
+
+  Status = EfiGetSystemConfigurationTable (&gEfiAcpiTableGuid, (VOID **) &Rsdp);
+  if (EFI_ERROR (Status)) {
+    Status = EfiGetSystemConfigurationTable (&gEfiAcpi10TableGuid, (VOID **) &Rsdp);
+  }
+
+  if (EFI_ERROR (Status) || (Rsdp == NULL)) {
+    return 0;
+  }
+
+  Fadt = NULL;
+
+  //
+  // Find FADT in XSDT
+  //
+  if (Rsdp->Revision >= EFI_ACPI_2_0_ROOT_SYSTEM_DESCRIPTION_POINTER_REVISION && Rsdp->XsdtAddress != 0) {
+    Fadt = ScanTableInSDT (
+             (EFI_ACPI_DESCRIPTION_HEADER *) (UINTN) Rsdp->XsdtAddress,
+             EFI_ACPI_2_0_FIXED_ACPI_DESCRIPTION_TABLE_SIGNATURE,
+             sizeof (UINTN)
+             );
+  }
+
+  //
+  // Find FADT in RSDT
+  //
+  if (Fadt == NULL && Rsdp->RsdtAddress != 0) {
+    Fadt = ScanTableInSDT (
+             (EFI_ACPI_DESCRIPTION_HEADER *) (UINTN) Rsdp->RsdtAddress,
+             EFI_ACPI_2_0_FIXED_ACPI_DESCRIPTION_TABLE_SIGNATURE,
+             sizeof (UINT32)
+             );
+  }
+
+  if ((Fadt != NULL) &&
+      (Fadt->Century > RTC_ADDRESS_REGISTER_D) && (Fadt->Century < 0x80)
+      ) {
+    return Fadt->Century;
+  } else {
+    return 0;
+  }
+}
+
+/**
   Notification function of ACPI Table change.
 
   This is a notification function registered on ACPI Table change event.
@@ -1255,47 +1311,14 @@ PcRtcAcpiTableChangeCallback (
   IN VOID             *Context
   )
 {
-  EFI_STATUS                                    Status;
-  EFI_ACPI_2_0_ROOT_SYSTEM_DESCRIPTION_POINTER  *Rsdp;
-  EFI_ACPI_DESCRIPTION_HEADER                   *Rsdt;
-  EFI_ACPI_DESCRIPTION_HEADER                   *Xsdt;
-  EFI_ACPI_2_0_FIXED_ACPI_DESCRIPTION_TABLE     *Fadt;
-  EFI_TIME                                      Time;
-  UINT8                                         Century;
+  EFI_STATUS          Status;
+  EFI_TIME            Time;
+  UINT8               CenturyRtcAddress;
+  UINT8               Century;
 
-  Status = EfiGetSystemConfigurationTable (&gEfiAcpiTableGuid, (VOID **) &Rsdp);
-  if (EFI_ERROR (Status)) {
-    Status = EfiGetSystemConfigurationTable (&gEfiAcpi10TableGuid, (VOID **) &Rsdp);
-  }
-
-  if (EFI_ERROR (Status)) {
-    return;
-  }
-
-  ASSERT (Rsdp != NULL);
-
-  //
-  // Find FADT in XSDT
-  //
-  Fadt = NULL;
-  if (Rsdp->Revision >= EFI_ACPI_2_0_ROOT_SYSTEM_DESCRIPTION_POINTER_REVISION) {
-    Xsdt = (EFI_ACPI_DESCRIPTION_HEADER *) (UINTN) Rsdp->XsdtAddress;
-    Fadt = ScanTableInSDT (Xsdt, EFI_ACPI_2_0_FIXED_ACPI_DESCRIPTION_TABLE_SIGNATURE, sizeof (UINT64));
-  }
-
-  if (Fadt == NULL) {
-    //
-    // Find FADT in RSDT
-    //
-    Rsdt = (EFI_ACPI_DESCRIPTION_HEADER *) (UINTN) Rsdp->RsdtAddress;
-    Fadt = ScanTableInSDT (Rsdt, EFI_ACPI_2_0_FIXED_ACPI_DESCRIPTION_TABLE_SIGNATURE, sizeof (UINT32));
-  }
-
-  if ((Fadt != NULL) &&
-      (Fadt->Century > RTC_ADDRESS_REGISTER_D) && (Fadt->Century < 0x80) &&
-      (mModuleGlobal.CenturyRtcAddress != Fadt->Century)
-      ) {
-    mModuleGlobal.CenturyRtcAddress = Fadt->Century;
+  CenturyRtcAddress = GetCenturyRtcAddress ();
+  if ((CenturyRtcAddress != 0) && (mModuleGlobal.CenturyRtcAddress != CenturyRtcAddress)) {
+    mModuleGlobal.CenturyRtcAddress = CenturyRtcAddress;
     Status = PcRtcGetTime (&Time, NULL, &mModuleGlobal);
     if (!EFI_ERROR (Status)) {
       Century = (UINT8) (Time.Year / 100);

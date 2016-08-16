@@ -19,6 +19,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Uefi.h>
 
 #include <IndustryStandard/Http11.h>
+#include <IndustryStandard/Dhcp.h>
 
 //
 // Libraries
@@ -189,6 +190,7 @@ struct _HTTP_BOOT_PRIVATE_DATA {
   VOID                                      *BootFileUriParser;
   UINTN                                     BootFileSize;
   BOOLEAN                                   NoGateway;
+  HTTP_BOOT_IMAGE_TYPE                      ImageType;
 
   //
   // URI string extracted from the input FilePath parameter.

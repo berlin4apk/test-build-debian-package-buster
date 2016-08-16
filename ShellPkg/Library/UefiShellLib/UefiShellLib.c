@@ -373,6 +373,8 @@ EFIAPI
 ShellInitialize (
   )
 {
+  EFI_STATUS Status;
+
   //
   // if auto initialize is not false then skip
   //
@@ -383,7 +385,8 @@ ShellInitialize (
   //
   // deinit the current stuff
   //
-  ASSERT_EFI_ERROR(ShellLibDestructor(gImageHandle, gST));
+  Status = ShellLibDestructor (gImageHandle, gST);
+  ASSERT_EFI_ERROR (Status);
 
   //
   // init the new stuff
@@ -2018,6 +2021,7 @@ InternalCommandLineParse (
   UINTN                         Count;
   CONST CHAR16                  *TempPointer;
   UINTN                         CurrentValueSize;
+  CHAR16                        *NewValue;
 
   CurrentItemPackage = NULL;
   GetItemValue = 0;
@@ -2116,8 +2120,15 @@ InternalCommandLineParse (
       // get the item VALUE for a previous flag
       //
       CurrentValueSize = ValueSize + StrSize(Argv[LoopCounter]) + sizeof(CHAR16);
-      CurrentItemPackage->Value = ReallocatePool(ValueSize, CurrentValueSize, CurrentItemPackage->Value);
-      ASSERT(CurrentItemPackage->Value != NULL);
+      NewValue = ReallocatePool(ValueSize, CurrentValueSize, CurrentItemPackage->Value);
+      if (NewValue == NULL) {
+        SHELL_FREE_NON_NULL (CurrentItemPackage->Value);
+        SHELL_FREE_NON_NULL (CurrentItemPackage);
+        ShellCommandLineFreeVarList (*CheckPackage);
+        *CheckPackage = NULL;
+        return EFI_OUT_OF_RESOURCES;
+      }
+      CurrentItemPackage->Value = NewValue;
       if (ValueSize == 0) {
         StrCpyS( CurrentItemPackage->Value, 
                   CurrentValueSize/sizeof(CHAR16), 
@@ -2965,13 +2976,14 @@ ShellPrintHiiEx(
   CHAR16            *HiiFormatString;
   EFI_STATUS        RetVal;
 
+  RetVal = EFI_DEVICE_ERROR;
+
   VA_START (Marker, HiiFormatHandle);
   HiiFormatString = HiiGetString(HiiFormatHandle, HiiFormatStringId, Language);
-  ASSERT(HiiFormatString != NULL);
-
-  RetVal = InternalShellPrintWorker(Col, Row, HiiFormatString, Marker);
-
-  SHELL_FREE_NON_NULL(HiiFormatString);
+  if (HiiFormatString != NULL) {
+    RetVal = InternalShellPrintWorker (Col, Row, HiiFormatString, Marker);
+    SHELL_FREE_NON_NULL (HiiFormatString);
+  }
   VA_END(Marker);
 
   return (RetVal);
@@ -3283,7 +3295,7 @@ StrnCatGrow (
   Prompt the user and return the resultant answer to the requestor.
 
   This function will display the requested question on the shell prompt and then
-  wait for an apropriate answer to be input from the console.
+  wait for an appropriate answer to be input from the console.
 
   if the SHELL_PROMPT_REQUEST_TYPE is SHELL_PROMPT_REQUEST_TYPE_YESNO, ShellPromptResponseTypeQuitContinue
   or SHELL_PROMPT_REQUEST_TYPE_YESNOCANCEL then *Response is of type SHELL_PROMPT_RESPONSE.

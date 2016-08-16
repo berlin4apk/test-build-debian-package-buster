@@ -1,7 +1,7 @@
 /** @file
   Udp6 driver's whole implementation.
 
-  Copyright (c) 2009 - 2016 Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -199,10 +199,10 @@ Udp6DeliverDgram (
   );
 
 /**
-  This function demultiplexes the received udp datagram to the apropriate instances.
+  This function demultiplexes the received udp datagram to the appropriate instances.
 
   @param[in]  Udp6Service        Pointer to the udp service context data.
-  @param[in]  NetSession         Pointer to the EFI_NET_SESSION_DATA abstrated from
+  @param[in]  NetSession         Pointer to the EFI_NET_SESSION_DATA abstracted from
                                  the received datagram.
   @param[in]  Packet             Pointer to the buffer containing the received udp
                                  datagram.
@@ -1579,7 +1579,7 @@ Udp6DeliverDgram (
   This function demultiplexes the received udp datagram to the appropriate instances.
 
   @param[in]  Udp6Service        Pointer to the udp service context data.
-  @param[in]  NetSession         Pointer to the EFI_NET_SESSION_DATA abstrated from
+  @param[in]  NetSession         Pointer to the EFI_NET_SESSION_DATA abstracted from
                                  the received datagram.
   @param[in]  Packet             Pointer to the buffer containing the received udp
                                  datagram.

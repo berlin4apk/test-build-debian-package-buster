@@ -39,11 +39,13 @@
 
 [Sources.Ia32]
   Ia32/EbcSupport.c
+  Ia32/EbcLowLevel.nasm
   Ia32/EbcLowLevel.S
   Ia32/EbcLowLevel.asm
 
 [Sources.X64]
   X64/EbcSupport.c
+  X64/EbcLowLevel.nasm
   X64/EbcLowLevel.S
   X64/EbcLowLevel.asm
 

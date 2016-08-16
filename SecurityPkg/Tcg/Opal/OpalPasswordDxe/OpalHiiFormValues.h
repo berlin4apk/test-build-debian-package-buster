@@ -21,6 +21,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 // PSID Length
 #define PSID_CHARACTER_LENGTH                              0x20
+#define PSID_CHARACTER_STRING_END_LENGTH                   0x21
 
 // ID's for various forms that will be used by HII
 #define FORMID_VALUE_MAIN_MENU                             0x01
@@ -38,7 +39,7 @@ typedef struct {
     UINT8   KeepUserData;
     UINT16  AvailableFields;
     UINT16  Password[MAX_PASSWORD_CHARACTER_LENGTH];
-    UINT16  Psid[PSID_CHARACTER_LENGTH];
+    UINT16  Psid[PSID_CHARACTER_STRING_END_LENGTH];
     UINT8   EnableBlockSid;
 } OPAL_HII_CONFIGURATION;
 #pragma pack()
@@ -55,7 +56,6 @@ typedef struct {
 #define HII_ACTION_REVERT                                      0x0080
 #define HII_ACTION_DISABLE_FEATURE                             0x0100
 #define HII_ACTION_ENABLE_FEATURE                              0x0200
-#define HII_ACTION_ENABLE_BLOCKSID                             0x0400
 
 /* Flags for diskActionAvailableFields */
 #define HII_FIELD_PASSWORD                      0x0001

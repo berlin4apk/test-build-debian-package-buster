@@ -233,7 +233,7 @@ PLATFORM_NAME = ${platform_name}
 PLATFORM_GUID = ${platform_guid}
 PLATFORM_VERSION = ${platform_version}
 PLATFORM_RELATIVE_DIR = ${platform_relative_directory}
-PLATFORM_DIR = $(WORKSPACE)${separator}${platform_relative_directory}
+PLATFORM_DIR = ${platform_dir}
 PLATFORM_OUTPUT_DIR = ${platform_output_directory}
 
 #
@@ -488,6 +488,11 @@ cleanlib:
         if 'IMAGE_ENTRY_POINT' not in self._AutoGenObject.Macros.keys():
             self._AutoGenObject.Macros['IMAGE_ENTRY_POINT'] = ImageEntryPoint
 
+        PCI_COMPRESS_Flag = False
+        for k, v in self._AutoGenObject.Module.Defines.iteritems():
+            if 'PCI_COMPRESS' == k and 'TRUE' == v:
+                PCI_COMPRESS_Flag = True
+
         # tools definitions
         ToolsDef = []
         IncPrefix = self._INC_FLAG_[self._AutoGenObject.ToolChainFamily]
@@ -505,6 +510,14 @@ cleanlib:
                     # Remove duplicated include path, if any
                     if Attr == "FLAGS":
                         Value = RemoveDupOption(Value, IncPrefix, self._AutoGenObject.IncludePathList)
+                        if Tool == "OPTROM" and PCI_COMPRESS_Flag:
+                            ValueList = Value.split()
+                            if ValueList:
+                                for i, v in enumerate(ValueList):
+                                    if '-e' == v:
+                                        ValueList[i] = '-ec'
+                                Value = ' '.join(ValueList)
+
                     ToolsDef.append("%s_%s = %s" % (Tool, Attr, Value))
             ToolsDef.append("")
 
@@ -597,10 +610,11 @@ cleanlib:
         while not found and os.sep in package_rel_dir:
             index = package_rel_dir.index(os.sep)
             current_dir = mws.join(current_dir, package_rel_dir[:index])
-            for fl in os.listdir(current_dir):
-                if fl.endswith('.dec'):
-                    found = True
-                    break
+            if os.path.exists(current_dir):
+                for fl in os.listdir(current_dir):
+                    if fl.endswith('.dec'):
+                        found = True
+                        break
             package_rel_dir = package_rel_dir[index + 1:]
 
         MakefileTemplateDict = {
@@ -612,6 +626,7 @@ cleanlib:
             "platform_version"          : self.PlatformInfo.Version,
             "platform_relative_directory": self.PlatformInfo.SourceDir,
             "platform_output_directory" : self.PlatformInfo.OutputDir,
+            "platform_dir"              : self._AutoGenObject.Macros["PLATFORM_DIR"],
 
             "module_name"               : self._AutoGenObject.Name,
             "module_guid"               : self._AutoGenObject.Guid,
@@ -852,7 +867,8 @@ cleanlib:
     ## For creating makefile targets for dependent libraries
     def ProcessDependentLibrary(self):
         for LibraryAutoGen in self._AutoGenObject.LibraryAutoGenList:
-            self.LibraryBuildDirectoryList.append(self.PlaceMacro(LibraryAutoGen.BuildDir, self.Macros))
+            if not LibraryAutoGen.IsBinaryModule:
+                self.LibraryBuildDirectoryList.append(self.PlaceMacro(LibraryAutoGen.BuildDir, self.Macros))
 
     ## Return a list containing source file's dependencies
     #
@@ -989,7 +1005,7 @@ PLATFORM_NAME = ${platform_name}
 PLATFORM_GUID = ${platform_guid}
 PLATFORM_VERSION = ${platform_version}
 PLATFORM_RELATIVE_DIR = ${platform_relative_directory}
-PLATFORM_DIR = $(WORKSPACE)${separator}${platform_relative_directory}
+PLATFORM_DIR = ${platform_dir}
 PLATFORM_OUTPUT_DIR = ${platform_output_directory}
 
 #
@@ -1119,6 +1135,7 @@ ${BEGIN}\t-@${create_directory_command}\n${END}\
             "platform_version"          : self.PlatformInfo.Version,
             "platform_relative_directory": self.PlatformInfo.SourceDir,
             "platform_output_directory" : self.PlatformInfo.OutputDir,
+            "platform_dir"              : self._AutoGenObject.Macros["PLATFORM_DIR"],
 
             "module_name"               : self._AutoGenObject.Name,
             "module_guid"               : self._AutoGenObject.Guid,
@@ -1171,7 +1188,7 @@ PLATFORM_NAME = ${platform_name}
 PLATFORM_GUID = ${platform_guid}
 PLATFORM_VERSION = ${platform_version}
 PLATFORM_FILE = ${platform_file}
-PLATFORM_DIR = $(WORKSPACE)${separator}${platform_relative_directory}
+PLATFORM_DIR = ${platform_dir}
 PLATFORM_OUTPUT_DIR = ${platform_output_directory}
 
 #
@@ -1313,6 +1330,7 @@ cleanlib:
             "platform_relative_directory": PlatformInfo.SourceDir,
             "platform_output_directory" : PlatformInfo.OutputDir,
             "platform_build_directory"  : PlatformInfo.BuildDir,
+            "platform_dir"              : self._AutoGenObject.Macros["PLATFORM_DIR"],
 
             "toolchain_tag"             : PlatformInfo.ToolChain,
             "build_target"              : PlatformInfo.BuildTarget,
@@ -1423,6 +1441,11 @@ class TopLevelMakefile(BuildFile):
 
         if GlobalData.gIgnoreSource:
             ExtraOption += " --ignore-sources"
+
+        if GlobalData.BuildOptionPcd:
+            for index, option in enumerate(GlobalData.gCommand):
+                if "--pcd" == option and GlobalData.gCommand[index+1]:
+                    ExtraOption += " --pcd " + GlobalData.gCommand[index+1]
 
         MakefileName = self._FILE_NAME_[self._FileType]
         SubBuildCommandList = []

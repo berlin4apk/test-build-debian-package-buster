@@ -1,7 +1,7 @@
 /** @file
   Miscellaneous routines for iSCSI driver.
 
-Copyright (c) 2004 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -857,22 +857,30 @@ IScsiCreateDriverData (
 /**
   Clean the iSCSI driver data.
 
-  @param[in]  Private The iSCSI driver data.
+  @param[in]              Private The iSCSI driver data.
+
+  @retval EFI_SUCCESS     The clean operation is successful.
+  @retval Others          Other errors as indicated.
 
 **/
-VOID
+EFI_STATUS
 IScsiCleanDriverData (
   IN ISCSI_DRIVER_DATA  *Private
   )
 {
   EFI_STATUS            Status;
 
+  Status = EFI_SUCCESS;
+
   if (Private->DevicePath != NULL) {
-    gBS->UninstallProtocolInterface (
-           Private->ExtScsiPassThruHandle,
-           &gEfiDevicePathProtocolGuid,
-           Private->DevicePath
-           );
+    Status = gBS->UninstallProtocolInterface (
+                    Private->ExtScsiPassThruHandle,
+                    &gEfiDevicePathProtocolGuid,
+                    Private->DevicePath
+                    );
+    if (EFI_ERROR (Status)) {
+      goto EXIT;
+    }
 
     FreePool (Private->DevicePath);
   }
@@ -888,9 +896,12 @@ IScsiCleanDriverData (
     }
   }
 
+EXIT:
+
   gBS->CloseEvent (Private->ExitBootServiceEvent);
 
   FreePool (Private);
+  return Status;
 }
 
 /**
@@ -995,6 +1006,7 @@ IScsiDhcpIsConfigured (
 
   @retval EFI_SUCCESS            The configuration data is retrieved.
   @retval EFI_NOT_FOUND          This iSCSI driver is not configured yet.
+  @retval EFI_OUT_OF_RESOURCES   Failed to allocate memory.
 
 **/
 EFI_STATUS
@@ -1095,7 +1107,7 @@ IScsiGetConfigData (
           //
           // Refresh the state of this attempt to NVR.
           //
-          AsciiStrToUnicodeStr (AttemptTmp->MacString, MacString);
+          AsciiStrToUnicodeStrS (AttemptTmp->MacString, MacString, sizeof (MacString) / sizeof (MacString[0]));
           UnicodeSPrint (
             mPrivate->PortString,
             (UINTN) ISCSI_NAME_IFR_MAX_SIZE,
@@ -1134,7 +1146,7 @@ IScsiGetConfigData (
         //
         // Refresh the state of this attempt to NVR.
         //
-        AsciiStrToUnicodeStr (AttemptTmp->MacString, MacString);
+        AsciiStrToUnicodeStrS (AttemptTmp->MacString, MacString, sizeof (MacString) / sizeof (MacString[0]));
         UnicodeSPrint (
           mPrivate->PortString,
           (UINTN) ISCSI_NAME_IFR_MAX_SIZE,
@@ -1225,7 +1237,7 @@ IScsiGetConfigData (
       //
       // Refresh the state of this attempt to NVR.
       //
-      AsciiStrToUnicodeStr (AttemptConfigData->MacString, MacString);
+      AsciiStrToUnicodeStrS (AttemptConfigData->MacString, MacString, sizeof (MacString) / sizeof (MacString[0]));
       UnicodeSPrint (
         mPrivate->PortString,
         (UINTN) ISCSI_NAME_IFR_MAX_SIZE,
@@ -1281,7 +1293,9 @@ IScsiGetConfigData (
                                                  mPrivate->PortString,
                                                  NULL
                                                  );
-    ASSERT (AttemptConfigData->AttemptTitleHelpToken != 0);
+    if (AttemptConfigData->AttemptTitleHelpToken == 0) {
+      return EFI_OUT_OF_RESOURCES;
+    }
 
     //
     // Record the attempt in global link list.

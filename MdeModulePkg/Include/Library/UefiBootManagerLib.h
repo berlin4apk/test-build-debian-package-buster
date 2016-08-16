@@ -1,7 +1,7 @@
 /** @file
   Provide Boot Manager related library APIs.
 
-Copyright (c) 2011 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2011 - 2016, Intel Corporation. All rights reserved.<BR>
 (C) Copyright 2015-2016 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
@@ -418,17 +418,42 @@ EfiBootManagerBoot (
   );
 
 /**
-  Return the Boot Manager Menu.
- 
+  Return the boot option corresponding to the Boot Manager Menu.
+  It may automatically create one if the boot option hasn't been created yet.
+
   @param BootOption    Return the Boot Manager Menu.
 
   @retval EFI_SUCCESS   The Boot Manager Menu is successfully returned.
-  @retval EFI_NOT_FOUND The Boot Manager Menu is not found.
+  @retval EFI_NOT_FOUND The Boot Manager Menu cannot be found.
+  @retval others        Return status of gRT->SetVariable (). BootOption still points
+                        to the Boot Manager Menu even the Status is not EFI_SUCCESS
+                        and EFI_NOT_FOUND.
 **/
 EFI_STATUS
 EFIAPI
 EfiBootManagerGetBootManagerMenu (
   EFI_BOOT_MANAGER_LOAD_OPTION *BootOption
+  );
+
+
+/**
+  Get the load option by its device path.
+
+  @param FilePath  The device path pointing to a load option.
+                   It could be a short-form device path.
+  @param FullPath  Return the full device path of the load option after
+                   short-form device path expanding.
+                   Caller is responsible to free it.
+  @param FileSize  Return the load option size.
+
+  @return The load option buffer. Caller is responsible to free the memory.
+**/
+VOID *
+EFIAPI
+EfiBootManagerGetLoadOptionBuffer (
+  IN  EFI_DEVICE_PATH_PROTOCOL          *FilePath,
+  OUT EFI_DEVICE_PATH_PROTOCOL          **FullPath,
+  OUT UINTN                             *FileSize
   );
 
 /**

@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2004  - 2015, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2004  - 2016, Intel Corporation. All rights reserved.<BR>
                                                                                    
   This program and the accompanying materials are licensed and made available under
   the terms and conditions of the BSD License that accompanies this distribution.  
@@ -226,6 +226,11 @@ PlatformBdsInit (
   EFI_STATUS  Status;
   EFI_EVENT   ShellImageEvent;
   EFI_GUID    ShellEnvProtocol = SHELL_ENVIRONMENT_INTERFACE_PROTOCOL;
+  
+  //
+  // Signal EndOfDxe PI Event
+  //
+  EfiEventGroupSignal (&gEfiEndOfDxeEventGroupGuid);
 
   #ifdef __GNUC__
   SerialPortWrite((UINT8 *)">>>>BdsEntry[GCC]\r\n", 19);
@@ -2158,7 +2163,6 @@ BdsLockFv (
   EFI_FV_BLOCK_MAP_ENTRY      *BlockMap;
   EFI_FIRMWARE_VOLUME_HEADER  *FvHeader;
   EFI_PHYSICAL_ADDRESS        BaseAddress;
-  UINT8                       Data;
   UINT32                      BlockLength;
   UINTN                       Index;
 
@@ -2169,7 +2173,7 @@ BdsLockFv (
   while ((BlockMap->NumBlocks != 0) && (BlockMap->Length != 0)) {
     BlockLength = BlockMap->Length;
     for (Index = 0; Index < BlockMap->NumBlocks; Index++) {
-      Data = MmioOr8 ((UINTN) BaseAddress, 0x03);
+      MmioOr8 ((UINTN) BaseAddress, 0x03);
       BaseAddress += BlockLength;
     }
     BlockMap++;
