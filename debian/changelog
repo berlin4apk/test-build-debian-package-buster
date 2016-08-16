@@ -1,4 +1,4 @@
-edk2 (0~20160813.de74668f-1) UNRELEASED; urgency=medium
+edk2 (0~20160813.de74668f-1) unstable; urgency=medium
 
   * New upstream release.
     - fixes build failure with gcc-6.  Closes: #834467.
@@ -7,7 +7,7 @@ edk2 (0~20160813.de74668f-1) UNRELEASED; urgency=medium
   * debian/patches/shell-proper-valist.patch: use VA_COPY() in Shell.
   * update Standards Version.
 
- -- Steve Langasek <vorlon@debian.org>  Mon, 15 Aug 2016 21:25:05 -0700
+ -- Steve Langasek <vorlon@debian.org>  Tue, 16 Aug 2016 06:20:28 +0000
 
 edk2 (0~20160408.ffea0a2c-2) unstable; urgency=medium
 
