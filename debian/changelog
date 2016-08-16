@@ -1,3 +1,10 @@
+edk2 (0~20160813.de74668f-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+    - fixes build failure with gcc-6.  Closes: #834467.
+
+ -- Steve Langasek <vorlon@debian.org>  Mon, 15 Aug 2016 21:25:05 -0700
+
 edk2 (0~20160408.ffea0a2c-2) unstable; urgency=medium
 
   * Provide split AAVMF_{CODE,VARS}.fd for arm64 in the qemu-efi package,
