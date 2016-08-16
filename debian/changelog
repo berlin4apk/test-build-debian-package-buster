@@ -5,6 +5,7 @@ edk2 (0~20160813.de74668f-1) UNRELEASED; urgency=medium
     - increases variable size for arm64 build, to support SecureBoot.
       Closes: #830488.
   * debian/patches/shell-proper-valist.patch: use VA_COPY() in Shell.
+  * update Standards Version.
 
  -- Steve Langasek <vorlon@debian.org>  Mon, 15 Aug 2016 21:25:05 -0700
 

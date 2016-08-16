@@ -4,7 +4,7 @@ Priority: extra
 Maintainer: Debian QEMU Team <pkg-qemu-devel@lists.alioth.debian.org>
 Uploaders: Steve Langasek <vorlon@debian.org>, Serge Hallyn <serge.hallyn@ubuntu.com>
 Build-Depends: debhelper (>= 8), uuid-dev, quilt, iasl, gcc-multilib [i386], nasm, python, gcc-aarch64-linux-gnu
-Standards-Version: 3.9.6
+Standards-Version: 3.9.8
 Homepage: http://www.tianocore.org
 Vcs-Git: git://git.debian.org/git/pkg-qemu/edk2.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-qemu/edk2.git
