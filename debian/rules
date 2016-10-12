@@ -38,7 +38,7 @@ ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
 %:
 	dh $@
 
-override_dh_auto_build: setup-build build-qemu-efi build-ovmf
+override_dh_auto_build: build-qemu-efi build-ovmf
 
 setup-build:
 	make -C BaseTools ARCH=$(EDK2_BUILD_ARCH)
@@ -50,7 +50,7 @@ setup-build:
 	cd CryptoPkg/Library/OpensslLib/ && ./Install.sh
 
 build-ovmf: EDK2_ARCH_DIR=X64
-build-ovmf:
+build-ovmf: setup-build
 ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 	cd UefiCpuPkg/ResetVector/Vtf0 && python Build.py
 	mkdir -p EdkShellBinPkg/FullShell/$(EDK2_ARCH_DIR) \
@@ -69,7 +69,7 @@ endif
 build-qemu-efi: EDK2_ARCH_DIR=AArch64
 build-qemu-efi: EDK2_HOST_ARCH=AARCH64
 build-qemu-efi: export GCC49_AARCH64_PREFIX=aarch64-linux-gnu-
-build-qemu-efi:
+build-qemu-efi: setup-build
 	mkdir -p ShellBinPkg/UefiShell/$(EDK2_ARCH_DIR) FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
 	set -e; . ./edksetup.sh; \
 		build -a $(EDK2_HOST_ARCH) -p ShellPkg/ShellPkg.dsc \
