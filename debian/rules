@@ -15,6 +15,7 @@ DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
 DEB_HOST_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
 
 EDK2_TOOLCHAIN = GCC49
+export $(EDK2_TOOLCHAIN)_AARCH64_PREFIX=aarch64-linux-gnu-
 
 ifeq ($(DEB_BUILD_ARCH),amd64)
 	EDK2_BUILD_ARCH=X64
@@ -68,7 +69,6 @@ endif
 
 build-qemu-efi: EDK2_ARCH_DIR=AArch64
 build-qemu-efi: EDK2_HOST_ARCH=AARCH64
-build-qemu-efi: export GCC49_AARCH64_PREFIX=aarch64-linux-gnu-
 build-qemu-efi: setup-build
 	mkdir -p ShellBinPkg/UefiShell/$(EDK2_ARCH_DIR) FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
 	set -e; . ./edksetup.sh; \
