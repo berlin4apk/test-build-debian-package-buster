@@ -2,6 +2,8 @@ edk2 (0~20160813.de74668f-2) UNRELEASED; urgency=medium
 
   * d/p/arm64-reorder-blocks-algorithm.diff: Workaround to fix
     booting in KVM mode. LP: #1632875.
+  * debian/rules: Export compiler prefix variable to simplify
+    build-qemu-efi target.
 
  -- dann frazier <dannf@debian.org>  Wed, 19 Oct 2016 12:03:30 -0600
 

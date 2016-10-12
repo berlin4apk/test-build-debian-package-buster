@@ -68,20 +68,20 @@ endif
 
 build-qemu-efi: EDK2_ARCH_DIR=AArch64
 build-qemu-efi: EDK2_HOST_ARCH=AARCH64
-build-qemu-efi: GCC49_AARCH64_PREFIX=aarch64-linux-gnu-
+build-qemu-efi: export GCC49_AARCH64_PREFIX=aarch64-linux-gnu-
 build-qemu-efi:
 	mkdir -p ShellBinPkg/UefiShell/$(EDK2_ARCH_DIR) FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
 	set -e; . ./edksetup.sh; \
-		GCC49_AARCH64_PREFIX=$(GCC49_AARCH64_PREFIX) build -a $(EDK2_HOST_ARCH) \
-			-p ShellPkg/ShellPkg.dsc -b RELEASE -t $(EDK2_TOOLCHAIN); \
+		build -a $(EDK2_HOST_ARCH) -p ShellPkg/ShellPkg.dsc \
+			-b RELEASE -t $(EDK2_TOOLCHAIN); \
 		cp -a Build/Shell/RELEASE_$(EDK2_TOOLCHAIN)/AARCH64/Shell.efi \
 			ShellBinPkg/UefiShell/$(EDK2_ARCH_DIR)/Shell.efi; \
-		GCC49_AARCH64_PREFIX=$(GCC49_AARCH64_PREFIX) build -a $(EDK2_HOST_ARCH) \
-			-p FatPkg/FatPkg.dsc -m FatPkg/EnhancedFatDxe/Fat.inf \
+		build -a $(EDK2_HOST_ARCH) -p FatPkg/FatPkg.dsc \
+			-m FatPkg/EnhancedFatDxe/Fat.inf \
 			-t $(EDK2_TOOLCHAIN) -b RELEASE; \
 		cp -a Build/Fat/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_HOST_ARCH)/Fat.efi \
 			FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)/Fat.efi; \
-		GCC49_AARCH64_PREFIX=$(GCC49_AARCH64_PREFIX) build -a $(EDK2_HOST_ARCH) \
+		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p ArmVirtPkg/ArmVirtQemu.dsc \
 			-DSECURE_BOOT_ENABLE=TRUE \
