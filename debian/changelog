@@ -7,6 +7,7 @@ edk2 (0~20160813.de74668f-2) UNRELEASED; urgency=medium
   * debian/rules: Make the target dependencies on setup-build explicit.
   * debian/rules: Set the aarch64 toolchain prefix agnostically of the
     toolchain tag being used.
+  * debian/rules: Respect EDK2_TOOLCHAIN tag when building ovmf.
 
  -- dann frazier <dannf@debian.org>  Wed, 19 Oct 2016 12:03:30 -0600
 

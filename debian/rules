@@ -56,15 +56,17 @@ ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 	cd UefiCpuPkg/ResetVector/Vtf0 && python Build.py
 	mkdir -p EdkShellBinPkg/FullShell/$(EDK2_ARCH_DIR) \
 	         FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
-	set -e; . ./edksetup.sh; build -p EdkShellPkg/EdkShellPkg.dsc \
-			-m Shell/ShellFull.inf -b RELEASE; \
+	set -e; . ./edksetup.sh; \
+		build -p EdkShellPkg/EdkShellPkg.dsc -m Shell/ShellFull.inf \
+			-b RELEASE -t $(EDK2_TOOLCHAIN); \
 		cp -a Build/EdkShellPkg/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_ARCH_DIR)/ShellFull.efi \
 			EdkShellBinPkg/FullShell/$(EDK2_ARCH_DIR)/Shell_Full.efi; \
 		build -p FatPkg/FatPkg.dsc -m FatPkg/EnhancedFatDxe/Fat.inf \
-			-b RELEASE; \
+			-b RELEASE -t $(EDK2_TOOLCHAIN); \
 		cp -a Build/Fat/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_ARCH_DIR)/Fat.efi \
 			FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)/Fat.efi; \
-		build -DSECURE_BOOT_ENABLE=TRUE -DFD_SIZE_2MB -b RELEASE
+		build -DSECURE_BOOT_ENABLE=TRUE -DFD_SIZE_2MB \
+			-b RELEASE -t $(EDK2_TOOLCHAIN)
 endif
 
 build-qemu-efi: EDK2_ARCH_DIR=AArch64
