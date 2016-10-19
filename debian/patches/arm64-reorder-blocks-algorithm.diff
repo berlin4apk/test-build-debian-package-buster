@@ -1,0 +1,21 @@
+Author: dann frazier <dannf@debian.org>
+Description: pass -freorder-blocks-algorithm=stc on arm64
+ qemu-efi began to fail to boot in KVM mode on arm64 once the build
+ switched from using gcc-5 to gcc-6. This was bisected down to an
+ upstream change in GCC that switched the reorder block algorith in -Os
+ builds from "stc" to "simple". Force it back to "stc" to workaround
+ the issue.
+Last-Updated: 2016-10-19
+Index: edk2/BaseTools/Conf/tools_def.template
+===================================================================
+--- edk2.orig/BaseTools/Conf/tools_def.template
++++ edk2/BaseTools/Conf/tools_def.template
+@@ -4463,7 +4463,7 @@ DEFINE GCC49_ARM_ASM_FLAGS           = D
+ DEFINE GCC49_AARCH64_ASM_FLAGS       = DEF(GCC48_AARCH64_ASM_FLAGS)
+ DEFINE GCC49_ARM_CC_FLAGS            = DEF(GCC48_ARM_CC_FLAGS)
+ DEFINE GCC49_ARM_CC_XIPFLAGS         = DEF(GCC48_ARM_CC_XIPFLAGS)
+-DEFINE GCC49_AARCH64_CC_FLAGS        = $(ARCHCC_FLAGS) $(PLATFORM_FLAGS) DEF(GCC44_ALL_CC_FLAGS) DEF(GCC_AARCH64_CC_FLAGS) -save-temps
++DEFINE GCC49_AARCH64_CC_FLAGS        = $(ARCHCC_FLAGS) $(PLATFORM_FLAGS) DEF(GCC44_ALL_CC_FLAGS) DEF(GCC_AARCH64_CC_FLAGS) -save-temps -freorder-blocks-algorithm=stc
+ DEFINE GCC49_AARCH64_CC_XIPFLAGS     = DEF(GCC48_AARCH64_CC_XIPFLAGS)
+ DEFINE GCC49_ARM_DLINK_FLAGS         = DEF(GCC48_ARM_DLINK_FLAGS)
+ DEFINE GCC49_ARM_DLINK2_FLAGS        = DEF(GCC48_ARM_DLINK2_FLAGS)
