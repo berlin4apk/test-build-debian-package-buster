@@ -2,7 +2,7 @@ Source: edk2
 Section: misc
 Priority: extra
 Maintainer: Debian QEMU Team <pkg-qemu-devel@lists.alioth.debian.org>
-Uploaders: Steve Langasek <vorlon@debian.org>, Serge Hallyn <serge.hallyn@ubuntu.com>
+Uploaders: Steve Langasek <vorlon@debian.org>, Serge Hallyn <serge.hallyn@ubuntu.com>, dann frazier <dannf@debian.org>
 Build-Depends: debhelper (>= 8), uuid-dev, quilt, iasl, gcc-multilib [i386], nasm, python, gcc-aarch64-linux-gnu
 Standards-Version: 3.9.8
 Homepage: http://www.tianocore.org

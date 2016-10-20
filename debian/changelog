@@ -1,3 +1,9 @@
+edk2 (0~20160813.de74668f-3) UNRELEASED; urgency=medium
+
+  * Add myself to Uploaders.
+
+ -- dann frazier <dannf@debian.org>  Thu, 20 Oct 2016 14:21:02 -0600
+
 edk2 (0~20160813.de74668f-2) unstable; urgency=medium
 
   [ dann frazier ]
