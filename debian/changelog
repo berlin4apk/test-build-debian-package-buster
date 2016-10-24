@@ -1,9 +1,9 @@
-edk2 (0~20160813.de74668f-1ubuntu0.1) UNRELEASED; urgency=medium
+edk2 (0~20160813.de74668f-1ubuntu0.1) yakkety; urgency=medium
 
   * d/p/arm64-reorder-blocks-algorithm.diff: Workaround to fix
     booting in KVM mode. LP: #1632875.
 
- -- dann frazier <dannf@ubuntu.com>  Thu, 20 Oct 2016 14:45:01 -0600
+ -- dann frazier <dannf@ubuntu.com>  Mon, 24 Oct 2016 15:53:34 -0600
 
 edk2 (0~20160813.de74668f-1) unstable; urgency=medium
 
