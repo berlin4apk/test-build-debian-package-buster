@@ -900,6 +900,8 @@ EXIT:
 
   gBS->CloseEvent (Private->ExitBootServiceEvent);
 
+  mCallbackInfo->Current = NULL;
+
   FreePool (Private);
   return Status;
 }
@@ -1107,7 +1109,7 @@ IScsiGetConfigData (
           //
           // Refresh the state of this attempt to NVR.
           //
-          AsciiStrToUnicodeStrS (AttemptTmp->MacString, MacString, sizeof (MacString) / sizeof (MacString[0]));
+          AsciiStrToUnicodeStrS (AttemptTmp->MacString, MacString, ARRAY_SIZE (MacString));
           UnicodeSPrint (
             mPrivate->PortString,
             (UINTN) ISCSI_NAME_IFR_MAX_SIZE,
@@ -1146,7 +1148,7 @@ IScsiGetConfigData (
         //
         // Refresh the state of this attempt to NVR.
         //
-        AsciiStrToUnicodeStrS (AttemptTmp->MacString, MacString, sizeof (MacString) / sizeof (MacString[0]));
+        AsciiStrToUnicodeStrS (AttemptTmp->MacString, MacString, ARRAY_SIZE (MacString));
         UnicodeSPrint (
           mPrivate->PortString,
           (UINTN) ISCSI_NAME_IFR_MAX_SIZE,
@@ -1186,11 +1188,11 @@ IScsiGetConfigData (
       );
 
     GetVariable2 (
-                 mPrivate->PortString,
-                 &gEfiIScsiInitiatorNameProtocolGuid,
-                 (VOID**)&AttemptConfigData,
-                 NULL
-                 );
+      mPrivate->PortString,
+      &gEfiIScsiInitiatorNameProtocolGuid,
+      (VOID**)&AttemptConfigData,
+      NULL
+      );
 
     if (AttemptConfigData == NULL) {
       continue;
@@ -1237,7 +1239,7 @@ IScsiGetConfigData (
       //
       // Refresh the state of this attempt to NVR.
       //
-      AsciiStrToUnicodeStrS (AttemptConfigData->MacString, MacString, sizeof (MacString) / sizeof (MacString[0]));
+      AsciiStrToUnicodeStrS (AttemptConfigData->MacString, MacString, ARRAY_SIZE (MacString));
       UnicodeSPrint (
         mPrivate->PortString,
         (UINTN) ISCSI_NAME_IFR_MAX_SIZE,

@@ -265,15 +265,16 @@ def LaunchCommand(Command, WorkingDir):
     # It could be a string or sequence. We find that if command is a string in following Popen(),
     # ubuntu may fail with an error message that the command is not found.
     # So here we may need convert command from string to list instance.
-    if not isinstance(Command, list):
-        if platform.system() != 'Windows':
+    if platform.system() != 'Windows':
+        if not isinstance(Command, list):
             Command = Command.split()
+        Command = ' '.join(Command)
 
     Proc = None
     EndOfProcedure = None
     try:
         # launch the command
-        Proc = Popen(Command, stdout=PIPE, stderr=PIPE, env=os.environ, cwd=WorkingDir, bufsize=-1)
+        Proc = Popen(Command, stdout=PIPE, stderr=PIPE, env=os.environ, cwd=WorkingDir, bufsize=-1, shell=True)
 
         # launch two threads to read the STDOUT and STDERR
         EndOfProcedure = Event()
@@ -775,8 +776,11 @@ class Build():
                 # This also handles someone specifying the Conf directory in the workspace. Using --conf=Conf
                 ConfDirectoryPath = mws.join(self.WorkspaceDir, ConfDirectoryPath)
         else:
-            # Get standard WORKSPACE/Conf use the absolute path to the WORKSPACE/Conf
-            ConfDirectoryPath = mws.join(self.WorkspaceDir, 'Conf')
+            if "CONF_PATH" in os.environ:
+                ConfDirectoryPath = os.path.normcase(os.path.normpath(os.environ["CONF_PATH"]))
+            else:
+                # Get standard WORKSPACE/Conf use the absolute path to the WORKSPACE/Conf
+                ConfDirectoryPath = mws.join(self.WorkspaceDir, 'Conf')
         GlobalData.gConfDirectory = ConfDirectoryPath
         GlobalData.gDatabasePath = os.path.normpath(os.path.join(ConfDirectoryPath, GlobalData.gDatabasePath))
 
@@ -812,7 +816,7 @@ class Build():
         if "EDK_TOOLS_BIN" in os.environ:
             # Print the same path style with WORKSPACE env. 
             EdkLogger.quiet("%-16s = %s" % ("EDK_TOOLS_BIN", os.path.normcase(os.path.normpath(os.environ["EDK_TOOLS_BIN"]))))
-
+        EdkLogger.quiet("%-16s = %s" % ("CONF_PATH", GlobalData.gConfDirectory))
         self.InitPreBuild()
         self.InitPostBuild()
         if self.PrebuildScript:
@@ -821,6 +825,8 @@ class Build():
             EdkLogger.quiet("%-16s = %s" % ("POSTBUILD", self.PostbuildScript))
         if self.PrebuildScript:
             self.LaunchPrebuild()
+            self.TargetTxt = TargetTxtClassObject()
+            self.ToolDef   = ToolDefClassObject()
         if not (self.LaunchPrebuildFlag and os.path.exists(self.PlatformBuildPath)):
             self.InitBuild()
 

@@ -1,7 +1,7 @@
 /** @file
 This file contains the internal functions required to generate a Firmware Volume.
 
-Copyright (c) 2004 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.<BR>
 Portions Copyright (c) 2011 - 2013, ARM Ltd. All rights reserved.<BR>
 Portions Copyright (c) 2016 HP Development Company, L.P.<BR>
 This program and the accompanying materials                          
@@ -374,7 +374,7 @@ Returns:
     }
   }
 
-  for (Index = 0; Index < MAX_NUMBER_OF_FILES_IN_FV; Index++) {
+  for (Index = 0; Number + Index < MAX_NUMBER_OF_FILES_IN_FV; Index++) {
     //
     // Read the FFS file list
     //
@@ -751,7 +751,7 @@ Returns:
   EFI_IMAGE_OPTIONAL_HEADER_UNION     *ImgHdr;
   EFI_TE_IMAGE_HEADER                 *TEImageHeader;
   EFI_IMAGE_SECTION_HEADER            *SectionHeader;
-  unsigned long long                  TempLongAddress;
+  long long                           TempLongAddress;
   UINT32                              TextVirtualAddress;
   UINT32                              DataVirtualAddress;
   EFI_PHYSICAL_ADDRESS                LinkTimeBaseAddress;
@@ -1161,6 +1161,7 @@ Returns:
   //
   FileBuffer = malloc (FileSize);
   if (FileBuffer == NULL) {
+    fclose (NewFile);
     Error (NULL, 0, 4001, "Resouce", "memory cannot be allocated!");
     return EFI_OUT_OF_RESOURCES;
   }
@@ -1220,6 +1221,7 @@ Returns:
     if (CompareGuid ((EFI_GUID *) FileBuffer, &mFileGuidArray [Index1]) == 0) {
       Error (NULL, 0, 2000, "Invalid parameter", "the %dth file and %uth file have the same file GUID.", (unsigned) Index1 + 1, (unsigned) Index + 1);
       PrintGuid ((EFI_GUID *) FileBuffer);
+      free (FileBuffer);
       return EFI_INVALID_PARAMETER;
     }
   }
@@ -2418,17 +2420,19 @@ Returns:
   UINT8                           *FvImage;
   UINTN                           FvImageSize;
   FILE                            *FvFile;
-  CHAR8                           FvMapName [MAX_LONG_FILE_PATH];
+  CHAR8                           *FvMapName;
   FILE                            *FvMapFile;
   EFI_FIRMWARE_VOLUME_EXT_HEADER  *FvExtHeader;
   FILE                            *FvExtHeaderFile;
   UINTN                           FileSize;
-  CHAR8                           FvReportName[MAX_LONG_FILE_PATH];
+  CHAR8                           *FvReportName;
   FILE                            *FvReportFile;
 
   FvBufferHeader = NULL;
   FvFile         = NULL;
+  FvMapName      = NULL;
   FvMapFile      = NULL;
+  FvReportName   = NULL;
   FvReportFile   = NULL;
 
   if (InfFileImage != NULL) {
@@ -2494,6 +2498,10 @@ Returns:
     // Open the FV Extension Header file
     //
     FvExtHeaderFile = fopen (LongFilePath (mFvDataInfo.FvExtHeaderFile), "rb");
+    if (FvExtHeaderFile == NULL) {
+      Error (NULL, 0, 0001, "Error opening file", mFvDataInfo.FvExtHeaderFile);
+      return EFI_ABORTED;
+    }
 
     //
     // Get the file size
@@ -2562,8 +2570,34 @@ Returns:
   // FvMap file to log the function address of all modules in one Fvimage
   //
   if (MapFileName != NULL) {
+    if (strlen (MapFileName) > MAX_LONG_FILE_PATH - 1) {
+      Error (NULL, 0, 1003, "Invalid option value", "MapFileName %s is too long!", MapFileName);
+      Status = EFI_ABORTED;
+      goto Finish;
+    }
+
+    FvMapName = malloc (strlen (MapFileName) + 1);
+    if (FvMapName == NULL) {
+      Error (NULL, 0, 4001, "Resource", "memory cannot be allocated!");
+      Status = EFI_OUT_OF_RESOURCES;
+      goto Finish;
+    }
+
     strcpy (FvMapName, MapFileName);
   } else {
+    if (strlen (FvFileName) + strlen (".map") > MAX_LONG_FILE_PATH - 1) {
+      Error (NULL, 0, 1003, "Invalid option value", "FvFileName %s is too long!", FvFileName);
+      Status = EFI_ABORTED;
+      goto Finish;
+    }
+
+    FvMapName = malloc (strlen (FvFileName) + strlen (".map") + 1);
+    if (FvMapName == NULL) {
+      Error (NULL, 0, 4001, "Resource", "memory cannot be allocated!");
+      Status = EFI_OUT_OF_RESOURCES;
+      goto Finish;
+    }
+
     strcpy (FvMapName, FvFileName);
     strcat (FvMapName, ".map");
   }
@@ -2572,6 +2606,19 @@ Returns:
   //
   // FvReport file to log the FV information in one Fvimage
   //
+  if (strlen (FvFileName) + strlen (".txt") > MAX_LONG_FILE_PATH - 1) {
+    Error (NULL, 0, 1003, "Invalid option value", "FvFileName %s is too long!", FvFileName);
+    Status = EFI_ABORTED;
+    goto Finish;
+  }
+
+  FvReportName = malloc (strlen (FvFileName) + strlen (".txt") + 1);
+  if (FvReportName == NULL) {
+    Error (NULL, 0, 4001, "Resource", "memory cannot be allocated!");
+    Status = EFI_OUT_OF_RESOURCES;
+    goto Finish;
+  }
+
   strcpy (FvReportName, FvFileName);
   strcat (FvReportName, ".txt");
 
@@ -2581,7 +2628,7 @@ Returns:
   //
   Status = CalculateFvSize (&mFvDataInfo);
   if (EFI_ERROR (Status)) {
-    return Status;    
+    goto Finish;
   }
   VerboseMsg ("the generated FV image size is %u bytes", (unsigned) mFvDataInfo.Size);
   
@@ -2595,7 +2642,8 @@ Returns:
   //
   FvBufferHeader = malloc (FvImageSize + sizeof (UINT64));
   if (FvBufferHeader == NULL) {
-    return EFI_OUT_OF_RESOURCES;
+    Status = EFI_OUT_OF_RESOURCES;
+    goto Finish;
   }
   FvImage = (UINT8 *) (((UINTN) FvBufferHeader + 7) & ~7);
 
@@ -2687,7 +2735,8 @@ Returns:
   FvMapFile = fopen (LongFilePath (FvMapName), "w");
   if (FvMapFile == NULL) {
     Error (NULL, 0, 0001, "Error opening file", FvMapName);
-    return EFI_ABORTED;
+    Status = EFI_ABORTED;
+    goto Finish;
   }
   
   //
@@ -2696,7 +2745,8 @@ Returns:
   FvReportFile = fopen (LongFilePath (FvReportName), "w");
   if (FvReportFile == NULL) {
     Error (NULL, 0, 0001, "Error opening file", FvReportName);
-    return EFI_ABORTED;
+    Status = EFI_ABORTED;
+    goto Finish;
   }
   //
   // record FV size information into FvMap file.
@@ -2847,6 +2897,14 @@ Finish:
 
   if (FvExtHeader != NULL) {
     free (FvExtHeader);
+  }
+
+  if (FvMapName != NULL) {
+    free (FvMapName);
+  }
+
+  if (FvReportName != NULL) {
+    free (FvReportName);
   }
   
   if (FvFile != NULL) {
@@ -3449,6 +3507,7 @@ Returns:
           PeFileSize = _filelength (fileno (PeFile));
           PeFileBuffer = (UINT8 *) malloc (PeFileSize);
           if (PeFileBuffer == NULL) {
+            fclose (PeFile);
             Error (NULL, 0, 4001, "Resource", "memory cannot be allocated on rebase of %s", FileName);
             return EFI_OUT_OF_RESOURCES;
           }
@@ -3704,6 +3763,7 @@ Returns:
         PeFileSize = _filelength (fileno (PeFile));
         PeFileBuffer = (UINT8 *) malloc (PeFileSize);
         if (PeFileBuffer == NULL) {
+          fclose (PeFile);
           Error (NULL, 0, 4001, "Resource", "memory cannot be allocated on rebase of %s", FileName);
           return EFI_OUT_OF_RESOURCES;
         }
@@ -4206,6 +4266,7 @@ Returns:
 
   fwrite (CapBuffer, 1, CapSize, fpout);
   fclose (fpout);
+  free (CapBuffer);
   
   VerboseMsg ("The size of the generated capsule image is %u bytes", (unsigned) CapSize);
 

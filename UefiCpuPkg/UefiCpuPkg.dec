@@ -50,8 +50,19 @@
   ##
   SmmCpuFeaturesLib|Include/Library/SmmCpuFeaturesLib.h
 
+  ##  @libraryclass  Provides functions to support MP services on CpuMpPei and CpuDxe module.
+  ##
+  MpInitLib|Include/Library/MpInitLib.h
+
+  ## @libraryclass  Provides services to access Microcode region on flash device.
+  #
+  MicrocodeFlashAccessLib|Include/Library/MicrocodeFlashAccessLib.h
+
 [Guids]
   gUefiCpuPkgTokenSpaceGuid      = { 0xac05bf33, 0x995a, 0x4ed4, { 0xaa, 0xb8, 0xef, 0x7a, 0xe8, 0xf, 0x5c, 0xb0 }}
+
+  ## Include/Guid/MicrocodeFmp.h
+  gMicrocodeFmpImageTypeIdGuid      = { 0x96d4fdcd, 0x1502, 0x424d, { 0x9d, 0x4c, 0x9b, 0x12, 0xd2, 0xdc, 0xae, 0x5c } }
 
 [Protocols]
   ## Include/Protocol/SmmCpuService.h
@@ -145,10 +156,6 @@
   # @Prompt Processor stack size in SMM.
   gUefiCpuPkgTokenSpaceGuid.PcdCpuSmmStackSize|0x2000|UINT32|0x32132105
 
-  ## Specifies timeout value in microseconds for the BSP in SMM to wait for all APs to come into SMM.
-  # @Prompt AP synchronization timeout value in SMM.
-  gUefiCpuPkgTokenSpaceGuid.PcdCpuSmmApSyncTimeout|1000000|UINT64|0x32132104
-
   ## Indicates if SMM Code Access Check is enabled.
   #  If enabled, the SMM handler cannot execute the code outside SMM regions.
   #  This PCD is suggested to TRUE in production image.<BR><BR>
@@ -156,12 +163,6 @@
   #   FALSE - SMM Code Access Check will be disabled.<BR>
   # @Prompt SMM Code Access Check.
   gUefiCpuPkgTokenSpaceGuid.PcdCpuSmmCodeAccessCheckEnable|TRUE|BOOLEAN|0x60000013
-
-  ## Indicates the CPU synchronization method used when processing an SMI.
-  #   0x00  - Traditional CPU synchronization method.<BR>
-  #   0x01  - Relaxed CPU synchronization method.<BR>
-  # @Prompt SMM CPU Synchronization Method.
-  gUefiCpuPkgTokenSpaceGuid.PcdCpuSmmSyncMode|0x00|UINT8|0x60000014
 
   ## Specifies the number of variable MTRRs reserved for OS use. The default number of
   #  MTRRs reserved for OS use is 2.
@@ -194,6 +195,24 @@
   #  The value is defined as below.<BR><BR>
   # @Prompt The specified AP target C-state for Mwait.
   gUefiCpuPkgTokenSpaceGuid.PcdCpuApTargetCstate|0|UINT8|0x00000007
+
+  ## Indicates if SMM uses static page table.
+  #  If enabled, SMM will not use on-demand paging. SMM will build static page table for all memory.<BR><BR>
+  #  This flag only impacts X64 build, because SMM alway builds static page table for IA32.
+  #   TRUE  - SMM uses static page table for all memory.<BR>
+  #   FALSE - SMM uses static page table for below 4G memory and use on-demand paging for above 4G memory.<BR>
+  # @Prompt Use static page table for all memory in SMM.
+  gUefiCpuPkgTokenSpaceGuid.PcdCpuSmmStaticPageTable|TRUE|BOOLEAN|0x3213210D
+
+  ## Specifies timeout value in microseconds for the BSP in SMM to wait for all APs to come into SMM.
+  # @Prompt AP synchronization timeout value in SMM.
+  gUefiCpuPkgTokenSpaceGuid.PcdCpuSmmApSyncTimeout|1000000|UINT64|0x32132104
+
+  ## Indicates the CPU synchronization method used when processing an SMI.
+  #   0x00  - Traditional CPU synchronization method.<BR>
+  #   0x01  - Relaxed CPU synchronization method.<BR>
+  # @Prompt SMM CPU Synchronization Method.
+  gUefiCpuPkgTokenSpaceGuid.PcdCpuSmmSyncMode|0x00|UINT8|0x60000014
 
 [PcdsDynamic, PcdsDynamicEx]
   ## Contains the pointer to a CPU S3 data buffer of structure ACPI_CPU_DATA.

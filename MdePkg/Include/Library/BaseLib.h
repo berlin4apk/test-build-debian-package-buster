@@ -1747,8 +1747,7 @@ BcdToDecimal8 (
 //
 
 /**
-  Removes the last directory or file entry in a path by changing the last
-  L'\' to a CHAR_NULL.
+  Removes the last directory or file entry in a path.
 
   @param[in, out] Path    The pointer to the path to modify.
 
@@ -1772,7 +1771,7 @@ PathRemoveLastItem(
 
   @param[in] Path       The pointer to the string containing the path.
 
-  @return       Returns Path, otherwise returns NULL to indicate that an error has occured.
+  @return       Returns Path, otherwise returns NULL to indicate that an error has occurred.
 **/
 CHAR16*
 EFIAPI

@@ -43,7 +43,6 @@ typedef enum {
   @sa ParseCommandLineToArgs
 **/
 EFI_STATUS
-EFIAPI
 CreatePopulateInstallShellParametersProtocol (
   IN OUT EFI_SHELL_PARAMETERS_PROTOCOL  **NewShellParameters,
   IN OUT BOOLEAN                        *RootShellInstance
@@ -62,7 +61,6 @@ CreatePopulateInstallShellParametersProtocol (
   @sa UninstallProtocolInterface
 **/
 EFI_STATUS
-EFIAPI
 CleanUpShellParametersProtocol (
   IN OUT EFI_SHELL_PARAMETERS_PROTOCOL  *NewShellParameters
   );
@@ -82,7 +80,6 @@ CleanUpShellParametersProtocol (
   @retval   EFI_OUT_OF_RESOURCES        a memory allocation failed.
 **/
 EFI_STATUS
-EFIAPI
 UpdateArgcArgv(
   IN OUT EFI_SHELL_PARAMETERS_PROTOCOL  *ShellParameters,
   IN CONST CHAR16                       *NewCommandLine,
@@ -101,7 +98,6 @@ UpdateArgcArgv(
   @param[in] OldArgc                    pointer to old number of items in Argv list
 **/
 VOID
-EFIAPI
 RestoreArgcArgv(
   IN OUT EFI_SHELL_PARAMETERS_PROTOCOL  *ShellParameters,
   IN CHAR16                             ***OldArgv,
@@ -135,7 +131,6 @@ typedef struct {
   @retval   EFI_OUT_OF_RESOURCES        A memory allocation failed.
 **/
 EFI_STATUS
-EFIAPI
 UpdateStdInStdOutStdErr(
   IN OUT EFI_SHELL_PARAMETERS_PROTOCOL  *ShellParameters,
   IN CHAR16                             *NewCommandLine,
@@ -156,7 +151,6 @@ UpdateStdInStdOutStdErr(
   @param[in] SystemTableInfo           Pointer to old system table information.
 **/
 EFI_STATUS
-EFIAPI
 RestoreStdInStdOutStdErr (
   IN OUT EFI_SHELL_PARAMETERS_PROTOCOL  *ShellParameters,
   IN  SHELL_FILE_HANDLE                 *OldStdIn,
@@ -182,12 +176,39 @@ RestoreStdInStdOutStdErr (
   @return EFI_OUT_OF_RESOURCES  a memory allocation failed.
 **/
 EFI_STATUS
-EFIAPI
 ParseCommandLineToArgs(
   IN CONST CHAR16 *CommandLine,
   IN BOOLEAN      StripQuotation,
   IN OUT CHAR16   ***Argv,
   IN OUT UINTN    *Argc
+  );
+
+/**
+  return the next parameter from a command line string;
+
+  This function moves the next parameter from Walker into TempParameter and moves
+  Walker up past that parameter for recursive calling.  When the final parameter
+  is moved *Walker will be set to NULL;
+
+  Temp Parameter must be large enough to hold the parameter before calling this
+  function.
+
+  @param[in, out] Walker          pointer to string of command line.  Adjusted to
+                                  reminaing command line on return
+  @param[in, out] TempParameter   pointer to string of command line item extracted.
+  @param[in]      Length          Length of (*TempParameter) in bytes
+  @param[in]      StripQuotation  if TRUE then strip the quotation marks surrounding
+                                  the parameters.
+
+  @return   EFI_INALID_PARAMETER  A required parameter was NULL or pointed to a NULL or empty string.
+  @return   EFI_NOT_FOUND         A closing " could not be found on the specified string
+**/
+EFI_STATUS
+GetNextParameter(
+  IN OUT CHAR16   **Walker,
+  IN OUT CHAR16   **TempParameter,
+  IN CONST UINTN  Length,
+  IN BOOLEAN      StripQuotation
   );
 
 #endif //_SHELL_PARAMETERS_PROTOCOL_PROVIDER_HEADER_

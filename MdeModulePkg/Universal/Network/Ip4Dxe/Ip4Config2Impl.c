@@ -150,7 +150,6 @@ Ip4Config2OnPolicyChanged (
   // Start the dhcp configuration.
   //
   if (NewPolicy == Ip4Config2PolicyDhcp) {
-    IpSb->Reconfig = TRUE;
     Ip4StartAutoConfig (&IpSb->Ip4Config2Instance);
   }
 
@@ -738,8 +737,7 @@ Ip4Config2SetDnsServerWorker (
 
   for (NewIndex = 0; NewIndex < NewDnsCount; NewIndex++) {
     CopyMem (&DnsAddress, NewDns + NewIndex, sizeof (IP4_ADDR));
-
-    if (!NetIp4IsUnicast (NTOHL (DnsAddress), 0)) {
+    if (IP4_IS_UNSPECIFIED (NTOHL (DnsAddress)) || IP4_IS_LOCAL_BROADCAST (NTOHL (DnsAddress))) {
       //
       // The dns server address must be unicast.
       //
@@ -902,7 +900,7 @@ Exit:
 
   @param[in]  Instance           The IP4 config2 instance to configure
 
-  @retval EFI_SUCCESS            The auto configuration is successfull started
+  @retval EFI_SUCCESS            The auto configuration is successfully started
   @retval Others                 Failed to start auto configuration.
 
 **/
@@ -1147,39 +1145,39 @@ Ip4Config2SetPolicy (
       return EFI_ABORTED;
     }
   } else {
+    //
+    // The policy is changed. Clean the ManualAddress, Gateway and DnsServers, 
+    // shrink the variable data size, and fire up all the related events.
+    //
+    DataItem           = &Instance->DataItem[Ip4Config2DataTypeManualAddress];
+    if (DataItem->Data.Ptr != NULL) {
+      FreePool (DataItem->Data.Ptr);
+    }
+    DataItem->Data.Ptr = NULL;
+    DataItem->DataSize = 0;
+    DataItem->Status   = EFI_NOT_FOUND;
+    NetMapIterate (&DataItem->EventMap, Ip4Config2SignalEvent, NULL);
+
+    DataItem           = &Instance->DataItem[Ip4Config2DataTypeGateway];
+    if (DataItem->Data.Ptr != NULL) {
+      FreePool (DataItem->Data.Ptr);
+    }
+    DataItem->Data.Ptr = NULL;
+    DataItem->DataSize = 0;
+    DataItem->Status   = EFI_NOT_FOUND;
+    NetMapIterate (&DataItem->EventMap, Ip4Config2SignalEvent, NULL);
+
+    DataItem           = &Instance->DataItem[Ip4Config2DataTypeDnsServer];
+    if (DataItem->Data.Ptr != NULL) {
+      FreePool (DataItem->Data.Ptr);
+    }
+    DataItem->Data.Ptr = NULL;
+    DataItem->DataSize = 0;
+    DataItem->Status   = EFI_NOT_FOUND;
+    NetMapIterate (&DataItem->EventMap, Ip4Config2SignalEvent, NULL);
+    
     if (NewPolicy == Ip4Config2PolicyDhcp) {
-      //
-      // The policy is changed from static to dhcp:
-      // Clean the ManualAddress, Gateway and DnsServers, shrink the variable
-      // data size, and fire up all the related events.
-      //
-      DataItem           = &Instance->DataItem[Ip4Config2DataTypeManualAddress];
-      if (DataItem->Data.Ptr != NULL) {
-        FreePool (DataItem->Data.Ptr);
-      }
-      DataItem->Data.Ptr = NULL;
-      DataItem->DataSize = 0;
-      DataItem->Status   = EFI_NOT_FOUND;
-      NetMapIterate (&DataItem->EventMap, Ip4Config2SignalEvent, NULL);
-
-      DataItem           = &Instance->DataItem[Ip4Config2DataTypeGateway];
-      if (DataItem->Data.Ptr != NULL) {
-        FreePool (DataItem->Data.Ptr);
-      }
-      DataItem->Data.Ptr = NULL;
-      DataItem->DataSize = 0;
-      DataItem->Status   = EFI_NOT_FOUND;
-      NetMapIterate (&DataItem->EventMap, Ip4Config2SignalEvent, NULL);
-
-      DataItem           = &Instance->DataItem[Ip4Config2DataTypeDnsServer];
-      if (DataItem->Data.Ptr != NULL) {
-        FreePool (DataItem->Data.Ptr);
-      }
-      DataItem->Data.Ptr = NULL;
-      DataItem->DataSize = 0;
-      DataItem->Status   = EFI_NOT_FOUND;
       SET_DATA_ATTRIB (DataItem->Attribute, DATA_ATTRIB_VOLATILE);
-      NetMapIterate (&DataItem->EventMap, Ip4Config2SignalEvent, NULL);
     } else {
       //
       // The policy is changed from dhcp to static. Stop the DHCPv4 process
@@ -1257,6 +1255,13 @@ Ip4Config2SetMaunualAddress (
 
   NewAddress = *((EFI_IP4_CONFIG2_MANUAL_ADDRESS *) Data);
 
+  StationAddress = EFI_NTOHL (NewAddress.Address);
+  SubnetMask = EFI_NTOHL (NewAddress.SubnetMask);
+
+  if (NetGetMaskLength (SubnetMask) == IP4_MASK_NUM) {
+    return EFI_INVALID_PARAMETER;
+  }
+
   //
   // Store the new data, and init the DataItem status to EFI_NOT_READY because
   // we may have an asynchronous configuration process.
@@ -1275,26 +1280,19 @@ Ip4Config2SetMaunualAddress (
   DataItem->DataSize = DataSize;
   DataItem->Status   = EFI_NOT_READY;
 
-  StationAddress = EFI_NTOHL (NewAddress.Address);
-  SubnetMask = EFI_NTOHL (NewAddress.SubnetMask);
-
   IpSb->Reconfig = TRUE;
   Status = Ip4Config2SetDefaultAddr (IpSb, StationAddress, SubnetMask);
-  if (EFI_ERROR (Status)) {
-    goto ON_EXIT;
-  }  
 
-  DataItem->Status = EFI_SUCCESS;   
+  DataItem->Status = Status; 
 
-ON_EXIT:
-  if (EFI_ERROR (DataItem->Status)) {
+  if (EFI_ERROR (DataItem->Status) && DataItem->Status != EFI_NOT_READY) {
     if (Ptr != NULL) {
       FreePool (Ptr);
     }
     DataItem->Data.Ptr = NULL; 
   }
 
-  return EFI_SUCCESS;
+  return Status;
 }
 
 /**
@@ -1348,14 +1346,15 @@ Ip4Config2SetGateway (
     return EFI_WRITE_PROTECTED;
   }
 
+  IpSb = IP4_SERVICE_FROM_IP4_CONFIG2_INSTANCE (Instance);
 
   NewGateway      = (EFI_IPv4_ADDRESS *) Data;
   NewGatewayCount = DataSize / sizeof (EFI_IPv4_ADDRESS);
   for (Index1 = 0; Index1 < NewGatewayCount; Index1++) {
     CopyMem (&Gateway, NewGateway + Index1, sizeof (IP4_ADDR));
-    
-    if (!NetIp4IsUnicast (NTOHL (Gateway), 0)) {
 
+    if ((IpSb->DefaultInterface->SubnetMask != 0) && 
+        !NetIp4IsUnicast (NTOHL (Gateway), IpSb->DefaultInterface->SubnetMask)) {
       return EFI_INVALID_PARAMETER;
     }
 
@@ -1366,7 +1365,6 @@ Ip4Config2SetGateway (
     }
   }
  
-  IpSb = IP4_SERVICE_FROM_IP4_CONFIG2_INSTANCE (Instance);
   DataItem = &Instance->DataItem[Ip4Config2DataTypeGateway];
   OldGateway      = DataItem->Data.Gateway;
   OldGatewayCount = DataItem->DataSize / sizeof (EFI_IPv4_ADDRESS);

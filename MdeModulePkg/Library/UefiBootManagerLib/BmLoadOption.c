@@ -796,7 +796,7 @@ EfiBootManagerIsValidLoadOptionVariableName (
     return FALSE;
   }
 
-  for (Index = 0; Index < sizeof (mBmLoadOptionName) / sizeof (mBmLoadOptionName[0]); Index++) {
+  for (Index = 0; Index < ARRAY_SIZE (mBmLoadOptionName); Index++) {
     if ((VariableNameLen - 4 == StrLen (mBmLoadOptionName[Index])) &&
         (StrnCmp (VariableName, mBmLoadOptionName[Index], VariableNameLen - 4) == 0)
         ) {
@@ -804,7 +804,7 @@ EfiBootManagerIsValidLoadOptionVariableName (
     }
   }
 
-  if (Index == sizeof (mBmLoadOptionName) / sizeof (mBmLoadOptionName[0])) {
+  if (Index == ARRAY_SIZE (mBmLoadOptionName)) {
     return FALSE;
   }
 
@@ -1277,8 +1277,9 @@ EfiBootManagerProcessLoadOption (
   // Load and start the load option.
   //
   DEBUG ((
-    DEBUG_INFO | DEBUG_LOAD, "Process Load Option (%s%04x) ...\n",
-    mBmLoadOptionName[LoadOption->OptionType], LoadOption->OptionNumber
+    DEBUG_INFO | DEBUG_LOAD, "Process %s%04x (%s) ...\n",
+    mBmLoadOptionName[LoadOption->OptionType], LoadOption->OptionNumber,
+    LoadOption->Description
     ));
   ImageHandle = NULL;
   FileBuffer = EfiBootManagerGetLoadOptionBuffer (LoadOption->FilePath, &FilePath, &FileSize);
@@ -1321,7 +1322,7 @@ EfiBootManagerProcessLoadOption (
 
     LoadOption->Status = gBS->StartImage (ImageHandle, &LoadOption->ExitDataSize, &LoadOption->ExitData);
     DEBUG ((
-      DEBUG_INFO | DEBUG_LOAD, "Load Option (%s%04x) Return Status = %r\n",
+      DEBUG_INFO | DEBUG_LOAD, "%s%04x Return Status = %r\n",
       mBmLoadOptionName[LoadOption->OptionType], LoadOption->OptionNumber, LoadOption->Status
       ));
 

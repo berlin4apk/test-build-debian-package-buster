@@ -262,6 +262,7 @@ UpdateBootDelPage (
       // through HiiSetBrowserData function.
       //
       CallbackData->BmmFakeNvData.BootOptionDel[Index] = FALSE;
+      CallbackData->BmmOldFakeNVData.BootOptionDel[Index] = FALSE;
     }
     
     HiiCreateCheckBoxOpCode (
@@ -348,6 +349,7 @@ UpdateDrvDelPage (
       // through HiiSetBrowserData function.
       //
       CallbackData->BmmFakeNvData.DriverOptionDel[Index] = FALSE;
+      CallbackData->BmmOldFakeNVData.DriverOptionDel[Index] = FALSE;
     }
     HiiCreateCheckBoxOpCode (
       mStartOpCodeHandle,
@@ -459,8 +461,6 @@ UpdateConsolePage (
   UINT16              Index2;
   UINT8               CheckFlags;
   UINT8               *ConsoleCheck;
-  UINT8               *OldConsoleCheck;
-  UINTN               ConsoleCheckSize;
   EFI_QUESTION_ID     QuestionIdBase;
   UINT16              VariableOffsetBase;
 
@@ -469,32 +469,24 @@ UpdateConsolePage (
   UpdatePageStart (CallbackData);
 
   ConsoleCheck       = NULL;
-  OldConsoleCheck    = NULL;
   QuestionIdBase     = 0;
   VariableOffsetBase = 0;
-  ConsoleCheckSize   = 0;
 
   switch (UpdatePageId) {
   case FORM_CON_IN_ID:
     ConsoleCheck       = &CallbackData->BmmFakeNvData.ConsoleInCheck[0];
-    OldConsoleCheck    = &CallbackData->BmmOldFakeNVData.ConsoleInCheck[0];
-    ConsoleCheckSize   = sizeof (CallbackData->BmmFakeNvData.ConsoleInCheck);
     QuestionIdBase     = CON_IN_DEVICE_QUESTION_ID;
     VariableOffsetBase = CON_IN_DEVICE_VAR_OFFSET;
     break;
 
   case FORM_CON_OUT_ID:
     ConsoleCheck       = &CallbackData->BmmFakeNvData.ConsoleOutCheck[0];
-    OldConsoleCheck    = &CallbackData->BmmOldFakeNVData.ConsoleOutCheck[0];
-    ConsoleCheckSize   = sizeof (CallbackData->BmmFakeNvData.ConsoleOutCheck);
     QuestionIdBase     = CON_OUT_DEVICE_QUESTION_ID;
     VariableOffsetBase = CON_OUT_DEVICE_VAR_OFFSET;
     break;
 
   case FORM_CON_ERR_ID:
     ConsoleCheck       = &CallbackData->BmmFakeNvData.ConsoleErrCheck[0];
-    OldConsoleCheck    = &CallbackData->BmmOldFakeNVData.ConsoleErrCheck[0];
-    ConsoleCheckSize   = sizeof (CallbackData->BmmFakeNvData.ConsoleErrCheck);
     QuestionIdBase     = CON_ERR_DEVICE_QUESTION_ID;
     VariableOffsetBase = CON_ERR_DEVICE_VAR_OFFSET;
     break;
@@ -519,7 +511,7 @@ UpdateConsolePage (
       (UINT16) (VariableOffsetBase + Index),
       NewMenuEntry->DisplayStringToken,
       NewMenuEntry->HelpStringToken,
-      0,
+      EFI_IFR_FLAG_CALLBACK,
       CheckFlags,
       NULL
       );
@@ -548,15 +540,13 @@ UpdateConsolePage (
       (UINT16) (VariableOffsetBase + Index),
       NewMenuEntry->DisplayStringToken,
       NewMenuEntry->HelpStringToken,
-      0,
+      EFI_IFR_FLAG_CALLBACK,
       CheckFlags,
       NULL
       );
 
     Index++;
   }
-
-  CopyMem (OldConsoleCheck, ConsoleCheck, ConsoleCheckSize);
 
   UpdatePageEnd (CallbackData);
 }
@@ -595,14 +585,30 @@ UpdateOrderPage (
   switch (UpdatePageId) { 
   
   case FORM_BOOT_CHG_ID:
-    GetBootOrder (CallbackData);
+    //
+    // If the BootOptionOrder in the BmmFakeNvData are same with the date in the BmmOldFakeNVData,
+    // means all Boot Options has been save in BootOptionMenu, we can get the date from the menu.
+    // else means browser maintains some uncommitted date which are not saved in BootOptionMenu,
+    // so we should not get the data from BootOptionMenu to show it.
+    //
+    if (CompareMem (CallbackData->BmmFakeNvData.BootOptionOrder, CallbackData->BmmOldFakeNVData.BootOptionOrder, sizeof (CallbackData->BmmFakeNvData.BootOptionOrder)) == 0) {
+      GetBootOrder (CallbackData);
+    }
     OptionOrder = CallbackData->BmmFakeNvData.BootOptionOrder;
     QuestionId = BOOT_OPTION_ORDER_QUESTION_ID;
     VarOffset = BOOT_OPTION_ORDER_VAR_OFFSET;
     break;
     
   case FORM_DRV_CHG_ID:
-    GetDriverOrder (CallbackData);
+    //
+    // If the DriverOptionOrder in the BmmFakeNvData are same with the date in the BmmOldFakeNVData,
+    // means all Driver Options has been save in DriverOptionMenu, we can get the DriverOptionOrder from the menu.
+    // else means browser maintains some uncommitted date which are not saved in DriverOptionMenu,
+    // so we should not get the data from DriverOptionMenu to show it.
+    //
+    if (CompareMem (CallbackData->BmmFakeNvData.DriverOptionOrder, CallbackData->BmmOldFakeNVData.DriverOptionOrder, sizeof (CallbackData->BmmFakeNvData.DriverOptionOrder)) == 0) {
+      GetDriverOrder (CallbackData);
+    }
     OptionOrder = CallbackData->BmmFakeNvData.DriverOptionOrder;
     QuestionId = DRIVER_OPTION_ORDER_QUESTION_ID;
     VarOffset = DRIVER_OPTION_ORDER_VAR_OFFSET;
@@ -730,7 +736,7 @@ UpdateConModePage (
     //
     UnicodeValueToString (ModeString, 0, Col, 0);
     PStr = &ModeString[0];
-    StrnCatS (PStr, sizeof (ModeString) / sizeof (ModeString[0]), L" x ", StrLen(L" x ") + 1);
+    StrnCatS (PStr, ARRAY_SIZE (ModeString), L" x ", StrLen(L" x ") + 1);
     PStr = PStr + StrLen (PStr);
     UnicodeValueToString (PStr , 0, Row, 0);
 
@@ -831,7 +837,7 @@ UpdateTerminalPage (
     (UINT16) (COM_BAUD_RATE_VAR_OFFSET + CurrentTerminal),
     STRING_TOKEN (STR_COM_BAUD_RATE),
     STRING_TOKEN (STR_COM_BAUD_RATE),
-    0,
+    EFI_IFR_FLAG_CALLBACK,
     EFI_IFR_NUMERIC_SIZE_1,
     OptionsOpCodeHandle,
     NULL
@@ -841,7 +847,7 @@ UpdateTerminalPage (
   OptionsOpCodeHandle = HiiAllocateOpCodeHandle ();
   ASSERT (OptionsOpCodeHandle != NULL);
 
-  for (Index = 0; Index < sizeof (DataBitsList) / sizeof (DataBitsList[0]); Index++) {
+  for (Index = 0; Index < ARRAY_SIZE (DataBitsList); Index++) {
     CheckFlags = 0;
 
     if (DataBitsList[Index].Value == 8) {
@@ -864,7 +870,7 @@ UpdateTerminalPage (
     (UINT16) (COM_DATA_RATE_VAR_OFFSET + CurrentTerminal),
     STRING_TOKEN (STR_COM_DATA_BITS),
     STRING_TOKEN (STR_COM_DATA_BITS),
-    0,
+    EFI_IFR_FLAG_CALLBACK,
     EFI_IFR_NUMERIC_SIZE_1,
     OptionsOpCodeHandle,
     NULL
@@ -874,7 +880,7 @@ UpdateTerminalPage (
   OptionsOpCodeHandle = HiiAllocateOpCodeHandle ();
   ASSERT (OptionsOpCodeHandle != NULL);
 
-  for (Index = 0; Index < sizeof (ParityList) / sizeof (ParityList[0]); Index++) {
+  for (Index = 0; Index < ARRAY_SIZE (ParityList); Index++) {
     CheckFlags = 0;
     if (ParityList[Index].Value ==  NoParity) {
       CheckFlags |= EFI_IFR_OPTION_DEFAULT;
@@ -896,7 +902,7 @@ UpdateTerminalPage (
     (UINT16) (COM_PARITY_VAR_OFFSET + CurrentTerminal),
     STRING_TOKEN (STR_COM_PARITY),
     STRING_TOKEN (STR_COM_PARITY),
-    0,
+    EFI_IFR_FLAG_CALLBACK,
     EFI_IFR_NUMERIC_SIZE_1,
     OptionsOpCodeHandle,
     NULL
@@ -906,7 +912,7 @@ UpdateTerminalPage (
   OptionsOpCodeHandle = HiiAllocateOpCodeHandle ();
   ASSERT (OptionsOpCodeHandle != NULL);
 
-  for (Index = 0; Index < sizeof (StopBitsList) / sizeof (StopBitsList[0]); Index++) {
+  for (Index = 0; Index < ARRAY_SIZE (StopBitsList); Index++) {
     CheckFlags = 0;
     if (StopBitsList[Index].Value == OneStopBit) {
       CheckFlags |= EFI_IFR_OPTION_DEFAULT;
@@ -928,7 +934,7 @@ UpdateTerminalPage (
     (UINT16) (COM_STOP_BITS_VAR_OFFSET + CurrentTerminal),
     STRING_TOKEN (STR_COM_STOP_BITS),
     STRING_TOKEN (STR_COM_STOP_BITS),
-    0,
+    EFI_IFR_FLAG_CALLBACK,
     EFI_IFR_NUMERIC_SIZE_1,
     OptionsOpCodeHandle,
     NULL
@@ -938,7 +944,7 @@ UpdateTerminalPage (
   OptionsOpCodeHandle = HiiAllocateOpCodeHandle ();
   ASSERT (OptionsOpCodeHandle != NULL);
 
-  for (Index = 0; Index < sizeof (TerminalType) / sizeof (TerminalType[0]); Index++) {
+  for (Index = 0; Index < ARRAY_SIZE (TerminalType); Index++) {
     CheckFlags = 0;
     if (Index == 0) {
       CheckFlags |= EFI_IFR_OPTION_DEFAULT;
@@ -960,7 +966,7 @@ UpdateTerminalPage (
     (UINT16) (COM_TERMINAL_VAR_OFFSET + CurrentTerminal),
     STRING_TOKEN (STR_COM_TERMI_TYPE),
     STRING_TOKEN (STR_COM_TERMI_TYPE),
-    0,
+    EFI_IFR_FLAG_CALLBACK,
     EFI_IFR_NUMERIC_SIZE_1,
     OptionsOpCodeHandle,
     NULL
@@ -970,7 +976,7 @@ UpdateTerminalPage (
   OptionsOpCodeHandle = HiiAllocateOpCodeHandle ();
   ASSERT (OptionsOpCodeHandle != NULL);
 
-  for (Index = 0; Index < sizeof (mFlowControlType) / sizeof (mFlowControlType[0]); Index++) {
+  for (Index = 0; Index < ARRAY_SIZE (mFlowControlType); Index++) {
   CheckFlags = 0;
     if (Index == 0) {
       CheckFlags |= EFI_IFR_OPTION_DEFAULT;
@@ -991,7 +997,7 @@ UpdateTerminalPage (
     (UINT16) (COM_FLOWCONTROL_VAR_OFFSET + CurrentTerminal),
     STRING_TOKEN (STR_COM_FLOW_CONTROL),
     STRING_TOKEN (STR_COM_FLOW_CONTROL),
-    0,
+    EFI_IFR_FLAG_CALLBACK,
     EFI_IFR_NUMERIC_SIZE_1,
     OptionsOpCodeHandle,
     NULL
@@ -1037,11 +1043,15 @@ UpdateOptionPage(
     if (!CallbackData->BmmFakeNvData.BootOptionChanged) {
       ZeroMem (CallbackData->BmmFakeNvData.BootOptionalData, sizeof (CallbackData->BmmFakeNvData.BootOptionalData));
       ZeroMem (CallbackData->BmmFakeNvData.BootDescriptionData, sizeof (CallbackData->BmmFakeNvData.BootDescriptionData));
+      ZeroMem (CallbackData->BmmOldFakeNVData.BootOptionalData, sizeof (CallbackData->BmmOldFakeNVData.BootOptionalData));
+      ZeroMem (CallbackData->BmmOldFakeNVData.BootDescriptionData, sizeof (CallbackData->BmmOldFakeNVData.BootDescriptionData));
     }
   } else if (FormId == FORM_DRV_ADD_FILE_ID){
     if (!CallbackData->BmmFakeNvData.DriverOptionChanged) {
       ZeroMem (CallbackData->BmmFakeNvData.DriverOptionalData, sizeof (CallbackData->BmmFakeNvData.DriverOptionalData));
       ZeroMem (CallbackData->BmmFakeNvData.DriverDescriptionData, sizeof (CallbackData->BmmFakeNvData.DriverDescriptionData));
+      ZeroMem (CallbackData->BmmOldFakeNVData.DriverOptionalData, sizeof (CallbackData->BmmOldFakeNVData.DriverOptionalData));
+      ZeroMem (CallbackData->BmmOldFakeNVData.DriverDescriptionData, sizeof (CallbackData->BmmOldFakeNVData.DriverDescriptionData));
     }
   }
 

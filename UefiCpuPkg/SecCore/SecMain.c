@@ -1,7 +1,7 @@
 /** @file
   C functions in SEC
 
-  Copyright (c) 2008 - 2015, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2008 - 2016, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -237,6 +237,14 @@ SecStartupPhase2(
     PpiList = &mPeiSecPlatformInformationPpi[0];
   }
 
+  DEBUG ((
+    DEBUG_INFO,
+    "%a() Stack Base: 0x%p, Stack Size: 0x%x\n",
+    __FUNCTION__,
+    SecCoreData->StackBase,
+    (UINT32) SecCoreData->StackSize
+    ));
+
   //
   // Report Status Code to indicate transferring to PEI core
   //
@@ -272,6 +280,11 @@ SecTemporaryRamDone (
   )
 {
   BOOLEAN  State;
+
+  //
+  // Republish Sec Platform Information(2) PPI
+  //
+  RepublishSecPlatformInformationPpi ();
 
   //
   // Migrate DebugAgentContext.

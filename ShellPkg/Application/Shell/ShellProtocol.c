@@ -3,6 +3,7 @@
   manipulation, and initialization of EFI_SHELL_PROTOCOL.
 
   (C) Copyright 2014 Hewlett-Packard Development Company, L.P.<BR>
+  (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
   Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -49,7 +50,6 @@ EfiShellClose (
   @retval FALSE     gEfiBlockIoProtocolGuid was not found.
 **/
 BOOLEAN
-EFIAPI
 InternalShellProtocolIsBlockIoPresent(
   IN CONST EFI_DEVICE_PATH_PROTOCOL *DevicePath
   )
@@ -79,7 +79,6 @@ InternalShellProtocolIsBlockIoPresent(
   @retval FALSE     gEfiSimpleFileSystemProtocolGuid was not found.
 **/
 BOOLEAN
-EFIAPI
 InternalShellProtocolIsSimpleFileSystemPresent(
   IN CONST EFI_DEVICE_PATH_PROTOCOL *DevicePath
   )
@@ -112,7 +111,6 @@ InternalShellProtocolIsSimpleFileSystemPresent(
   @sa OpenProtocol
 **/
 EFI_STATUS
-EFIAPI
 InternalShellProtocolDebugPrintMessage (
   IN CONST CHAR16                   *Mapping,
   IN CONST EFI_DEVICE_PATH_PROTOCOL *DevicePath
@@ -950,7 +948,6 @@ EfiShellBatchIsActive (
   @retval other                   an error ocurred.
 **/
 EFI_STATUS
-EFIAPI
 InternalOpenFileDevicePath(
   IN OUT EFI_DEVICE_PATH_PROTOCOL *DevicePath,
   OUT SHELL_FILE_HANDLE           *FileHandle,
@@ -1182,7 +1179,7 @@ EfiShellCreateFile(
   @retval EFI_ACCESS_DENIED       Guid already is assigned a name.
 **/
 EFI_STATUS
-EFIAPI 
+EFIAPI
 EfiShellRegisterGuidName(
   IN CONST EFI_GUID *Guid,
   IN CONST CHAR16   *GuidName
@@ -1287,9 +1284,10 @@ EfiShellOpenFileByName(
   }
 
   //
-  // Is this for NUL file
+  // Is this for NUL / NULL file
   //
-  if (StrCmp(FileName, L"NUL") == 0) {
+  if ((gUnicodeCollation->StriColl (gUnicodeCollation, (CHAR16*)FileName, L"NUL") == 0) ||
+      (gUnicodeCollation->StriColl (gUnicodeCollation, (CHAR16*)FileName, L"NULL") == 0)) {
     *FileHandle = &FileInterfaceNulFile;
     return (EFI_SUCCESS);
   }
@@ -1428,7 +1426,6 @@ EfiShellEnablePageBreak (
   @retval EFI_UNSUPPORTED   Nested shell invocations are not allowed.
 **/
 EFI_STATUS
-EFIAPI
 InternalShellExecuteDevicePath(
   IN CONST EFI_HANDLE               *ParentImageHandle,
   IN CONST EFI_DEVICE_PATH_PROTOCOL *DevicePath,
@@ -1637,7 +1634,6 @@ FreeAlloc:
   @retval EFI_UNSUPPORTED   Nested shell invocations are not allowed.
 **/
 EFI_STATUS
-EFIAPI
 InternalShellExecute(
   IN CONST CHAR16                   *CommandLine OPTIONAL,
   IN CONST CHAR16                   **Environment OPTIONAL,
@@ -1681,7 +1677,6 @@ InternalShellExecute(
 **/
 STATIC
 BOOLEAN
-EFIAPI
 NestingEnabled(
 )
 {
@@ -1820,7 +1815,6 @@ EfiShellExecute(
   @param FileListNode     pointer to the list node to free
 **/
 VOID
-EFIAPI
 InternalFreeShellFileInfoNode(
   IN EFI_SHELL_FILE_INFO *FileListNode
   )
@@ -1948,7 +1942,6 @@ typedef struct {
   @return != NULL     a pointer to the new node
 **/
 EFI_SHELL_FILE_INFO*
-EFIAPI
 InternalDuplicateShellFileInfo(
   IN       EFI_SHELL_FILE_INFO *Node,
   IN BOOLEAN                   Save
@@ -2001,7 +1994,6 @@ InternalDuplicateShellFileInfo(
   @return                     a pointer to the newly allocated structure.
 **/
 EFI_SHELL_FILE_INFO *
-EFIAPI
 CreateAndPopulateShellFileInfo(
   IN CONST CHAR16 *BasePath,
   IN CONST EFI_STATUS Status,
@@ -2199,7 +2191,7 @@ EfiShellFindFilesInDir(
   @retval EFI_NOT_FOUND           GuidName is not a known GUID Name.
 **/
 EFI_STATUS
-EFIAPI 
+EFIAPI
 EfiShellGetGuidFromName(
   IN  CONST CHAR16   *GuidName,
   OUT       EFI_GUID *Guid
@@ -2215,7 +2207,7 @@ EfiShellGetGuidFromName(
   Status = GetGuidFromStringName(GuidName, NULL, &NewGuid);
 
   if (!EFI_ERROR(Status)) {
-    CopyGuid(NewGuid, Guid);
+    CopyGuid(Guid, NewGuid);
   }
 
   return (Status);
@@ -2239,7 +2231,7 @@ EfiShellGetGuidFromName(
   @retval EFI_NOT_FOUND           Guid is not assigned a name.
 **/
 EFI_STATUS
-EFIAPI 
+EFIAPI
 EfiShellGetGuidName(
   IN  CONST EFI_GUID *Guid,
   OUT CONST CHAR16   **GuidName
@@ -2272,7 +2264,6 @@ EfiShellGetGuidName(
   @retval EFI_OUT_OF_RESOURCES
 **/
 EFI_STATUS
-EFIAPI
 UpdateFileName(
   IN CONST CHAR16 *BasePath,
   IN OUT CHAR16   **Path
@@ -2333,7 +2324,6 @@ UpdateFileName(
   @retval EFI_OUT_OF_RESOURCES  a memory allocation failed
 **/
 EFI_STATUS
-EFIAPI
 ShellSearchHandle(
   IN     CONST CHAR16                         *FilePattern,
   IN           EFI_UNICODE_COLLATION_PROTOCOL *UnicodeCollation,
@@ -2507,6 +2497,10 @@ ShellSearchHandle(
         Status = EfiShellFreeFileList(&ShellInfo);
       }
     }
+  }
+
+  if (*FileList == NULL || (*FileList != NULL && IsListEmpty(&(*FileList)->Link))) {
+    Status = EFI_NOT_FOUND;
   }
 
   FreePool(CurrentFilePattern);
@@ -2720,7 +2714,7 @@ EfiShellOpenFileList(
                                 pointer does not need to be freed by the caller.
 **/
 CONST CHAR16 *
-EFIAPI 
+EFIAPI
 EfiShellGetEnvEx(
   IN  CONST CHAR16 *Name,
   OUT       UINT32 *Attributes OPTIONAL
@@ -2857,7 +2851,6 @@ EfiShellGetEnv(
   @retval EFI_SUCCESS           The environment variable was successfully updated.
 **/
 EFI_STATUS
-EFIAPI
 InternalEfiShellSetEnv(
   IN CONST CHAR16 *Name,
   IN CONST CHAR16 *Value,
@@ -3291,7 +3284,6 @@ EfiShellIsRootShell(
   @return !NULL   a list of all alias'
 **/
 CHAR16 *
-EFIAPI
 InternalEfiShellGetListAlias(
   )
 {
@@ -3463,7 +3455,6 @@ EfiShellGetAlias(
   @retval EFI_NOT_FOUND         the Alias intended to be deleted was not found
 **/
 EFI_STATUS
-EFIAPI
 InternalSetAlias(
   IN CONST CHAR16 *Command,
   IN CONST CHAR16 *Alias,
@@ -3627,7 +3618,6 @@ EFI_SHELL_PROTOCOL         mShellProtocol = {
   @return                 An error from LocateHandle, CreateEvent, or other core function.
 **/
 EFI_STATUS
-EFIAPI
 CreatePopulateInstallShellProtocol (
   IN OUT EFI_SHELL_PROTOCOL  **NewShell
   )
@@ -3867,7 +3857,6 @@ NotificationFunction(
   @retval EFI_OUT_OF_RESOURCES  There is not enough mnemory available.
 **/
 EFI_STATUS
-EFIAPI
 InernalEfiShellStartMonitor(
   VOID
   )

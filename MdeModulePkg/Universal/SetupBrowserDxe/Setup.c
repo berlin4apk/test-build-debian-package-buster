@@ -181,7 +181,7 @@ UiFindMenuList (
     // Find the same FromSet.
     //
     if (MenuList->HiiHandle == HiiHandle) {
-      if (CompareGuid (&MenuList->FormSetGuid, &gZeroGuid)) {
+      if (IsZeroGuid (&MenuList->FormSetGuid)) {
         //
         // FormSetGuid is not specified.
         //
@@ -938,7 +938,7 @@ InitializeSetup (
   
   Status = gBS->InstallProtocolInterface (
                   &mPrivateData.Handle,
-                  &gEfiFormBrowserExProtocolGuid,
+                  &gEdkiiFormBrowserExProtocolGuid,
                   EFI_NATIVE_INTERFACE,
                   &mPrivateData.FormBrowserEx
                   );
@@ -3275,6 +3275,7 @@ SubmitForForm (
 
         Status = EFI_SUCCESS;
       }
+      SendDiscardInfoToDriver (FormSet,Form);
     } else {
       Status = EFI_UNSUPPORTED;
     }
@@ -3336,9 +3337,11 @@ SubmitForFormSet (
   BOOLEAN                 HasInserted;
   FORM_BROWSER_STATEMENT  *Question;
   BOOLEAN                 SubmitFormSetFail;
+  BOOLEAN                 DiscardChange;
 
   HasInserted = FALSE;
   SubmitFormSetFail = FALSE;
+  DiscardChange     = FALSE;
 
   if (!IsNvUpdateRequiredForFormSet (FormSet)) {
     return EFI_SUCCESS;
@@ -3439,6 +3442,7 @@ SubmitForFormSet (
       // If not in system level, just handl the save failed storage here.
       //
       if (ConfirmSaveFail (Form->FormTitle, FormSet->HiiHandle) == BROWSER_ACTION_DISCARD) {
+        DiscardChange = TRUE;
         Link = GetFirstNode (&FormSet->SaveFailStorageListHead);
         while (!IsNull (&FormSet->SaveFailStorageListHead, Link)) {
           FormSetStorage = FORMSET_STORAGE_FROM_SAVE_FAIL_LINK (Link);
@@ -3484,6 +3488,21 @@ SubmitForFormSet (
       // If in system level, just return error and handle the failed formset later.
       //
       Status = EFI_UNSUPPORTED;
+    }
+  }
+
+  //
+  // If user discard the change, send the discard info to driver.
+  //
+  if (DiscardChange) {
+    Link = GetFirstNode (&FormSet->FormListHead);
+    while (!IsNull (&FormSet->FormListHead, Link)) {
+      Form = FORM_BROWSER_FORM_FROM_LINK (Link);
+      Link = GetNextNode (&FormSet->FormListHead, Link);
+      //
+      // Call callback with Changed type to inform the driver.
+      //
+      SendDiscardInfoToDriver (FormSet, Form);
     }
   }
 
@@ -3604,6 +3623,16 @@ SubmitForSystem (
             FormSetStorage->SyncConfigRequest = NULL;
           }
         }
+      }
+
+      Link = GetFirstNode (&LocalFormSet->FormListHead);
+      while (!IsNull (&LocalFormSet->FormListHead, Link)) {
+        Form = FORM_BROWSER_FORM_FROM_LINK (Link);
+        Link = GetNextNode (&LocalFormSet->FormListHead, Link);
+        //
+        // Call callback with Changed type to inform the driver.
+        //
+        SendDiscardInfoToDriver (LocalFormSet, Form);
       }
 
       if (!IsHiiHandleInBrowserContext (LocalFormSet->HiiHandle)) {
@@ -4241,8 +4270,6 @@ ReGetDefault:
           ((DefaultId == EFI_HII_DEFAULT_CLASS_MANUFACTURING) && ((Question->Flags & EFI_IFR_CHECKBOX_DEFAULT_MFG) != 0))
          ) {
         HiiValue->Value.b = TRUE;
-      } else {
-        HiiValue->Value.b = FALSE;
       }
 
       return EFI_SUCCESS;
@@ -4269,6 +4296,11 @@ ReGetDefault:
   //
   Status = EFI_NOT_FOUND;
   switch (Question->Operand) {
+  case EFI_IFR_CHECKBOX_OP:
+    HiiValue->Value.b = FALSE;
+    Status = EFI_SUCCESS;
+    break;
+
   case EFI_IFR_NUMERIC_OP:
     //
     // Take minimum value as numeric default value
@@ -5686,7 +5718,7 @@ GetIfrBinaryData (
           //
           // Try to compare against formset GUID
           //
-          if (CompareGuid (FormSetGuid, &gZeroGuid) || 
+          if (IsZeroGuid (FormSetGuid) ||
               CompareGuid (ComparingGuid, (EFI_GUID *)(OpCodeData + sizeof (EFI_IFR_OP_HEADER)))) {
             break;
           }
@@ -6076,29 +6108,10 @@ PasswordCheck (
       return EFI_UNSUPPORTED;
     }
   } else {
-    if (PasswordString == NULL) {
-      return EFI_SUCCESS;
-    } 
-
     //
-    // Check whether has preexisted password.
+    // If a password doesn't have the CALLBACK flag, browser will not handle it.
     //
-    if (PasswordString[0] == 0) {
-      if (*((CHAR16 *) Question->BufferValue) == 0) {
-        return EFI_SUCCESS;
-      } else {
-        return EFI_NOT_READY;
-      }
-    }
-
-    //
-    // Check whether the input password is same as preexisted password.
-    //
-    if (StrnCmp (PasswordString, (CHAR16 *) Question->BufferValue, Question->StorageWidth/sizeof (CHAR16)) == 0) {
-      return EFI_SUCCESS;
-    } else {
-      return EFI_NOT_READY;
-    }
+    return EFI_UNSUPPORTED;
   }
     
   //

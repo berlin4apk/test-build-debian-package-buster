@@ -3,6 +3,7 @@
 #
 # Copyright (c) 2009 - 2010, Apple Inc. All rights reserved.<BR>
 # Copyright (c) 2011 - 2015, ARM Ltd. All rights reserved.<BR>
+# Copyright (c) 2016, Linaro Ltd. All rights reserved.<BR>
 #
 #    This program and the accompanying materials
 #    are licensed and made available under the terms and conditions of the BSD License
@@ -36,6 +37,7 @@
   RVCT:*_*_ARM_PLATFORM_FLAGS  == --cpu Cortex-A15
 
   RELEASE_*_*_CC_FLAGS  = -DMDEPKG_NDEBUG
+  *_*_*_CC_FLAGS  = -DDISABLE_NEW_DEPRECATED_INTERFACES
 
 [LibraryClasses.common]
   BaseLib|MdePkg/Library/BaseLib/BaseLib.inf
@@ -86,13 +88,8 @@
 
   IoLib|MdePkg/Library/BaseIoLibIntrinsic/BaseIoLibIntrinsic.inf
 
+  ArmLib|ArmPkg/Library/ArmLib/ArmBaseLib.inf
   ArmMmuLib|ArmPkg/Library/ArmMmuLib/ArmMmuBaseLib.inf
-
-[LibraryClasses.ARM]
-  ArmLib|ArmPkg/Library/ArmLib/ArmV7/ArmV7Lib.inf
-
-[LibraryClasses.AARCH64]
-  ArmLib|ArmPkg/Library/ArmLib/AArch64/AArch64Lib.inf
 
 [LibraryClasses.common.PEIM]
   HobLib|MdePkg/Library/PeiHobLib/PeiHobLib.inf
@@ -111,8 +108,6 @@
   ArmPkg/Library/ArmCacheMaintenanceLib/ArmCacheMaintenanceLib.inf
   ArmPkg/Library/ArmDisassemblerLib/ArmDisassemblerLib.inf
   ArmPkg/Library/ArmDmaLib/ArmDmaLib.inf
-  ArmPkg/Library/ArmLib/Null/NullArmLib.inf
-  ArmPkg/Library/BaseMemoryLibStm/BaseMemoryLibStm.inf
   ArmPkg/Library/BdsLib/BdsLib.inf
   ArmPkg/Library/CompilerIntrinsicsLib/CompilerIntrinsicsLib.inf
   ArmPkg/Library/DebugAgentSymbolsBaseLib/DebugAgentSymbolsBaseLib.inf
@@ -145,23 +140,24 @@
 
   ArmPkg/Filesystem/SemihostFs/SemihostFs.inf
 
-  ArmPkg/Application/LinuxLoader/LinuxLoader.inf
-
   ArmPkg/Library/ArmMmuLib/ArmMmuBaseLib.inf
 
-[Components.ARM]
-  ArmPkg/Library/BaseMemoryLibVstm/BaseMemoryLibVstm.inf
+  ArmPkg/Drivers/ArmPciCpuIo2Dxe/ArmPciCpuIo2Dxe.inf
+  ArmPkg/Library/ArmArchTimerLib/ArmArchTimerLib.inf
+  ArmPkg/Library/ArmGicArchLib/ArmGicArchLib.inf
+  ArmPkg/Library/ArmGicArchSecLib/ArmGicArchSecLib.inf
+  ArmPkg/Library/ArmLib/ArmBaseLib.inf
+  ArmPkg/Library/ArmSoftFloatLib/ArmSoftFloatLib.inf
+  ArmPkg/Library/DefaultExceptionHandlerLib/DefaultExceptionHandlerLibBase.inf
+  ArmPkg/Library/PeiServicesTablePointerLib/PeiServicesTablePointerLib.inf
+  ArmPkg/Library/PlatformBootManagerLib/PlatformBootManagerLib.inf
 
+[Components.ARM]
   ArmPkg/Drivers/ArmCpuLib/ArmCortexA8Lib/ArmCortexA8Lib.inf
   ArmPkg/Drivers/ArmCpuLib/ArmCortexA9Lib/ArmCortexA9Lib.inf
   ArmPkg/Drivers/ArmCpuLib/ArmCortexA15Lib/ArmCortexA15Lib.inf
 
-  ArmPkg/Library/ArmLib/ArmV7/ArmV7LibSec.inf
-  ArmPkg/Library/ArmLib/ArmV7/ArmV7LibPrePi.inf
-
 [Components.AARCH64]
   ArmPkg/Drivers/ArmCpuLib/ArmCortexAEMv8Lib/ArmCortexAEMv8Lib.inf
   ArmPkg/Drivers/ArmCpuLib/ArmCortexA5xLib/ArmCortexA5xLib.inf
-
-  ArmPkg/Library/ArmLib/AArch64/AArch64LibSec.inf
-  ArmPkg/Library/ArmLib/AArch64/AArch64LibPrePi.inf
+  ArmPkg/Library/ArmMmuLib/ArmMmuPeiLib.inf

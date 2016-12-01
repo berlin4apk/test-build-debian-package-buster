@@ -1,7 +1,7 @@
 /** @file
   Provides interface to shell internal functions for shell commands.
 
-  Copyright (c) 2009 - 2014, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
   (C) Copyright 2013-2015 Hewlett-Packard Development Company, L.P.<BR>
   (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 
@@ -30,7 +30,6 @@ STATIC UINTN                              mProfileListSize;
 STATIC UINTN                              mFsMaxCount = 0;
 STATIC UINTN                              mBlkMaxCount = 0;
 STATIC BUFFER_LIST                        mFileHandleList;
-STATIC CHAR16                             *mRawCmdLine = NULL;
 
 STATIC CONST CHAR8 Hex[] = {
   '0',
@@ -84,191 +83,6 @@ CommandInit(
 }
 
 /**
-  Return the pointer to the first occurrence of any character from a list of characters.
-
-  @param[in] String                 The string to parse
-  @param[in] CharacterList          The list of character to look for
-  @param[in] IgnoreEscapedCharacter TRUE to ignore escaped characters
-
-  @return The location of the first character in the String.
-  @return Pointer to the ending NULL character of the String.
-**/
-CONST CHAR16*
-EFIAPI
-ShellFindFirstCharacter (
-  IN CONST CHAR16  *String,
-  IN CONST CHAR16  *CharacterList,
-  IN CONST BOOLEAN IgnoreEscapedCharacter
-  )
-{
-  UINTN WalkChar;
-  UINTN WalkStr;
-
-  for (WalkStr = 0; WalkStr < StrLen (String); WalkStr++) {
-    if (IgnoreEscapedCharacter && (String[WalkStr] == L'^')) {
-      WalkStr++;
-      continue;
-    }
-    for (WalkChar = 0; WalkChar < StrLen (CharacterList); WalkChar++) {
-      if (String[WalkStr] == CharacterList[WalkChar]) {
-        return &String[WalkStr];
-      }
-    }
-  }
-  return &String[WalkStr];
-}
-
-/**
-  Return the next parameter's end from a command line string.
-
-  @param[in] String        the string to parse
-**/
-CONST CHAR16*
-FindEndOfParameter(
-  IN CONST CHAR16 *String
-  )
-{
-  CONST CHAR16 *First;
-  CONST CHAR16 *CloseQuote;
-
-  First = ShellFindFirstCharacter (String, L" \"", TRUE);
-
-  //
-  // nothing, all one parameter remaining
-  //
-  if (*First == CHAR_NULL) {
-    return (First);
-  }
-
-  //
-  // If space before a quote (or neither found, i.e. both CHAR_NULL),
-  // then that's the end.
-  //
-  if (*First == L' ') {
-    return (First);
-  }
-
-  CloseQuote = ShellFindFirstCharacter (First+1, L"\"", TRUE);
-
-  //
-  // We did not find a terminator...
-  //
-  if (*CloseQuote == CHAR_NULL) {
-    return (NULL);
-  }
-
-  return (FindEndOfParameter (CloseQuote+1));
-}
-
-/**
-  Return the next parameter from a command line string.
-
-  This function moves the next parameter from Walker into NextParameter and moves
-  Walker up past that parameter for recursive calling.  When the final parameter
-  is moved *Walker will be set to NULL;
-
-  This will also remove all remaining ^ characters after processing.
-
-  @param[in, out] Walker          pointer to string of command line.  Adjusted to
-                                  reminaing command line on return
-  @param[in, out] NextParameter   pointer to string of command line item extracted.
-  @param[in]      Length          buffer size of TempParameter.
-  @param[in]      StripQuotation  if TRUE then strip the quotation marks surrounding
-                                  the parameters.
-
-  @return   EFI_INALID_PARAMETER  A required parameter was NULL or pointed to a NULL or empty string.
-  @return   EFI_NOT_FOUND         A closing " could not be found on the specified string
-**/
-EFI_STATUS
-EFIAPI
-ShellGetNextParameter (
-  IN OUT CHAR16   **Walker,
-  IN OUT CHAR16   *NextParameter,
-  IN CONST UINTN  Length,
-  IN BOOLEAN      StripQuotation
-  )
-{
-  CONST CHAR16 *NextDelim;
-
-  if (Walker           == NULL
-    ||*Walker          == NULL
-    ||NextParameter    == NULL
-    ){
-    return EFI_INVALID_PARAMETER;
-  }
-
-  //
-  // make sure we dont have any leading spaces
-  //
-  while ((*Walker)[0] == L' ') {
-    (*Walker)++;
-  }
-
-  //
-  // make sure we still have some params now...
-  //
-  if (StrLen(*Walker) == 0) {
-    DEBUG_CODE (
-      *Walker = NULL;
-    );
-    return (EFI_INVALID_PARAMETER);
-  }
-
-  NextDelim = FindEndOfParameter(*Walker);
-
-  if (NextDelim == NULL){
-    DEBUG_CODE (
-      *Walker = NULL;
-    );
-    return (EFI_NOT_FOUND);
-  }
-
-  StrnCpyS(NextParameter, Length / sizeof(CHAR16), (*Walker), NextDelim - *Walker);
-
-  //
-  // Add a CHAR_NULL if we didnt get one via the copy
-  //
-  if (*NextDelim != CHAR_NULL) {
-    NextParameter[NextDelim - *Walker] = CHAR_NULL;
-  }
-
-  //
-  // Update Walker for the next iteration through the function
-  //
-  *Walker = (CHAR16*)NextDelim;
-
-  //
-  // Remove any non-escaped quotes in the string
-  // Remove any remaining escape characters in the string
-  //
-  for (NextDelim = ShellFindFirstCharacter(NextParameter, L"\"^", FALSE)
-    ; *NextDelim != CHAR_NULL
-    ; NextDelim = ShellFindFirstCharacter(NextDelim, L"\"^", FALSE)
-    ) {
-    if (*NextDelim == L'^') {
-
-      //
-      // eliminate the escape ^
-      //
-      CopyMem ((CHAR16*)NextDelim, NextDelim + 1, StrSize (NextDelim + 1));
-      NextDelim++;
-    } else if (*NextDelim == L'\"') {
-
-      //
-      // eliminate the unescaped quote
-      //
-      if (StripQuotation) {
-        CopyMem ((CHAR16*)NextDelim, NextDelim + 1, StrSize (NextDelim + 1));
-      } else {
-        NextDelim++;
-      }
-    }
-  }
-
-  return EFI_SUCCESS;
-}
-
-/**
   Constructor for the Shell Command library.
 
   Initialize the library and determine if the underlying is a UEFI Shell 2.0 or an EFI shell.
@@ -314,7 +128,6 @@ ShellCommandLibConstructor (
   @param[in] List     The list to free.
 **/
 VOID
-EFIAPI
 FreeFileHandleList (
   IN BUFFER_LIST *List
   )
@@ -430,7 +243,6 @@ ShellCommandLibDestructor (
   @retval NULL          no dynamic command protocol instance found for name
 **/
 CONST EFI_SHELL_DYNAMIC_COMMAND_PROTOCOL *
-EFIAPI
 ShellCommandFindDynamicCommand (
   IN CONST CHAR16 *CommandString
   )
@@ -479,7 +291,6 @@ ShellCommandFindDynamicCommand (
   @param[in] CommandString        The command string to check for on the list.
 **/
 BOOLEAN
-EFIAPI
 ShellCommandDynamicCommandExists (
   IN CONST CHAR16 *CommandString
   )
@@ -493,7 +304,6 @@ ShellCommandDynamicCommandExists (
   @param[in] CommandString        The command string to check for on the list.
 **/
 BOOLEAN
-EFIAPI
 ShellCommandIsCommandOnInternalList(
   IN CONST  CHAR16 *CommandString
   )
@@ -551,7 +361,6 @@ ShellCommandIsCommandOnList(
   @return       String of help text. Caller required to free.
 **/
 CHAR16*
-EFIAPI
 ShellCommandGetDynamicCommandHelp(
   IN CONST  CHAR16                      *CommandString
   )
@@ -578,7 +387,6 @@ ShellCommandGetDynamicCommandHelp(
   @return       String of help text. Caller reuiqred to free.
 **/
 CHAR16*
-EFIAPI
 ShellCommandGetInternalCommandHelp(
   IN CONST  CHAR16                      *CommandString
   )
@@ -1413,10 +1221,8 @@ ShellCommandAddMapItemAndUpdatePath(
     ASSERT((NewPath == NULL && NewPathSize == 0) || (NewPath != NULL));
     if (OriginalPath != NULL) {
       StrnCatGrow(&NewPath, &NewPathSize, OriginalPath, 0);
-    } else {
-      StrnCatGrow(&NewPath, &NewPathSize, L".\\", 0);
+      StrnCatGrow(&NewPath, &NewPathSize, L";", 0);
     }
-    StrnCatGrow(&NewPath, &NewPathSize, L";", 0);
     StrnCatGrow(&NewPath, &NewPathSize, Name, 0);
     StrnCatGrow(&NewPath, &NewPathSize, L"\\efi\\tools\\;", 0);
     StrnCatGrow(&NewPath, &NewPathSize, Name, 0);
@@ -1870,50 +1676,6 @@ ShellFileHandleEof(
 }
 
 /**
-  Function to get the original CmdLine string for current command.
-
-  @return     A pointer to the buffer of the original command string.
-              It's the caller's responsibility to free the buffer.
-**/
-CHAR16*
-EFIAPI
-ShellGetRawCmdLine (
-  VOID
-  )
-{
-  if (mRawCmdLine == NULL) {
-    return NULL;
-  } else {
-    return AllocateCopyPool(StrSize(mRawCmdLine), mRawCmdLine);
-  }
-}
-
-/**
-  Function to store the raw command string.
-
-  The alias and variables have been replaced and spaces are trimmed.
-
-  @param[in] CmdLine     the command line string to store.
-**/
-VOID
-EFIAPI
-ShellSetRawCmdLine (
-  IN CONST CHAR16     *CmdLine
-  )
-{
-  SHELL_FREE_NON_NULL(mRawCmdLine);
-
-  if (CmdLine != NULL) {
-    //
-    // The spaces in the beginning and end are trimmed.
-    //
-    ASSERT (*CmdLine != L' ');
-    ASSERT (CmdLine[StrLen (CmdLine) - 1] != L' ');
-    mRawCmdLine = AllocateCopyPool (StrSize(CmdLine), CmdLine);
-  }
-}
-
-/**
   Frees any BUFFER_LIST defined type.
 
   @param[in] List     The BUFFER_LIST object to free.
@@ -1953,6 +1715,7 @@ FreeBufferList (
   @param[in] UserData   The data to print out.
 **/
 VOID
+EFIAPI
 DumpHex (
   IN UINTN        Indent,
   IN UINTN        Offset,
@@ -2005,6 +1768,7 @@ DumpHex (
   @param[in] UserData   The data to print out.
 **/
 CHAR16*
+EFIAPI
 CatSDumpHex (
   IN CHAR16  *Buffer,
   IN UINTN   Indent,

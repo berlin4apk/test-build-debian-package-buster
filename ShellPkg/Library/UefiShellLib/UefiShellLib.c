@@ -1,6 +1,7 @@
 /** @file
   Provides interface to shell functionality for shell commands and applications.
 
+  (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
   Copyright 2016 Dell Inc.
   Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
@@ -14,7 +15,6 @@
 **/
 
 #include "UefiShellLib.h"
-#include <ShellBase.h>
 #include <Library/SortLib.h>
 #include <Library/BaseLib.h>
 
@@ -36,6 +36,7 @@ EFI_SHELL_PROTOCOL            *gEfiShellProtocol;
 EFI_SHELL_PARAMETERS_PROTOCOL *gEfiShellParametersProtocol;
 EFI_HANDLE                    mEfiShellEnvironment2Handle;
 FILE_HANDLE_FUNCTION_MAP      FileFunctionMap;
+EFI_UNICODE_COLLATION_PROTOCOL  *mUnicodeCollationProtocol;
 
 /**
   Check if a Unicode character is a hexadecimal character.
@@ -90,7 +91,6 @@ ShellIsDecimalDigitCharacter (
   @retval EFI_OUT_OF_RESOURCES    Memory allocation failed.
 **/
 EFI_STATUS
-EFIAPI
 ShellFindSE2 (
   IN EFI_HANDLE        ImageHandle
   )
@@ -174,7 +174,6 @@ ShellFindSE2 (
   @retval EFI_SUCCESS   The operationw as successful.
 **/
 EFI_STATUS
-EFIAPI
 ShellLibConstructorWorker (
   IN EFI_HANDLE        ImageHandle,
   IN EFI_SYSTEM_TABLE  *SystemTable
@@ -295,6 +294,7 @@ ShellLibConstructor (
   gEfiShellParametersProtocol = NULL;
   mEfiShellInterface          = NULL;
   mEfiShellEnvironment2Handle = NULL;
+  mUnicodeCollationProtocol   = NULL;
 
   //
   // verify that auto initialize is not set false
@@ -720,7 +720,21 @@ ShellOpenFileByName(
     Status = gEfiShellProtocol->OpenFileByName(FileName,
                                                FileHandle,
                                                OpenMode);
-    if (StrCmp(FileName, L"NUL") != 0 && !EFI_ERROR(Status) && ((OpenMode & EFI_FILE_MODE_CREATE) != 0)){
+    if (EFI_ERROR(Status)) {
+      return Status;
+    }
+
+    if (mUnicodeCollationProtocol == NULL) {
+      Status = gBS->LocateProtocol (&gEfiUnicodeCollation2ProtocolGuid, NULL, (VOID**)&mUnicodeCollationProtocol);
+      if (EFI_ERROR (Status)) {
+        gEfiShellProtocol->CloseFile (*FileHandle);
+        return Status;
+      }
+    }
+
+    if ((mUnicodeCollationProtocol->StriColl (mUnicodeCollationProtocol, (CHAR16*)FileName, L"NUL") != 0) &&
+        (mUnicodeCollationProtocol->StriColl (mUnicodeCollationProtocol, (CHAR16*)FileName, L"NULL") != 0) &&
+         !EFI_ERROR(Status) && ((OpenMode & EFI_FILE_MODE_CREATE) != 0)){
       FileInfo = FileFunctionMap.GetFileInfo(*FileHandle);
       ASSERT(FileInfo != NULL);
       FileInfo->Attribute = Attributes;
@@ -1406,7 +1420,6 @@ typedef struct {
   @retval the resultant head of the double linked new format list;
 **/
 LIST_ENTRY*
-EFIAPI
 InternalShellConvertFileListType (
   IN LIST_ENTRY                 *FileList,
   IN OUT LIST_ENTRY             *ListHead
@@ -1876,7 +1889,6 @@ typedef struct {
   @retval FALSE                 the Parameter was not found.  Type is not valid.
 **/
 BOOLEAN
-EFIAPI
 InternalIsOnCheckList (
   IN CONST CHAR16               *Name,
   IN CONST SHELL_PARAM_ITEM     *CheckList,
@@ -1945,7 +1957,6 @@ InternalIsOnCheckList (
   @retval FALSE                 the Parameter not a flag.
 **/
 BOOLEAN
-EFIAPI
 InternalIsFlag (
   IN CONST CHAR16               *Name,
   IN CONST BOOLEAN              AlwaysAllowNumbers,
@@ -2002,7 +2013,6 @@ InternalIsFlag (
                                 ProblemParam if provided.
 **/
 EFI_STATUS
-EFIAPI
 InternalCommandLineParse (
   IN CONST SHELL_PARAM_ITEM     *CheckList,
   OUT LIST_ENTRY                **CheckPackage,
@@ -2691,7 +2701,6 @@ ShellCopySearchAndReplace(
   @retval !EFI_SUCCESS    The operation failed.
 **/
 EFI_STATUS
-EFIAPI
 InternalPrintTo (
   IN CONST CHAR16 *String
   )
@@ -2747,7 +2756,6 @@ InternalPrintTo (
   @return EFI_DEVICE_ERROR      The console device reported an error.
 **/
 EFI_STATUS
-EFIAPI
 InternalShellPrintWorker(
   IN INT32                Col OPTIONAL,
   IN INT32                Row OPTIONAL,
@@ -3395,7 +3403,8 @@ ShellPromptForResponse (
             break;
         }
       }
-      break;    case ShellPromptResponseTypeYesNoAllCancel:
+      break;
+      case ShellPromptResponseTypeYesNoAllCancel:
        if (Prompt != NULL) {
         ShellPrintEx(-1, -1, L"%s", Prompt);
       }
@@ -3413,7 +3422,11 @@ ShellPromptForResponse (
         if (EFI_ERROR(Status)) {
           break;
         }
-        ShellPrintEx(-1, -1, L"%c", Key.UnicodeChar);
+
+        if (Key.UnicodeChar <= 127 && Key.UnicodeChar >= 32) {
+          ShellPrintEx (-1, -1, L"%c", Key.UnicodeChar);
+        }
+
         switch (Key.UnicodeChar) {
           case L'Y':
           case L'y':
@@ -3597,7 +3610,6 @@ ShellPromptForResponseHii (
   @retval FALSE       There is a non-numeric character.
 **/
 BOOLEAN
-EFIAPI
 InternalShellIsHexOrDecimalNumber (
   IN CONST CHAR16   *String,
   IN CONST BOOLEAN  ForceHex,
@@ -3710,7 +3722,6 @@ ShellFileExists(
 
 **/
 CHAR16
-EFIAPI
 InternalShellCharToUpper (
   IN      CHAR16                    Char
   )
@@ -3736,7 +3747,6 @@ InternalShellCharToUpper (
 
 **/
 UINTN
-EFIAPI
 InternalShellHexCharToUintn (
   IN      CHAR16                    Char
   )
@@ -3779,7 +3789,6 @@ InternalShellHexCharToUintn (
   @retval EFI_DEVICE_ERROR        An overflow occured.
 **/
 EFI_STATUS
-EFIAPI
 InternalShellStrHexToUint64 (
   IN CONST CHAR16   *String,
      OUT   UINT64   *Value,
@@ -3881,7 +3890,6 @@ InternalShellStrHexToUint64 (
   @retval EFI_DEVICE_ERROR        An overflow occured.
 **/
 EFI_STATUS
-EFIAPI
 InternalShellStrDecimalToUint64 (
   IN CONST CHAR16 *String,
      OUT   UINT64 *Value,
@@ -4333,7 +4341,6 @@ ShellDeleteFileByName(
   @retval EFI_SUCCESS   The operation was successful.
 **/
 EFI_STATUS
-EFIAPI
 InternalShellStripQuotes (
   IN  CONST CHAR16     *OriginalString,
   OUT CHAR16           **CleanString

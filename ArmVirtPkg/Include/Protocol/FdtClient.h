@@ -80,7 +80,31 @@ EFI_STATUS
   IN  FDT_CLIENT_PROTOCOL     *This,
   IN  CONST CHAR8             *CompatibleString,
   OUT CONST VOID              **Reg,
-  OUT UINT32                  *RegElemSize,
+  OUT UINTN                   *AddressCells,
+  OUT UINTN                   *SizeCells,
+  OUT UINT32                  *RegSize
+  );
+
+typedef
+EFI_STATUS
+(EFIAPI *FDT_CLIENT_FIND_NEXT_MEMORY_NODE_REG) (
+  IN  FDT_CLIENT_PROTOCOL     *This,
+  IN  INT32                   PrevNode,
+  OUT INT32                   *Node,
+  OUT CONST VOID              **Reg,
+  OUT UINTN                   *AddressCells,
+  OUT UINTN                   *SizeCells,
+  OUT UINT32                  *RegSize
+  );
+
+typedef
+EFI_STATUS
+(EFIAPI *FDT_CLIENT_FIND_MEMORY_NODE_REG) (
+  IN  FDT_CLIENT_PROTOCOL     *This,
+  OUT INT32                   *Node,
+  OUT CONST VOID              **Reg,
+  OUT UINTN                   *AddressCells,
+  OUT UINTN                   *SizeCells,
   OUT UINT32                  *RegSize
   );
 
@@ -99,6 +123,9 @@ struct _FDT_CLIENT_PROTOCOL {
   FDT_CLIENT_FIND_NEXT_COMPATIBLE_NODE     FindNextCompatibleNode;
   FDT_CLIENT_FIND_COMPATIBLE_NODE_PROPERTY FindCompatibleNodeProperty;
   FDT_CLIENT_FIND_COMPATIBLE_NODE_REG      FindCompatibleNodeReg;
+
+  FDT_CLIENT_FIND_MEMORY_NODE_REG          FindMemoryNodeReg;
+  FDT_CLIENT_FIND_NEXT_MEMORY_NODE_REG     FindNextMemoryNodeReg;
 
   FDT_CLIENT_GET_OR_INSERT_CHOSEN_NODE     GetOrInsertChosenNode;
 };

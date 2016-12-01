@@ -97,15 +97,6 @@ CheckFeatureSupported (
   );
 
 /**
-  Enable XD feature.
-
-**/
-VOID
-ActivateXd (
-  VOID
-  );
-
-/**
   Update page table according to protected memory ranges and the 4KB-page mapped memory ranges.
 
 **/
@@ -114,7 +105,22 @@ InitPaging (
   VOID
   );
 
+/**
+  Get CPU Index from APIC ID.
+
+**/
+UINTN
+GetCpuIndex (
+  VOID
+  );
+
+//
+// The flag indicates if execute-disable is supported by processor.
+//
 extern BOOLEAN    mXdSupported;
+//
+// The flag indicates if execute-disable is enabled on processor.
+//
 extern BOOLEAN    mXdEnabled;
 
 #endif // _SMM_PROFILE_H_

@@ -578,10 +578,17 @@ PlatformBootManagerBeforeConsole (
   VOID
   )
 {
+  RETURN_STATUS PcdStatus;
+
   //
   // Signal EndOfDxe PI Event
   //
   EfiEventGroupSignal (&gEfiEndOfDxeEventGroupGuid);
+
+  //
+  // Dispatch deferred images after EndOfDxe event.
+  //
+  EfiBootManagerDispatchDeferredImages ();
 
   //
   // Locate the PCI root bridges and make the PCI bus driver connect each,
@@ -629,7 +636,9 @@ PlatformBootManagerBeforeConsole (
   //
   // Set the front page timeout from the QEMU configuration.
   //
-  PcdSet16 (PcdPlatformBootTimeOut, GetFrontPageTimeoutFromQemu ());
+  PcdStatus = PcdSet16S (PcdPlatformBootTimeOut,
+                GetFrontPageTimeoutFromQemu ());
+  ASSERT_RETURN_ERROR (PcdStatus);
 
   //
   // Register platform-specific boot options and keyboard shortcuts.
@@ -657,13 +666,7 @@ PlatformBootManagerAfterConsole (
   //
   // Show the splash screen.
   //
-  BootLogoEnableLogo (
-    ImageFormatBmp,                          // ImageFormat
-    PcdGetPtr (PcdLogoFile),                 // Logo
-    EdkiiPlatformLogoDisplayAttributeCenter, // Attribute
-    0,                                       // OffsetX
-    0                                        // OffsetY
-    );
+  BootLogoEnableLogo ();
 
   //
   // Connect the rest of the devices.

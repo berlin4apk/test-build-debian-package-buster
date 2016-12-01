@@ -2,7 +2,7 @@
   Provides interface to shell internal functions for shell commands.
 
   This library is for use ONLY by shell commands linked into the shell application.
-  This library will not funciton if it is used for UEFI Shell 2.0 Applications.
+  This library will not function if it is used for UEFI Shell 2.0 Applications.
 
   Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
   (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
@@ -21,10 +21,9 @@
 #define _SHELL_COMMAND_LIB_
 
 #include <Uefi.h>
-#include <ShellBase.h>
 
-#include <Protocol/EfiShell.h>
-#include <Protocol/EfiShellParameters.h>
+#include <Protocol/Shell.h>
+#include <Protocol/ShellParameters.h>
 #include <Protocol/UnicodeCollation.h>
 #include <Protocol/SimpleFileSystem.h>
 
@@ -670,29 +669,6 @@ ShellFileHandleEof(
   IN SHELL_FILE_HANDLE Handle
   );
 
-/**
-  Function to get the original CmdLine string for current command.
-
-  @return     A pointer to the buffer of the original command string.
-              It's the caller's responsibility to free the buffer.
-**/
-CHAR16*
-EFIAPI
-ShellGetRawCmdLine (
-  VOID
-  );
-
-/**
-  Function to store the orgignal command string into mOriginalCmdLine.
-
-  @param[in] CmdLine     the command line string to store.
-**/
-VOID
-EFIAPI
-ShellSetRawCmdLine (
-  IN CONST CHAR16     *CmdLine
-  );
-
 typedef struct {
   LIST_ENTRY    Link;
   void          *Buffer;
@@ -718,6 +694,7 @@ FreeBufferList (
   @param[in] UserData     Pointer to some data.
 **/
 VOID
+EFIAPI
 DumpHex (
   IN UINTN        Indent,
   IN UINTN        Offset,
@@ -735,6 +712,7 @@ DumpHex (
   @param[in] UserData   The data to print out.
 **/
 CHAR16*
+EFIAPI
 CatSDumpHex (
   IN CHAR16  *Buffer,
   IN UINTN   Indent,
@@ -742,49 +720,4 @@ CatSDumpHex (
   IN UINTN   DataSize,
   IN VOID    *UserData
   );
-
-/**
-  Return the pointer to the first occurrence of any character from a list of characters.
-
-  @param[in] String                 The string to parse
-  @param[in] CharacterList          The list of character to look for
-  @param[in] IgnoreEscapedCharacter TRUE to ignore escaped characters
-
-  @return The location of the first character in the String.
-  @return Pointer to the ending NULL character of the String.
-**/
-CONST CHAR16*
-EFIAPI
-ShellFindFirstCharacter (
-  IN CONST CHAR16  *String,
-  IN CONST CHAR16  *CharacterList,
-  IN CONST BOOLEAN IgnoreEscapedCharacter
-  );
-
-/**
-  return the next parameter from a command line string;
-
-  This function moves the next parameter from Walker into NextParameter and moves
-  Walker up past that parameter for recursive calling.  When the final parameter
-  is moved *Walker will be set to NULL;
-
-  @param[in, out] Walker          pointer to string of command line.  Adjusted to
-                                  reminaing command line on return
-  @param[in, out] NextParameter   string of command line item extracted.
-  @param[in]      Length          Length of TempParameter in bytes
-  @param[in]      StripQuotation  if TRUE then strip the quotation marks surrounding
-                                  the parameters.
-
-  @return   EFI_INALID_PARAMETER  A required parameter was NULL or pointed to a NULL or empty string.
-  @return   EFI_NOT_FOUND         A closing " could not be found on the specified string
-**/
-EFI_STATUS
-EFIAPI
-ShellGetNextParameter(
-  IN OUT CHAR16   **Walker,
-  IN OUT CHAR16   *NextParameter,
-  IN CONST UINTN  Length,
-  IN BOOLEAN      StripQuotation
-  );
-
 #endif //_SHELL_COMMAND_LIB_

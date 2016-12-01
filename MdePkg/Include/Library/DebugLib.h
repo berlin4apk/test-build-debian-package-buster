@@ -8,7 +8,7 @@
   of size reduction when compiler optimization is disabled. If MDEPKG_NDEBUG is
   defined, then debug and assert related macros wrapped by it are the NULL implementations.
 
-Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials are licensed and made available under 
 the terms and conditions of the BSD License that accompanies this distribution.  
 The full text of the license may be found at
@@ -46,7 +46,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #define DEBUG_VARIABLE  0x00000100  // Variable
 #define DEBUG_BM        0x00000400  // Boot Manager
 #define DEBUG_BLKIO     0x00001000  // BlkIo Driver
-#define DEBUG_NET       0x00004000  // SNP Driver
+#define DEBUG_NET       0x00004000  // Network Io Driver
 #define DEBUG_UNDI      0x00010000  // UNDI Driver
 #define DEBUG_LOADFILE  0x00020000  // LoadFile
 #define DEBUG_EVENT     0x00080000  // Event messages
@@ -346,6 +346,33 @@ DebugPrintLevelEnabled (
     } while (FALSE)
 #else
   #define ASSERT_EFI_ERROR(StatusParameter)
+#endif
+
+/**
+  Macro that calls DebugAssert() if a RETURN_STATUS evaluates to an error code.
+
+  If MDEPKG_NDEBUG is not defined and the DEBUG_PROPERTY_DEBUG_ASSERT_ENABLED
+  bit of PcdDebugProperyMask is set, then this macro evaluates the
+  RETURN_STATUS value specified by StatusParameter.  If StatusParameter is an
+  error code, then DebugAssert() is called passing in the source filename,
+  source line number, and StatusParameter.
+
+  @param  StatusParameter  RETURN_STATUS value to evaluate.
+
+**/
+#if !defined(MDEPKG_NDEBUG)
+  #define ASSERT_RETURN_ERROR(StatusParameter)                          \
+    do {                                                                \
+      if (DebugAssertEnabled ()) {                                      \
+        if (RETURN_ERROR (StatusParameter)) {                           \
+          DEBUG ((DEBUG_ERROR, "\nASSERT_RETURN_ERROR (Status = %r)\n", \
+            StatusParameter));                                          \
+          _ASSERT (!RETURN_ERROR (StatusParameter));                    \
+        }                                                               \
+      }                                                                 \
+    } while (FALSE)
+#else
+  #define ASSERT_RETURN_ERROR(StatusParameter)
 #endif
 
 /**  

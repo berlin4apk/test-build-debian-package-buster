@@ -27,6 +27,7 @@ SmmInitPageTable (
 {
   UINTN                             PageFaultHandlerHookAddress;
   IA32_IDT_GATE_DESCRIPTOR          *IdtEntry;
+  EFI_STATUS                        Status;
 
   //
   // Initialize spin lock
@@ -49,7 +50,8 @@ SmmInitPageTable (
     //
     // Register SMM Page Fault Handler
     //
-    SmmRegisterExceptionHandler (&mSmmCpuService, EXCEPT_IA32_PAGE_FAULT, SmiPFHandler);
+    Status = SmmRegisterExceptionHandler (&mSmmCpuService, EXCEPT_IA32_PAGE_FAULT, SmiPFHandler);
+    ASSERT_EFI_ERROR (Status);
   }
 
   //
@@ -58,7 +60,7 @@ SmmInitPageTable (
   if (FeaturePcdGet (PcdCpuSmmStackGuard)) {
     InitializeIDTSmmStackGuard ();
   }
-  return Gen4GPageTable (0, TRUE);
+  return Gen4GPageTable (TRUE);
 }
 
 /**
@@ -89,6 +91,8 @@ SmiPFHandler (
   )
 {
   UINTN             PFAddress;
+  UINTN             GuardPageAddress;
+  UINTN             CpuIndex;
 
   ASSERT (InterruptType == EXCEPT_IA32_PAGE_FAULT);
 
@@ -96,10 +100,40 @@ SmiPFHandler (
 
   PFAddress = AsmReadCr2 ();
 
-  if ((FeaturePcdGet (PcdCpuSmmStackGuard)) &&
-      (PFAddress >= mCpuHotPlugData.SmrrBase) &&
+  //
+  // If a page fault occurs in SMRAM range, it might be in a SMM stack guard page,
+  // or SMM page protection violation.
+  //
+  if ((PFAddress >= mCpuHotPlugData.SmrrBase) &&
       (PFAddress < (mCpuHotPlugData.SmrrBase + mCpuHotPlugData.SmrrSize))) {
-    DEBUG ((EFI_D_ERROR, "SMM stack overflow!\n"));
+    CpuIndex = GetCpuIndex ();
+    GuardPageAddress = (mSmmStackArrayBase + EFI_PAGE_SIZE + CpuIndex * mSmmStackSize);
+    if ((FeaturePcdGet (PcdCpuSmmStackGuard)) &&
+        (PFAddress >= GuardPageAddress) &&
+        (PFAddress < (GuardPageAddress + EFI_PAGE_SIZE))) {
+      DEBUG ((DEBUG_ERROR, "SMM stack overflow!\n"));
+    } else {
+      DEBUG ((DEBUG_ERROR, "SMM exception data - 0x%x(", SystemContext.SystemContextIa32->ExceptionData));
+      DEBUG ((DEBUG_ERROR, "I:%x, R:%x, U:%x, W:%x, P:%x",
+        (SystemContext.SystemContextIa32->ExceptionData & IA32_PF_EC_ID) != 0,
+        (SystemContext.SystemContextIa32->ExceptionData & IA32_PF_EC_RSVD) != 0,
+        (SystemContext.SystemContextIa32->ExceptionData & IA32_PF_EC_US) != 0,
+        (SystemContext.SystemContextIa32->ExceptionData & IA32_PF_EC_WR) != 0,
+        (SystemContext.SystemContextIa32->ExceptionData & IA32_PF_EC_P) != 0
+        ));
+      DEBUG ((DEBUG_ERROR, ")\n"));
+      if ((SystemContext.SystemContextIa32->ExceptionData & IA32_PF_EC_ID) != 0) {
+        DEBUG ((DEBUG_ERROR, "SMM exception at execution (0x%x)\n", PFAddress));
+        DEBUG_CODE (
+          DumpModuleInfoByIp (*(UINTN *)(UINTN)SystemContext.SystemContextIa32->Esp);
+        );
+      } else {
+        DEBUG ((DEBUG_ERROR, "SMM exception at access (0x%x)\n", PFAddress));
+        DEBUG_CODE (
+          DumpModuleInfoByIp ((UINTN)SystemContext.SystemContextIa32->Eip);
+        );
+      }
+    }
     CpuDeadLoop ();
   }
 
@@ -109,7 +143,7 @@ SmiPFHandler (
   if ((PFAddress < mCpuHotPlugData.SmrrBase) ||
       (PFAddress >= mCpuHotPlugData.SmrrBase + mCpuHotPlugData.SmrrSize)) {
     if ((SystemContext.SystemContextIa32->ExceptionData & IA32_PF_EC_ID) != 0) {
-      DEBUG ((EFI_D_ERROR, "Code executed on IP(0x%x) out of SMM range after SMM is locked!\n", PFAddress));
+      DEBUG ((DEBUG_ERROR, "Code executed on IP(0x%x) out of SMM range after SMM is locked!\n", PFAddress));
       DEBUG_CODE (
         DumpModuleInfoByIp (*(UINTN *)(UINTN)SystemContext.SystemContextIa32->Esp);
       );
@@ -127,4 +161,69 @@ SmiPFHandler (
   }
 
   ReleaseSpinLock (mPFLock);
+}
+
+/**
+  This function sets memory attribute for page table.
+**/
+VOID
+SetPageTableAttributes (
+  VOID
+  )
+{
+  UINTN                 Index2;
+  UINTN                 Index3;
+  UINT64                *L1PageTable;
+  UINT64                *L2PageTable;
+  UINT64                *L3PageTable;
+  BOOLEAN               IsSplitted;
+  BOOLEAN               PageTableSplitted;
+
+  DEBUG ((DEBUG_INFO, "SetPageTableAttributes\n"));
+
+  //
+  // Disable write protection, because we need mark page table to be write protected.
+  // We need *write* page table memory, to mark itself to be *read only*.
+  //
+  AsmWriteCr0 (AsmReadCr0() & ~CR0_WP);
+
+  do {
+    DEBUG ((DEBUG_INFO, "Start...\n"));
+    PageTableSplitted = FALSE;
+
+    L3PageTable = (UINT64 *)GetPageTableBase ();
+
+    SmmSetMemoryAttributesEx ((EFI_PHYSICAL_ADDRESS)(UINTN)L3PageTable, SIZE_4KB, EFI_MEMORY_RO, &IsSplitted);
+    PageTableSplitted = (PageTableSplitted || IsSplitted);
+
+    for (Index3 = 0; Index3 < 4; Index3++) {
+      L2PageTable = (UINT64 *)(UINTN)(L3PageTable[Index3] & PAGING_4K_ADDRESS_MASK_64);
+      if (L2PageTable == NULL) {
+        continue;
+      }
+
+      SmmSetMemoryAttributesEx ((EFI_PHYSICAL_ADDRESS)(UINTN)L2PageTable, SIZE_4KB, EFI_MEMORY_RO, &IsSplitted);
+      PageTableSplitted = (PageTableSplitted || IsSplitted);
+
+      for (Index2 = 0; Index2 < SIZE_4KB/sizeof(UINT64); Index2++) {
+        if ((L2PageTable[Index2] & IA32_PG_PS) != 0) {
+          // 2M
+          continue;
+        }
+        L1PageTable = (UINT64 *)(UINTN)(L2PageTable[Index2] & PAGING_4K_ADDRESS_MASK_64);
+        if (L1PageTable == NULL) {
+          continue;
+        }
+        SmmSetMemoryAttributesEx ((EFI_PHYSICAL_ADDRESS)(UINTN)L1PageTable, SIZE_4KB, EFI_MEMORY_RO, &IsSplitted);
+        PageTableSplitted = (PageTableSplitted || IsSplitted);
+      }
+    }
+  } while (PageTableSplitted);
+
+  //
+  // Enable write protection, after page table updated.
+  //
+  AsmWriteCr0 (AsmReadCr0() | CR0_WP);
+
+  return ;
 }

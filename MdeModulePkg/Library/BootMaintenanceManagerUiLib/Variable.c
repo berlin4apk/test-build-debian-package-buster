@@ -371,7 +371,7 @@ Var_UpdateConsoleOption (
       Vendor.Header.Type    = MESSAGING_DEVICE_PATH;
       Vendor.Header.SubType = MSG_VENDOR_DP;
       
-      ASSERT (NewTerminalContext->TerminalType < (sizeof (TerminalTypeGuid) / sizeof (TerminalTypeGuid[0])));
+      ASSERT (NewTerminalContext->TerminalType < (ARRAY_SIZE (TerminalTypeGuid)));
       CopyMem (
         &Vendor.Guid,
         &TerminalTypeGuid[NewTerminalContext->TerminalType],
@@ -465,7 +465,9 @@ Var_UpdateErrorOutOption (
   @param OptionalData    The optional load option.
   @param ForceReconnect  If to force reconnect.
 
-  @retval EFI_OUT_OF_RESOURCES If not enought memory to complete the operation.
+  @retval other                Contain some errors when excuting this function.See function
+                               EfiBootManagerInitializeLoadOption/EfiBootManagerAddLoadOptionVariabl
+                               for detail return information.
   @retval EFI_SUCCESS          If function completes successfully.
 
 **/
@@ -525,8 +527,14 @@ Var_UpdateDriverOption (
              OptionalDesData,
              OptionalDataSize
            );
-  if (!EFI_ERROR (Status)){
-    Status = EfiBootManagerAddLoadOptionVariable (&LoadOption,(UINTN) -1 );
+  if (EFI_ERROR (Status)){
+    return Status;
+  }
+
+  Status = EfiBootManagerAddLoadOptionVariable (&LoadOption,(UINTN) -1 );
+  if (EFI_ERROR (Status)) {
+    EfiBootManagerFreeLoadOption(&LoadOption);
+    return Status;
   }
 
   NewLoadContext                  = (BM_LOAD_CONTEXT *) NewMenuEntry->VariableContext;
@@ -582,7 +590,9 @@ Var_UpdateDriverOption (
 
   @param CallbackData    The BMM context data.
 
-  @retval EFI_OUT_OF_RESOURCES If not enought memory to complete the operation.
+  @retval other                Contain some errors when excuting this function. See function
+                               EfiBootManagerInitializeLoadOption/EfiBootManagerAddLoadOptionVariabl
+                               for detail return information.
   @retval EFI_SUCCESS          If function completes successfully.
 
 **/
@@ -635,8 +645,14 @@ Var_UpdateBootOption (
              OptionalData,
              OptionalDataSize
            );
-  if (!EFI_ERROR (Status)){
-    Status = EfiBootManagerAddLoadOptionVariable (&LoadOption,(UINTN) -1 );
+  if (EFI_ERROR (Status)){
+    return Status;
+  }
+
+  Status = EfiBootManagerAddLoadOptionVariable (&LoadOption,(UINTN) -1 );
+  if (EFI_ERROR (Status)) {
+    EfiBootManagerFreeLoadOption(&LoadOption);
+    return Status;
   }
 
   NewLoadContext                  = (BM_LOAD_CONTEXT *) NewMenuEntry->VariableContext;

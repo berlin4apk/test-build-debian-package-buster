@@ -52,11 +52,13 @@ import Common.GlobalData as GlobalData
 from Common.Expression import *
 from Common import GlobalData
 from Common.String import ReplaceMacro
-
+import uuid
 from Common.Misc import tdict
-
+from Common.MultipleWorkspace import MultipleWorkspace as mws
 import Common.LongFilePathOs as os
 from Common.LongFilePathSupport import OpenLongFilePath as open
+from Capsule import EFI_CERT_TYPE_PKCS7_GUID
+from Capsule import EFI_CERT_TYPE_RSA2048_SHA256_GUID
 
 ##define T_CHAR_SPACE                ' '
 ##define T_CHAR_NULL                 '\0'
@@ -1124,6 +1126,26 @@ class FdfParser:
             self.__UndoToken()
             return False
 
+    def __Verify(self, Name, Value, Scope):
+        if Scope in ['UINT64', 'UINT8']:
+            ValueNumber = 0
+            try:
+                if Value.upper().startswith('0X'):
+                    ValueNumber = int (Value, 16)
+                else:
+                    ValueNumber = int (Value)
+            except:
+                EdkLogger.error("FdfParser", FORMAT_INVALID, "The value is not valid dec or hex number for %s." % Name)
+            if ValueNumber < 0:
+                EdkLogger.error("FdfParser", FORMAT_INVALID, "The value can't be set to negative value for %s." % Name)
+            if Scope == 'UINT64':
+                if ValueNumber >= 0x10000000000000000:
+                    EdkLogger.error("FdfParser", FORMAT_INVALID, "Too large value for %s." % Name)
+            if Scope == 'UINT8':
+                if ValueNumber >= 0x100:
+                    EdkLogger.error("FdfParser", FORMAT_INVALID, "Too large value for %s." % Name)
+            return True
+
     ## __UndoToken() method
     #
     #   Go back one token unit in file buffer
@@ -1363,25 +1385,10 @@ class FdfParser:
 
         try:
             self.Preprocess()
-            while self.__GetFd():
-                pass
-
-            while self.__GetFv():
-                pass
-
-            while self.__GetFmp():
-                pass
-
-            while self.__GetCapsule():
-                pass
-
-            while self.__GetVtf():
-                pass
-
-            while self.__GetRule():
-                pass
-            
-            while self.__GetOptionRom():
+            #
+            # Keep processing sections of the FDF until no new sections or a syntax error is found
+            #
+            while self.__GetFd() or self.__GetFv() or self.__GetFmp() or self.__GetCapsule() or self.__GetVtf() or self.__GetRule() or self.__GetOptionRom():
                 pass
 
         except Warning, X:
@@ -2739,7 +2746,9 @@ class FdfParser:
             if self.__GetAlignment():
                 if self.__Token not in ("Auto", "8", "16", "32", "64", "128", "512", "1K", "4K", "32K" ,"64K"):
                     raise Warning("Incorrect alignment '%s'" % self.__Token, self.FileName, self.CurrentLineNumber)
-                AlignValue = self.__Token
+                #For FFS, Auto is default option same to ""
+                if not self.__Token == "Auto":
+                    AlignValue = self.__Token
             if not self.__GetNextToken():
                 raise Warning("expected Filename value", self.FileName, self.CurrentLineNumber)
 
@@ -3187,7 +3196,7 @@ class FdfParser:
 
         if not self.__GetNextToken():
             raise Warning("The FMP payload section is empty!", self.FileName, self.CurrentLineNumber)
-        FmpKeyList = ['IMAGE_HEADER_INIT_VERSION', 'IMAGE_TYPE_ID', 'IMAGE_INDEX', 'HARDWARE_INSTANCE']
+        FmpKeyList = ['IMAGE_HEADER_INIT_VERSION', 'IMAGE_TYPE_ID', 'IMAGE_INDEX', 'HARDWARE_INSTANCE', 'CERTIFICATE_GUID', 'MONOTONIC_COUNT']
         while self.__Token in FmpKeyList:
             Name = self.__Token
             FmpKeyList.remove(Name)
@@ -3195,32 +3204,55 @@ class FdfParser:
                 raise Warning("expected '='", self.FileName, self.CurrentLineNumber)
             if Name == 'IMAGE_TYPE_ID':
                 if not self.__GetNextGuid():
-                    raise Warning("expected GUID value for IMAGE_TYPE_ID", self.FileName, self.CurrentLineNumber)
+                    raise Warning("expected GUID value for IMAGE_TYPE_ID.", self.FileName, self.CurrentLineNumber)
                 FmpData.ImageTypeId = self.__Token
+            elif Name == 'CERTIFICATE_GUID':
+                if not self.__GetNextGuid():
+                    raise Warning("expected GUID value for CERTIFICATE_GUID.", self.FileName, self.CurrentLineNumber)
+                FmpData.Certificate_Guid = self.__Token
+                if uuid.UUID(FmpData.Certificate_Guid) != EFI_CERT_TYPE_RSA2048_SHA256_GUID and uuid.UUID(FmpData.Certificate_Guid) != EFI_CERT_TYPE_PKCS7_GUID:
+                    raise Warning("Only support EFI_CERT_TYPE_RSA2048_SHA256_GUID or EFI_CERT_TYPE_PKCS7_GUID for CERTIFICATE_GUID.", self.FileName, self.CurrentLineNumber)
             else:
                 if not self.__GetNextToken():
                     raise Warning("expected value of %s" % Name, self.FileName, self.CurrentLineNumber)
                 Value = self.__Token
                 if Name == 'IMAGE_HEADER_INIT_VERSION':
-                    FmpData.Version = Value
+                    if self.__Verify(Name, Value, 'UINT8'):
+                        FmpData.Version = Value
                 elif Name == 'IMAGE_INDEX':
-                    FmpData.ImageIndex = Value
+                    if self.__Verify(Name, Value, 'UINT8'):
+                        FmpData.ImageIndex = Value
                 elif Name == 'HARDWARE_INSTANCE':
-                    FmpData.HardwareInstance = Value
+                    if self.__Verify(Name, Value, 'UINT8'):
+                        FmpData.HardwareInstance = Value
+                elif Name == 'MONOTONIC_COUNT':
+                    if self.__Verify(Name, Value, 'UINT64'):
+                        FmpData.MonotonicCount = Value
+                        if FmpData.MonotonicCount.upper().startswith('0X'):
+                            FmpData.MonotonicCount = (long)(FmpData.MonotonicCount, 16)
+                        else:
+                            FmpData.MonotonicCount = (long)(FmpData.MonotonicCount)
             if not self.__GetNextToken():
                 break
         else:
             self.__UndoToken()
 
+        if (FmpData.MonotonicCount and not FmpData.Certificate_Guid) or (not FmpData.MonotonicCount and FmpData.Certificate_Guid):
+            EdkLogger.error("FdfParser", FORMAT_INVALID, "CERTIFICATE_GUID and MONOTONIC_COUNT must be work as a pair.")
+        # remove CERTIFICATE_GUID and MONOTONIC_COUNT from FmpKeyList, since these keys are optional
+        if 'CERTIFICATE_GUID' in FmpKeyList:
+            FmpKeyList.remove('CERTIFICATE_GUID')
+        if 'MONOTONIC_COUNT' in FmpKeyList:
+            FmpKeyList.remove('MONOTONIC_COUNT')
         if FmpKeyList:
-            raise Warning("Missing keywords %s in FMP payload section" % ', '.join(FmpKeyList), self.FileName, self.CurrentLineNumber)
-        ImageFile = self.__ParseRawFileStatement()
-        if not ImageFile:
-            raise Warning("Missing image file in FMP payload section", self.FileName, self.CurrentLineNumber)
-        FmpData.ImageFile = ImageFile
-        VendorCodeFile = self.__ParseRawFileStatement()
-        if VendorCodeFile:
-            FmpData.VendorCodeFile = VendorCodeFile
+            raise Warning("Missing keywords %s in FMP payload section." % ', '.join(FmpKeyList), self.FileName, self.CurrentLineNumber)
+        # get the Image file and Vendor code file
+        self.__GetFMPCapsuleData(FmpData)
+        if not FmpData.ImageFile:
+            raise Warning("Missing image file in FMP payload section.", self.FileName, self.CurrentLineNumber)
+        # check whether more than one Vendor code file
+        if len(FmpData.VendorCodeFile) > 1:
+            raise Warning("At most one Image file and one Vendor code file are allowed in FMP payload section.", self.FileName, self.CurrentLineNumber)
         self.Profile.FmpPayloadDict[FmpUiName] = FmpData
         return True
 
@@ -3352,6 +3384,22 @@ class FdfParser:
             if not (IsInf or IsFile or IsFv or IsFd or IsAnyFile or IsAfile or IsFmp):
                 break
 
+    ## __GetFMPCapsuleData() method
+    #
+    #   Get capsule data for FMP capsule
+    #
+    #   @param  self        The object pointer
+    #   @param  Obj         for whom capsule data are got
+    #
+    def __GetFMPCapsuleData(self, Obj):
+
+        while True:
+            IsFv = self.__GetFvStatement(Obj, True)
+            IsFd = self.__GetFdStatement(Obj, True)
+            IsAnyFile = self.__GetAnyFileStatement(Obj, True)
+            if not (IsFv or IsFd or IsAnyFile):
+                break
+
     ## __GetFvStatement() method
     #
     #   Get FV for capsule
@@ -3361,7 +3409,7 @@ class FdfParser:
     #   @retval True        Successfully find a FV statement
     #   @retval False       Not able to find a FV statement
     #
-    def __GetFvStatement(self, CapsuleObj):
+    def __GetFvStatement(self, CapsuleObj, FMPCapsule = False):
 
         if not self.__IsKeyword("FV"):
             return False
@@ -3377,7 +3425,13 @@ class FdfParser:
 
         CapsuleFv = CapsuleData.CapsuleFv()
         CapsuleFv.FvName = self.__Token
-        CapsuleObj.CapsuleDataList.append(CapsuleFv)
+        if FMPCapsule:
+            if not CapsuleObj.ImageFile:
+                CapsuleObj.ImageFile.append(CapsuleFv)
+            else:
+                CapsuleObj.VendorCodeFile.append(CapsuleFv)
+        else:
+            CapsuleObj.CapsuleDataList.append(CapsuleFv)
         return True
 
     ## __GetFdStatement() method
@@ -3389,7 +3443,7 @@ class FdfParser:
     #   @retval True        Successfully find a FD statement
     #   @retval False       Not able to find a FD statement
     #
-    def __GetFdStatement(self, CapsuleObj):
+    def __GetFdStatement(self, CapsuleObj, FMPCapsule = False):
 
         if not self.__IsKeyword("FD"):
             return False
@@ -3405,7 +3459,13 @@ class FdfParser:
 
         CapsuleFd = CapsuleData.CapsuleFd()
         CapsuleFd.FdName = self.__Token
-        CapsuleObj.CapsuleDataList.append(CapsuleFd)
+        if FMPCapsule:
+            if not CapsuleObj.ImageFile:
+                CapsuleObj.ImageFile.append(CapsuleFd)
+            else:
+                CapsuleObj.VendorCodeFile.append(CapsuleFd)
+        else:
+            CapsuleObj.CapsuleDataList.append(CapsuleFd)
         return True
 
     def __GetFmpStatement(self, CapsuleObj):
@@ -3445,6 +3505,9 @@ class FdfParser:
         AnyFileName = self.__Token
         self.__VerifyFile(AnyFileName)
 
+        if not os.path.isabs(AnyFileName):
+            AnyFileName = mws.join(GenFdsGlobalVariable.WorkSpaceDir, AnyFileName)
+
         return AnyFileName
 
     ## __GetAnyFileStatement() method
@@ -3456,14 +3519,20 @@ class FdfParser:
     #   @retval True        Successfully find a Anyfile statement
     #   @retval False       Not able to find a AnyFile statement
     #
-    def __GetAnyFileStatement(self, CapsuleObj):
+    def __GetAnyFileStatement(self, CapsuleObj, FMPCapsule = False):
         AnyFileName = self.__ParseRawFileStatement()
         if not AnyFileName:
             return False
 
         CapsuleAnyFile = CapsuleData.CapsuleAnyFile()
         CapsuleAnyFile.FileName = AnyFileName
-        CapsuleObj.CapsuleDataList.append(CapsuleAnyFile)
+        if FMPCapsule:
+            if not CapsuleObj.ImageFile:
+                CapsuleObj.ImageFile.append(CapsuleAnyFile)
+            else:
+                CapsuleObj.VendorCodeFile.append(CapsuleAnyFile)
+        else:
+            CapsuleObj.CapsuleDataList.append(CapsuleAnyFile)
         return True
     
     ## __GetAfileStatement() method

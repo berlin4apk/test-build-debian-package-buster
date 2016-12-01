@@ -240,6 +240,7 @@ OpalDriverPopUpHddPassword (
   }
 
   UnicodeStrToAsciiStrS (Unicode, Ascii, MAX_PASSWORD_SIZE + 1);
+  ZeroMem (Unicode, sizeof (Unicode));
 
   return Ascii;
 }
@@ -406,7 +407,7 @@ OpalDriverGetDeviceList(
   ReadyToBoot callback to send BlockSid command.
 
   @param  Event   Pointer to this event
-  @param  Context Event hanlder private Data
+  @param  Context Event handler private Data
 
 **/
 VOID

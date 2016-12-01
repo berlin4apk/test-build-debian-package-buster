@@ -786,7 +786,7 @@ IScsiPrepareLoginReq (
 
   case ISCSI_LOGIN_OPERATIONAL_NEGOTIATION:
     //
-    // Only negotiate the paramter once.
+    // Only negotiate the parameter once.
     //
     if (!Conn->ParamNegotiated) {
       IScsiFillOpParams (Conn, Nbuf);
@@ -1069,12 +1069,13 @@ IScsiUpdateTargetAddress (
   IN     UINT32                Len
   )
 {
-  LIST_ENTRY      *KeyValueList;
-  CHAR8           *TargetAddress;
-  CHAR8           *IpStr;
-  EFI_STATUS      Status;
-  UINTN           Number;
-  UINT8           IpMode;
+  LIST_ENTRY                   *KeyValueList;
+  CHAR8                        *TargetAddress;
+  CHAR8                        *IpStr;
+  EFI_STATUS                   Status;
+  UINTN                        Number;
+  UINT8                        IpMode;
+  ISCSI_SESSION_CONFIG_NVDATA  *NvData;
 
   KeyValueList = IScsiBuildKeyValueList (Data, Len);
   if (KeyValueList == NULL) {
@@ -1082,30 +1083,62 @@ IScsiUpdateTargetAddress (
   }
 
   Status = EFI_NOT_FOUND;
-
+  NvData = &Session->ConfigData->SessionConfigData;
+ 
   while (TRUE) {
     TargetAddress = IScsiGetValueByKeyFromList (KeyValueList, ISCSI_KEY_TARGET_ADDRESS);
     if (TargetAddress == NULL) {
       break;
     }
 
-    if (!NET_IS_DIGIT (TargetAddress[0])) {
+    //
+    // RFC 3720 defines format of the TargetAddress=domainname[:port][,portal-group-tag]
+    // The domainname can be specified as either a DNS host name, adotted-decimal IPv4 address,
+    // or a bracketed IPv6 address as specified in [RFC2732].
+    //
+    if (NET_IS_DIGIT (TargetAddress[0])) {
       //
-      // The domainname of the target may be presented in three formats: a DNS host name,
-      // a dotted-decimal IPv4 address, or a bracketed IPv6 address. Only accept dotted
-      // IPv4 address.
+      // The domainname of the target is presented in a dotted-decimal IPv4 address format.
       //
+      IpStr = TargetAddress;
+
+      while ((*TargetAddress != '\0') && (*TargetAddress != ':') && (*TargetAddress != ',')) {
+        //
+        // NULL, ':', or ',' ends the IPv4 string.
+        //
+        TargetAddress++;
+      }
+    } else if (*TargetAddress == ISCSI_REDIRECT_ADDR_START_DELIMITER){
+      //
+      // The domainname of the target is presented in a bracketed IPv6 address format.
+      //
+      TargetAddress ++;
+      IpStr = TargetAddress;
+      while ((*TargetAddress != '\0') && (*TargetAddress != ISCSI_REDIRECT_ADDR_END_DELIMITER)) {
+        //
+        // ']' ends the IPv6 string.
+        //
+        TargetAddress++;
+      }
+
+      if (*TargetAddress != ISCSI_REDIRECT_ADDR_END_DELIMITER) {
+        continue;
+      }
+
+      *TargetAddress = '\0';
+      TargetAddress ++;
+
+    } else {
+      //
+      // The domainname of the target is presented in the format of a DNS host name.
+      // Temporary not supported.
       continue;
     }
 
-    IpStr = TargetAddress;
-
-    while ((*TargetAddress != 0) && (*TargetAddress != ':') && (*TargetAddress != ',')) {
-      //
-      // NULL, ':', or ',' ends the IPv4 string.
-      //
-      TargetAddress++;
-    }
+    //
+    // Save the origial user setting which specifies the proxy/virtual iSCSI target.
+    //
+    NvData->OriginalTargetPort = NvData->TargetPort;
 
     if (*TargetAddress == ',') {
       //
@@ -1122,19 +1155,25 @@ IScsiUpdateTargetAddress (
       if (Number > 0xFFFF) {
         continue;
       } else {
-        Session->ConfigData->SessionConfigData.TargetPort = (UINT16) Number;
+        NvData->TargetPort = (UINT16) Number;
       }
     } else {
       //
-      // The string only contains the IPv4 address. Use the well-known port.
+      // The string only contains the Target address. Use the well-known port.
       //
-      Session->ConfigData->SessionConfigData.TargetPort = ISCSI_WELL_KNOWN_PORT;
+      NvData->TargetPort = ISCSI_WELL_KNOWN_PORT;
     }
+
+    //
+    // Save the origial user setting which specifies the proxy/virtual iSCSI target.
+    //    
+    CopyMem (&NvData->OriginalTargetIp, &NvData->TargetIp, sizeof (EFI_IP_ADDRESS));
+
     //
     // Update the target IP address.
     //
-    if (Session->ConfigData->SessionConfigData.IpMode < IP_MODE_AUTOCONFIG) {
-      IpMode = Session->ConfigData->SessionConfigData.IpMode;
+    if (NvData->IpMode < IP_MODE_AUTOCONFIG) {
+      IpMode = NvData->IpMode;
     } else {
       IpMode = Session->ConfigData->AutoConfigureMode;
     }
@@ -1148,6 +1187,7 @@ IScsiUpdateTargetAddress (
     if (EFI_ERROR (Status)) {
       continue;
     } else {
+      NvData->RedirectFlag = TRUE;
       break;
     }
   }
@@ -2103,7 +2143,7 @@ IScsiNewDataSegment (
 
   @param[in]  Packet The EXT SCSI PASS THRU request packet containing the SCSI command.
   @param[in]  Lun    The LUN.
-  @param[in]  Tcb    The tcb assocated with this SCSI command.
+  @param[in]  Tcb    The tcb associated with this SCSI command.
 
   @return The  created iSCSI SCSI command PDU.
   @retval NULL Other errors as indicated.

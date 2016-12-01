@@ -43,9 +43,9 @@ typedef UINT16          TCP_PORTNO;
 //
 // The address classification
 //
-#define  IP4_ADDR_CLASSA       1
-#define  IP4_ADDR_CLASSB       2
-#define  IP4_ADDR_CLASSC       3
+#define  IP4_ADDR_CLASSA       1     // Deprecated
+#define  IP4_ADDR_CLASSB       2     // Deprecated
+#define  IP4_ADDR_CLASSC       3     // Deprecated
 #define  IP4_ADDR_CLASSD       4
 #define  IP4_ADDR_CLASSE       5
 
@@ -231,6 +231,7 @@ typedef struct {
 // Test the IP's attribute, All the IPs are in host byte order.
 //
 #define IP4_IS_MULTICAST(Ip)              (((Ip) & 0xF0000000) == 0xE0000000)
+#define IP4_IS_UNSPECIFIED(Ip)            ((Ip) == 0)
 #define IP4_IS_LOCAL_BROADCAST(Ip)        ((Ip) == 0xFFFFFFFF)
 #define IP4_NET_EQUAL(Ip1, Ip2, NetMask)  (((Ip1) & (NetMask)) == ((Ip2) & (NetMask)))
 #define IP4_IS_VALID_NETMASK(Ip)          (NetGetMaskLength (Ip) != (IP4_MASK_MAX + 1))
@@ -252,7 +253,7 @@ typedef struct {
 
 //
 // The debug level definition. This value is also used as the
-// syslog's servity level. Don't change it.
+// syslog's severity level. Don't change it.
 //
 #define NETDEBUG_LEVEL_TRACE   5
 #define NETDEBUG_LEVEL_WARNING 4
@@ -335,8 +336,8 @@ NetDebugASPrint (
   This function will locate a instance of SNP then send the message through it.
   Because it isn't open the SNP BY_DRIVER, apply caution when using it.
 
-  @param Level    The servity level of the message.
-  @param Module   The Moudle that generates the log.
+  @param Level    The severity level of the message.
+  @param Module   The Module that generates the log.
   @param File     The file that contains the log.
   @param Line     The exact line that contains the log.
   @param Message  The user message to log.
@@ -379,6 +380,11 @@ NetGetMaskLength (
   Return the class of the IP address, such as class A, B, C.
   Addr is in host byte order.
 
+  [ATTENTION]
+  Classful addressing (IP class A/B/C) has been deprecated according to RFC4632.
+  Caller of this function could only check the returned value against
+  IP4_ADDR_CLASSD (multicast) or IP4_ADDR_CLASSE (reserved) now.
+
   The address of class A  starts with 0.
   If the address belong to class A, return IP4_ADDR_CLASSA.
   The address of class B  starts with 10.
@@ -404,17 +410,16 @@ NetGetIpClass (
 
 /**
   Check whether the IP is a valid unicast address according to
-  the netmask. If NetMask is zero, use the IP address's class to get the default mask.
+  the netmask. 
 
-  If Ip is 0, IP is not a valid unicast address.
-  Class D address is used for multicasting and class E address is reserved for future. If Ip
-  belongs to class D or class E, Ip is not a valid unicast address.
-  If all bits of the host address of Ip are 0 or 1, Ip is not a valid unicast address.
+  ASSERT if NetMask is zero.
+  
+  If all bits of the host address of IP are 0 or 1, IP is also not a valid unicast address.
 
   @param[in]  Ip                    The IP to check against.
   @param[in]  NetMask               The mask of the IP.
 
-  @return TRUE if Ip is a valid unicast address on the network, otherwise FALSE.
+  @return TRUE if IP is a valid unicast address on the network, otherwise FALSE.
 
 **/
 BOOLEAN
@@ -750,7 +755,7 @@ NetDestroyLinkList (
   @param[in]  ChildHandleBuffer  An array of child handles to be freed. May be NULL
                                  if NumberOfChildren is 0.
 
-  @retval TURE                   Found the input Handle in ChildHandleBuffer.
+  @retval TRUE                   Found the input Handle in ChildHandleBuffer.
   @retval FALSE                  Can't find the input Handle in ChildHandleBuffer.
 
 **/
@@ -1008,7 +1013,7 @@ EFI_STATUS
 /**
   Iterate through the netmap and call CallBack for each item.
 
-  It will contiue the traverse if CallBack returns EFI_SUCCESS, otherwise, break
+  It will continue the traverse if CallBack returns EFI_SUCCESS, otherwise, break
   from the loop. It returns the CallBack's last return value. This function is
   delete safe for the current item.
 
@@ -1308,7 +1313,7 @@ NetLibCreateIPv6DPathNode (
   needs to find its own private data that is related the IP's
   service binding instance that is installed on the UNDI/SNP handle.
   The controller is then either an MNP or an ARP child handle. Note that
-  IP opens these handles using BY_DRIVER. Use that infomation to get the
+  IP opens these handles using BY_DRIVER. Use that information to get the
   UNDI/SNP handle.
 
   @param[in]  Controller            The protocol handle to check.
@@ -1349,7 +1354,7 @@ NetLibDefaultUnload (
   @param[out]     Ip4Address     The pointer to the converted IPv4 address.
 
   @retval EFI_SUCCESS            Converted to an IPv4 address successfully.
-  @retval EFI_INVALID_PARAMETER  The string is malformated, or Ip4Address is NULL.
+  @retval EFI_INVALID_PARAMETER  The string is malformatted, or Ip4Address is NULL.
 
 **/
 EFI_STATUS
@@ -1361,13 +1366,13 @@ NetLibAsciiStrToIp4 (
 
 /**
   Convert one Null-terminated ASCII string to EFI_IPv6_ADDRESS. The format of the
-  string is defined in RFC 4291 - Text Pepresentation of Addresses.
+  string is defined in RFC 4291 - Text Representation of Addresses.
 
   @param[in]      String         The pointer to the Ascii string.
   @param[out]     Ip6Address     The pointer to the converted IPv6 address.
 
   @retval EFI_SUCCESS            Converted to an IPv6 address successfully.
-  @retval EFI_INVALID_PARAMETER  The string is malformated, or Ip6Address is NULL.
+  @retval EFI_INVALID_PARAMETER  The string is malformatted, or Ip6Address is NULL.
 
 **/
 EFI_STATUS
@@ -1384,7 +1389,7 @@ NetLibAsciiStrToIp6 (
   @param[out]     Ip4Address     The pointer to the converted IPv4 address.
 
   @retval EFI_SUCCESS            Converted to an IPv4 address successfully.
-  @retval EFI_INVALID_PARAMETER  The string is mal-formated or Ip4Address is NULL.
+  @retval EFI_INVALID_PARAMETER  The string is mal-formatted or Ip4Address is NULL.
   @retval EFI_OUT_OF_RESOURCES   Failed to perform the operation due to lack of resources.
 
 **/
@@ -1397,13 +1402,13 @@ NetLibStrToIp4 (
 
 /**
   Convert one Null-terminated Unicode string to EFI_IPv6_ADDRESS.  The format of
-  the string is defined in RFC 4291 - Text Pepresentation of Addresses.
+  the string is defined in RFC 4291 - Text Representation of Addresses.
 
   @param[in]      String         The pointer to the Ascii string.
   @param[out]     Ip6Address     The pointer to the converted IPv6 address.
 
   @retval EFI_SUCCESS            Converted to an IPv6 address successfully.
-  @retval EFI_INVALID_PARAMETER  The string is malformated or Ip6Address is NULL.
+  @retval EFI_INVALID_PARAMETER  The string is malformatted or Ip6Address is NULL.
   @retval EFI_OUT_OF_RESOURCES   Failed to perform the operation due to a lack of resources.
 
 **/
@@ -1416,7 +1421,7 @@ NetLibStrToIp6 (
 
 /**
   Convert one Null-terminated Unicode string to EFI_IPv6_ADDRESS and prefix length.
-  The format of the string is defined in RFC 4291 - Text Pepresentation of Addresses
+  The format of the string is defined in RFC 4291 - Text Representation of Addresses
   Prefixes: ipv6-address/prefix-length.
 
   @param[in]      String         The pointer to the Ascii string.
@@ -1424,7 +1429,7 @@ NetLibStrToIp6 (
   @param[out]     PrefixLength   The pointer to the converted prefix length.
 
   @retval EFI_SUCCESS            Converted to an  IPv6 address successfully.
-  @retval EFI_INVALID_PARAMETER  The string is malformated, or Ip6Address is NULL.
+  @retval EFI_INVALID_PARAMETER  The string is malformatted, or Ip6Address is NULL.
   @retval EFI_OUT_OF_RESOURCES   Failed to perform the operation due to a lack of resources.
 
 **/
@@ -1493,9 +1498,9 @@ typedef struct {
   UINT32              Signature;
   INTN                RefCnt;  // Reference count to share NET_VECTOR.
   NET_VECTOR_EXT_FREE Free;    // external function to free NET_VECTOR
-  VOID                *Arg;    // opeque argument to Free
+  VOID                *Arg;    // opaque argument to Free
   UINT32              Flag;    // Flags, NET_VECTOR_OWN_FIRST
-  UINT32              Len;     // Total length of the assocated BLOCKs
+  UINT32              Len;     // Total length of the associated BLOCKs
 
   UINT32              BlockNum;
   NET_BLOCK           Block[1];

@@ -36,10 +36,12 @@ ArmVirtGicArchLibConstructor (
   UINT32                IccSre;
   FDT_CLIENT_PROTOCOL   *FdtClient;
   CONST UINT64          *Reg;
-  UINT32                RegElemSize, RegSize;
+  UINT32                RegSize;
+  UINTN                 AddressCells, SizeCells;
   UINTN                 GicRevision;
   EFI_STATUS            Status;
   UINT64                DistBase, CpuBase, RedistBase;
+  RETURN_STATUS         PcdStatus;
 
   Status = gBS->LocateProtocol (&gFdtClientProtocolGuid, NULL,
                   (VOID **)&FdtClient);
@@ -47,11 +49,13 @@ ArmVirtGicArchLibConstructor (
 
   GicRevision = 2;
   Status = FdtClient->FindCompatibleNodeReg (FdtClient, "arm,cortex-a15-gic",
-                        (CONST VOID **)&Reg, &RegElemSize, &RegSize);
+                        (CONST VOID **)&Reg, &AddressCells, &SizeCells,
+                        &RegSize);
   if (Status == EFI_NOT_FOUND) {
     GicRevision = 3;
     Status = FdtClient->FindCompatibleNodeReg (FdtClient, "arm,gic-v3",
-                          (CONST VOID **)&Reg, &RegElemSize, &RegSize);
+                          (CONST VOID **)&Reg, &AddressCells, &SizeCells,
+                          &RegSize);
   }
   if (EFI_ERROR (Status)) {
     return Status;
@@ -76,14 +80,16 @@ ArmVirtGicArchLibConstructor (
 
     // RegProp[0..1] == { GICD base, GICD size }
     DistBase = SwapBytes64 (Reg[0]);
-    ASSERT (DistBase < MAX_UINT32);
+    ASSERT (DistBase < MAX_UINTN);
 
     // RegProp[2..3] == { GICR base, GICR size }
     RedistBase = SwapBytes64 (Reg[2]);
-    ASSERT (RedistBase < MAX_UINT32);
+    ASSERT (RedistBase < MAX_UINTN);
 
-    PcdSet32 (PcdGicDistributorBase, (UINT32)DistBase);
-    PcdSet32 (PcdGicRedistributorsBase, (UINT32)RedistBase);
+    PcdStatus = PcdSet64S (PcdGicDistributorBase, DistBase);
+    ASSERT_RETURN_ERROR (PcdStatus);
+    PcdStatus = PcdSet64S (PcdGicRedistributorsBase, RedistBase);
+    ASSERT_RETURN_ERROR (PcdStatus);
 
     DEBUG ((EFI_D_INFO, "Found GIC v3 (re)distributor @ 0x%Lx (0x%Lx)\n",
       DistBase, RedistBase));
@@ -114,11 +120,13 @@ ArmVirtGicArchLibConstructor (
 
     DistBase = SwapBytes64 (Reg[0]);
     CpuBase  = SwapBytes64 (Reg[2]);
-    ASSERT (DistBase < MAX_UINT32);
-    ASSERT (CpuBase < MAX_UINT32);
+    ASSERT (DistBase < MAX_UINTN);
+    ASSERT (CpuBase < MAX_UINTN);
 
-    PcdSet32 (PcdGicDistributorBase, (UINT32)DistBase);
-    PcdSet32 (PcdGicInterruptInterfaceBase, (UINT32)CpuBase);
+    PcdStatus = PcdSet64S (PcdGicDistributorBase, DistBase);
+    ASSERT_RETURN_ERROR (PcdStatus);
+    PcdStatus = PcdSet64S (PcdGicInterruptInterfaceBase, CpuBase);
+    ASSERT_RETURN_ERROR (PcdStatus);
 
     DEBUG ((EFI_D_INFO, "Found GIC @ 0x%Lx/0x%Lx\n", DistBase, CpuBase));
 

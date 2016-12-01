@@ -27,8 +27,6 @@
 
 #include <Protocol/IpSecConfig.h>
 
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
-
 #define IPSECCONFIG_STATUS_NAME    L"IpSecStatus"
 
 #define BIT(x)   (UINT32) (1 << (x))

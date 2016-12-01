@@ -125,7 +125,7 @@ XhcGetCapability (
   Xhc             = XHC_FROM_THIS (This);
   *MaxSpeed       = EFI_USB_SPEED_SUPER;
   *PortNumber     = (UINT8) (Xhc->HcSParams1.Data.MaxPorts);
-  *Is64BitCapable = (UINT8) (Xhc->HcCParams.Data.Ac64);
+  *Is64BitCapable = (UINT8) Xhc->Support64BitDma;
   DEBUG ((EFI_D_INFO, "XhcGetCapability: %d ports, 64 bit %d\n", *PortNumber, *Is64BitCapable));
 
   gBS->RestoreTPL (OldTpl);
@@ -2020,6 +2020,26 @@ XhcDriverBindingStart (
     return EFI_OUT_OF_RESOURCES;
   }
 
+  //
+  // Enable 64-bit DMA support in the PCI layer if this controller
+  // supports it.
+  //
+  if (Xhc->HcCParams.Data.Ac64 != 0) {
+    Status = PciIo->Attributes (
+                      PciIo,
+                      EfiPciIoAttributeOperationEnable,
+                      EFI_PCI_IO_ATTRIBUTE_DUAL_ADDRESS_CYCLE,
+                      NULL
+                      );
+    if (!EFI_ERROR (Status)) {
+      Xhc->Support64BitDma = TRUE;
+    } else {
+      DEBUG ((EFI_D_WARN,
+        "%a: failed to enable 64-bit DMA on 64-bit capable controller @ %p (%r)\n",
+        __FUNCTION__, Controller, Status));
+    }
+  }
+
   XhcSetBiosOwnership (Xhc);
 
   XhcResetHC (Xhc, XHC_RESET_TIMEOUT);
@@ -2129,7 +2149,7 @@ CLOSE_PCIIO:
 
 
 /**
-  Stop this driver on ControllerHandle. Support stoping any child handles
+  Stop this driver on ControllerHandle. Support stopping any child handles
   created by this driver.
 
   @param  This                 Protocol instance pointer.

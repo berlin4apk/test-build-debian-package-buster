@@ -27,7 +27,6 @@
 #include <Protocol/SmmCommunication.h>
 #include <Protocol/SmmAccess2.h>
 
-#include <Guid/ZeroGuid.h>
 #include <Guid/MemoryProfile.h>
 #include <Guid/PiSmmCommunicationRegionTable.h>
 
@@ -255,7 +254,7 @@ GetDriverNameString (
     return mNameString;
   }
 
-  if (!CompareGuid (&DriverInfo->FileName, &gZeroGuid)) {
+  if (!IsZeroGuid (&DriverInfo->FileName)) {
     //
     // Try to get the image's FFS UI section by image GUID
     //
@@ -344,16 +343,16 @@ ProfileActionToStr (
 
   if (IsForSmm) {
     ActionString = mSmmActionString;
-    ActionStringCount = sizeof (mSmmActionString) / sizeof (mSmmActionString[0]);
+    ActionStringCount = ARRAY_SIZE (mSmmActionString);
   } else {
     ActionString = mActionString;
-    ActionStringCount = sizeof (mActionString) / sizeof (mActionString[0]);
+    ActionStringCount = ARRAY_SIZE (mActionString);
   }
 
   if ((UINTN) (UINT32) Action < ActionStringCount) {
     return ActionString[Action];
   }
-  for (Index = 0; Index < sizeof (mExtActionString) / sizeof (mExtActionString[0]); Index++) {
+  for (Index = 0; Index < ARRAY_SIZE (mExtActionString); Index++) {
     if (mExtActionString[Index].Action == Action) {
       return mExtActionString[Index].String;
     }

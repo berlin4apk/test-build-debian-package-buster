@@ -137,10 +137,6 @@
   #
   FileExplorerLib|Include/Library/FileExplorerLib.h
 
-  ## @libraryclass  Provides image decoding service.
-  #
-  ImageDecoderLib|Include/Library/ImageDecoderLib.h
-
   ## @libraryclass  Provides interfaces about logo display.
   #
   BootLogoLib|Include/Library/BootLogoLib.h
@@ -156,6 +152,14 @@
   ## @libraryclass  Provides services to record memory profile of multilevel caller.
   #
   MemoryProfileLib|Include/Library/MemoryProfileLib.h
+
+  ##  @libraryclass  Provides an interface for performing UEFI Graphics Output Protocol Video blt operations.
+  ##
+  FrameBufferBltLib|Include/Library/FrameBufferBltLib.h
+
+  ## @libraryclass  Provides services to authenticate a UEFI defined FMP Capsule.
+  #
+  FmpAuthenticationLib|Include/Library/FmpAuthenticationLib.h
 
 [Guids]
   ## MdeModule package token space guid
@@ -355,6 +359,9 @@
   ## Include/Guid/PiSmmCommunicationRegionTable.h
   gEdkiiPiSmmCommunicationRegionTableGuid = { 0x4e28ca50, 0xd582, 0x44ac, {0xa1, 0x1f, 0xe3, 0xd5, 0x65, 0x26, 0xdb, 0x34}}
 
+  ## Include/Guid/PiSmmMemoryAttributesTable.h
+  gEdkiiPiSmmMemoryAttributesTableGuid = { 0x6b9fd3f7, 0x16df, 0x45e8, {0xbd, 0x39, 0xb9, 0x4a, 0x66, 0x54, 0x1a, 0x5d}}
+
 [Ppis]
   ## Include/Ppi/AtaController.h
   gPeiAtaControllerPpiGuid       = { 0xa45e60d1, 0xc719, 0x44aa, { 0xb0, 0x7a, 0xaa, 0x77, 0x7f, 0x85, 0x90, 0x6d }}
@@ -459,6 +466,7 @@
 
   ## Include/Protocol/FormBrowserEx.h
   gEfiFormBrowserExProtocolGuid = { 0x1f73b18d, 0x4630, 0x43c1, { 0xa1, 0xde, 0x6f, 0x80, 0x85, 0x5d, 0x7d, 0xa4 } }
+  gEdkiiFormBrowserExProtocolGuid = { 0x1f73b18d, 0x4630, 0x43c1, { 0xa1, 0xde, 0x6f, 0x80, 0x85, 0x5d, 0x7d, 0xa4 } }
 
   ## Include/Protocol/EbcVmTest.h
   gEfiEbcVmTestProtocolGuid = { 0xAAEACCFD, 0xF27B, 0x4C17, { 0xB6, 0x10, 0x75, 0xCA, 0x1F, 0x2D, 0xFB, 0x52 } }
@@ -491,7 +499,7 @@
   gEdkiiSmmReadyToBootProtocolGuid = { 0x6e057ecf, 0xfa99, 0x4f39, { 0x95, 0xbc, 0x59, 0xf9, 0x92, 0x1d, 0x17, 0xe4 } }
 
   ## Include/Protocol/PlatformLogo.h
-  gEdkiiPlatformLogoProtocolGuid = { 0x9b517978, 0xeba1, 0x44e7, { 0xba, 0x65, 0x7c, 0x2c, 0xd0, 0x8b, 0xf8, 0xe9 } }
+  gEdkiiPlatformLogoProtocolGuid = { 0x53cd299f, 0x2bc1, 0x40c0, { 0x8c, 0x07, 0x23, 0xf6, 0x4f, 0xdb, 0x30, 0xe0 } }
 
   ## Include/Protocol/FileExplorer.h
   gEfiFileExplorerProtocolGuid = { 0x2C03C536, 0x4594, 0x4515, { 0x9E, 0x7A, 0xD3, 0xD2, 0x04, 0xFE, 0x13, 0x63 } }
@@ -748,6 +756,17 @@
   #   FALSE - Turn off PS2 mouse extended verification. <BR>
   # @Prompt Turn on PS2 Mouse Extended Verification
   gEfiMdeModulePkgTokenSpaceGuid.PcdPs2MouseExtendedVerification|TRUE|BOOLEAN|0x00010075
+
+  ## Indicates whether 64-bit PCI MMIO BARs should degrade to 32-bit in the presence of an option ROM
+  #  On X64 platforms, Option ROMs may contain code that executes in the context of a legacy BIOS (CSM),
+  #  which requires that all PCI MMIO BARs are located below 4 GB
+  #   TRUE  - All PCI MMIO BARs of a device will be located below 4 GB if it has an option ROM
+  #   FALSE - PCI MMIO BARs of a device may be located above 4 GB even if it has an option ROM
+  # @Prompt Degrade 64-bit PCI MMIO BARs for legacy BIOS option ROMs
+  gEfiMdeModulePkgTokenSpaceGuid.PcdPciDegradeResourceForOptionRom|TRUE|BOOLEAN|0x0001003a
+
+[PcdsFeatureFlag.IA32, PcdsFeatureFlag.ARM, PcdsFeatureFlag.AARCH64]
+  gEfiMdeModulePkgTokenSpaceGuid.PcdPciDegradeResourceForOptionRom|FALSE|BOOLEAN|0x0001003a
 
 [PcdsFeatureFlag.IA32, PcdsFeatureFlag.X64]
   ## Indicates if DxeIpl should switch to long mode to enter DXE phase.
@@ -1129,6 +1148,66 @@
   #  The default value is 0 that means infinite.
   # @Prompt MAX repair count
   gEfiMdeModulePkgTokenSpaceGuid.PcdMaxRepairCount|0x00|UINT32|0x00010076
+
+  ## Status Code for Capsule subclass definitions.<BR><BR>
+  #  EFI_OEM_SPECIFIC_SUBCLASS_CAPSULE  = 0x00810000<BR>
+  #  NOTE: The default value of this PCD may collide with other OEM specific status codes.
+  #        Override the value of this PCD in the platform DSC file as needed.
+  # @Prompt Status Code for Capsule subclass definitions
+  # @ValidList  0x80000003 | 0x00810000
+  gEfiMdeModulePkgTokenSpaceGuid.PcdStatusCodeSubClassCapsule|0x00810000|UINT32|0x00000100
+
+  ## Status Code for Capsule Process Begin.<BR><BR>
+  #  EFI_CAPSULE_PROCESS_CAPSULES_BEGIN  = (EFI_OEM_SPECIFIC | 0x00000001) = 0x00008001<BR>
+  #  NOTE: The default value of this PCD may collide with other OEM specific status codes.
+  #        Override the value of this PCD in the platform DSC file as needed.
+  # @Prompt Status Code for Capsule Process Begin
+  # @ValidList  0x80000003 | 0x00008001
+  gEfiMdeModulePkgTokenSpaceGuid.PcdCapsuleStatusCodeProcessCapsulesBegin|0x00008001|UINT32|0x00000101
+
+  ## Status Code for Capsule Process End.<BR><BR>
+  #  EFI_CAPSULE_PROCESS_CAPSULES_END    = (EFI_OEM_SPECIFIC | 0x00000002) = 0x00008002<BR>
+  #  NOTE: The default value of this PCD may collide with other OEM specific status codes.
+  #        Override the value of this PCD in the platform DSC file as needed.
+  # @Prompt Status Code for Capsule Process End
+  # @ValidList  0x80000003 | 0x00008002
+  gEfiMdeModulePkgTokenSpaceGuid.PcdCapsuleStatusCodeProcessCapsulesEnd|0x00008002|UINT32|0x00000102
+
+  ## Status Code for Capsule Process Updating Firmware.<BR><BR>
+  #  EFI_CAPSULE_UPDATING_FIRMWARE       = (EFI_OEM_SPECIFIC | 0x00000003) = 0x00008003<BR>
+  #  NOTE: The default value of this PCD may collide with other OEM specific status codes.
+  #        Override the value of this PCD in the platform DSC file as needed.
+  # @Prompt Status Code for Capsule Process Updating Firmware
+  # @ValidList  0x80000003 | 0x00008003
+  gEfiMdeModulePkgTokenSpaceGuid.PcdCapsuleStatusCodeUpdatingFirmware|0x00008003|UINT32|0x00000103
+
+  ## Status Code for Capsule Process Update Firmware Success.<BR><BR>
+  #  EFI_CAPSULE_UPDATE_FIRMWARE_SUCCESS = (EFI_OEM_SPECIFIC | 0x00000004) = 0x00008004<BR>
+  #  NOTE: The default value of this PCD may collide with other OEM specific status codes.
+  #        Override the value of this PCD in the platform DSC file as needed.
+  # @Prompt Status Code for Capsule Process Update Firmware Success
+  # @ValidList  0x80000003 | 0x00008004
+  gEfiMdeModulePkgTokenSpaceGuid.PcdCapsuleStatusCodeUpdateFirmwareSuccess|0x00008004|UINT32|0x00000104
+
+  ## Status Code for Capsule Process Update Firmware Failed.<BR><BR>
+  #  EFI_CAPSULE_UPDATE_FIRMWARE_FAILED  = (EFI_OEM_SPECIFIC | 0x00000005) = 0x00008005<BR>
+  #  NOTE: The default value of this PCD may collide with other OEM specific status codes.
+  #        Override the value of this PCD in the platform DSC file as needed.
+  # @Prompt Status Code for Capsule Process Update Firmware Failed
+  # @ValidList  0x80000003 | 0x00008005
+  gEfiMdeModulePkgTokenSpaceGuid.PcdCapsuleStatusCodeUpdateFirmwareFailed|0x00008005|UINT32|0x00000105
+
+  ## Status Code for Capsule Resetting System.<BR><BR>
+  #  EFI_CAPSULE_RESETTING_SYSTEM        = (EFI_OEM_SPECIFIC | 0x00000006) = 0x00008006<BR>
+  #  NOTE: The default value of this PCD may collide with other OEM specific status codes.
+  #        Override the value of this PCD in the platform DSC file as needed.
+  # @Prompt Status Code for Capsule Resetting System
+  # @ValidList  0x80000003 | 0x00008006
+  gEfiMdeModulePkgTokenSpaceGuid.PcdCapsuleStatusCodeResettingSystem|0x00008006|UINT32|0x00000106
+
+  ## CapsuleMax value in capsule report variable.
+  # @Prompt CapsuleMax value in capsule report variable.
+  gEfiMdeModulePkgTokenSpaceGuid.PcdCapsuleMax|0xFFFF|UINT16|0x00000107
 
 [PcdsPatchableInModule, PcdsDynamic, PcdsDynamicEx]
   ## This PCD defines the Console output row. The default value is 25 according to UEFI spec.
@@ -1569,6 +1648,17 @@
   # @Prompt Enable fast PS2 detection
   gEfiMdeModulePkgTokenSpaceGuid.PcdFastPS2Detection|FALSE|BOOLEAN|0x30001044
 
+  ## This is recover file name in PEI phase.
+  #  The file must be in the root directory.
+  #  The file name must be the 8.3 format.
+  #  The PCD data must be in UNICODE format.
+  gEfiMdeModulePkgTokenSpaceGuid.PcdRecoveryFileName|L"FVMAIN.FV"|VOID*|0x30001045
+
+  ## This PCD hold a list GUIDs for the ImageTypeId to indicate the
+  #  FMP capsule is a system FMP.
+  # @Prompt A list of system FMP ImageTypeId GUIDs
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSystemFmpCapsuleImageTypeIdGuid|{0x0}|VOID*|0x30001046
+
 [PcdsPatchableInModule]
   ## Specify memory size with page number for PEI code when
   #  Loading Module at Fixed Address feature is enabled.
@@ -1620,6 +1710,10 @@
   # @Prompt Identify Mapping Page Table pointer.
   # @ValidList  0x80000001 | 0x0
   gEfiMdeModulePkgTokenSpaceGuid.PcdIdentifyMappingPageTablePtr|0x0|UINT64|0x00030002
+
+  ## This dynamic PCD holds the information if there is any test key used by the platform.
+  # @Prompt If there is any test key used by the platform.
+  gEfiMdeModulePkgTokenSpaceGuid.PcdTestKeyUsed|FALSE|BOOLEAN|0x00030003
 
 [UserExtensions.TianoCore."ExtraFiles"]
   MdeModulePkgExtra.uni

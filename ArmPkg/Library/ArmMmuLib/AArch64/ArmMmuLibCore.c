@@ -121,20 +121,8 @@ GcdAttributeToArmAttribute (
   }
 }
 
-// Describe the T0SZ values for each translation table level
-typedef struct {
-  UINTN     MinT0SZ;
-  UINTN     MaxT0SZ;
-  UINTN     LargestT0SZ; // Generally (MaxT0SZ == LargestT0SZ) but at the Level3 Table
-                         // the MaxT0SZ is not at the boundary of the table
-} T0SZ_DESCRIPTION_PER_LEVEL;
-
-// Map table for the corresponding Level of Table
-STATIC CONST T0SZ_DESCRIPTION_PER_LEVEL T0SZPerTableLevel[] = {
-    { 16, 24, 24 }, // Table Level 0
-    { 25, 33, 33 }, // Table Level 1
-    { 34, 39, 42 }  // Table Level 2
-};
+#define MIN_T0SZ        16
+#define BITS_PER_LEVEL  9
 
 VOID
 GetRootTranslationTableInfo (
@@ -143,28 +131,13 @@ GetRootTranslationTableInfo (
   OUT UINTN   *TableEntryCount
   )
 {
-  UINTN Index;
-
-  // Identify the level of the root table from the given T0SZ
-  for (Index = 0; Index < sizeof (T0SZPerTableLevel) / sizeof (T0SZ_DESCRIPTION_PER_LEVEL); Index++) {
-    if (T0SZ <= T0SZPerTableLevel[Index].MaxT0SZ) {
-      break;
-    }
-  }
-
-  // If we have not found the corresponding maximum T0SZ then we use the last one
-  if (Index == sizeof (T0SZPerTableLevel) / sizeof (T0SZ_DESCRIPTION_PER_LEVEL)) {
-    Index--;
-  }
-
   // Get the level of the root table
   if (TableLevel) {
-    *TableLevel = Index;
+    *TableLevel = (T0SZ - MIN_T0SZ) / BITS_PER_LEVEL;
   }
 
-  // The Size of the Table is 2^(T0SZ-LargestT0SZ)
   if (TableEntryCount) {
-    *TableEntryCount = 1 << (T0SZPerTableLevel[Index].LargestT0SZ - T0SZ + 1);
+    *TableEntryCount = 1UL << (BITS_PER_LEVEL - (T0SZ - MIN_T0SZ) % BITS_PER_LEVEL);
   }
 }
 
@@ -325,7 +298,7 @@ GetBlockEntryListFromAddress (
         }
 
         // Create a new translation table
-        TranslationTable = (UINT64*)AllocateAlignedPages (EFI_SIZE_TO_PAGES(TT_ENTRY_COUNT * sizeof(UINT64)), TT_ALIGNMENT_DESCRIPTION_TABLE);
+        TranslationTable = AllocatePages (1);
         if (TranslationTable == NULL) {
           return NULL;
         }
@@ -348,7 +321,7 @@ GetBlockEntryListFromAddress (
         //
 
         // Create a new translation table
-        TranslationTable = (UINT64*)AllocateAlignedPages (EFI_SIZE_TO_PAGES(TT_ENTRY_COUNT * sizeof(UINT64)), TT_ALIGNMENT_DESCRIPTION_TABLE);
+        TranslationTable = AllocatePages (1);
         if (TranslationTable == NULL) {
           return NULL;
         }
@@ -580,13 +553,12 @@ ArmConfigureMmu (
   )
 {
   VOID*                         TranslationTable;
-  UINTN                         TranslationTablePageCount;
+  VOID*                         TranslationTableBuffer;
   UINT32                        TranslationTableAttribute;
-  ARM_MEMORY_REGION_DESCRIPTOR *MemoryTableEntry;
   UINT64                        MaxAddress;
-  UINT64                        TopAddress;
   UINTN                         T0SZ;
   UINTN                         RootTableEntryCount;
+  UINTN                         RootTableEntrySize;
   UINT64                        TCR;
   RETURN_STATUS                 Status;
 
@@ -595,16 +567,8 @@ ArmConfigureMmu (
     return RETURN_INVALID_PARAMETER;
   }
 
-  // Identify the highest address of the memory table
-  MaxAddress = MemoryTable->PhysicalBase + MemoryTable->Length - 1;
-  MemoryTableEntry = MemoryTable;
-  while (MemoryTableEntry->Length != 0) {
-    TopAddress = MemoryTableEntry->PhysicalBase + MemoryTableEntry->Length - 1;
-    if (TopAddress > MaxAddress) {
-      MaxAddress = TopAddress;
-    }
-    MemoryTableEntry++;
-  }
+  // Cover the entire GCD memory space
+  MaxAddress = (1UL << PcdGet8 (PcdPrePiCpuMemorySize)) - 1;
 
   // Lookup the Table Level to get the information
   LookupAddresstoRootTable (MaxAddress, &T0SZ, &RootTableEntryCount);
@@ -666,9 +630,19 @@ ArmConfigureMmu (
   // Set TCR
   ArmSetTCR (TCR);
 
-  // Allocate pages for translation table
-  TranslationTablePageCount = EFI_SIZE_TO_PAGES(RootTableEntryCount * sizeof(UINT64));
-  TranslationTable = (UINT64*)AllocateAlignedPages (TranslationTablePageCount, TT_ALIGNMENT_DESCRIPTION_TABLE);
+  // Allocate pages for translation table. Pool allocations are 8 byte aligned,
+  // but we may require a higher alignment based on the size of the root table.
+  RootTableEntrySize = RootTableEntryCount * sizeof(UINT64);
+  if (RootTableEntrySize < EFI_PAGE_SIZE / 2) {
+    TranslationTableBuffer = AllocatePool (2 * RootTableEntrySize - 8);
+    //
+    // Naturally align the root table. Preserves possible NULL value
+    //
+    TranslationTable = (VOID *)((UINTN)(TranslationTableBuffer - 1) | (RootTableEntrySize - 1)) + 1;
+  } else {
+    TranslationTable = AllocatePages (1);
+    TranslationTableBuffer = NULL;
+  }
   if (TranslationTable == NULL) {
     return RETURN_OUT_OF_RESOURCES;
   }
@@ -682,10 +656,10 @@ ArmConfigureMmu (
   }
 
   if (TranslationTableSize != NULL) {
-    *TranslationTableSize = RootTableEntryCount * sizeof(UINT64);
+    *TranslationTableSize = RootTableEntrySize;
   }
 
-  ZeroMem (TranslationTable, RootTableEntryCount * sizeof(UINT64));
+  ZeroMem (TranslationTable, RootTableEntrySize);
 
   // Disable MMU and caches. ArmDisableMmu() also invalidates the TLBs
   ArmDisableMmu ();
@@ -745,7 +719,11 @@ ArmConfigureMmu (
   return RETURN_SUCCESS;
 
 FREE_TRANSLATION_TABLE:
-  FreePages (TranslationTable, TranslationTablePageCount);
+  if (TranslationTableBuffer != NULL) {
+    FreePool (TranslationTableBuffer);
+  } else {
+    FreePages (TranslationTable, 1);
+  }
   return Status;
 }
 

@@ -707,7 +707,7 @@ TranslatePciOfwNodes (
   // Parse the OFW nodes starting with the first non-bridge node.
   //
   PciDevFun[1] = 0;
-  NumEntries = sizeof (PciDevFun) / sizeof (PciDevFun[0]);
+  NumEntries = ARRAY_SIZE (PciDevFun);
   if (ParseUnitAddressHexList (
         OfwNode[FirstNonBridge].UnitAddress,
         PciDevFun,
@@ -872,13 +872,13 @@ TranslatePciOfwNodes (
     //
     // UEFI device path prefix:
     //
-    //   PciRoot(0x0)/Pci(0x6,0x0)/HD( -- if PCI function is 0 or absent
-    //   PciRoot(0x0)/Pci(0x6,0x3)/HD( -- if PCI function is present and nonzero
+    //   PciRoot(0x0)/Pci(0x6,0x0) -- if PCI function is 0 or absent
+    //   PciRoot(0x0)/Pci(0x6,0x3) -- if PCI function is present and nonzero
     //
     Written = UnicodeSPrintAsciiFormat (
       Translated,
       *TranslatedSize * sizeof (*Translated), // BufferSize in bytes
-      "PciRoot(0x%x)%s/Pci(0x%Lx,0x%Lx)/HD(",
+      "PciRoot(0x%x)%s/Pci(0x%Lx,0x%Lx)",
       PciRoot,
       Bridges,
       PciDevFun[0],
@@ -910,7 +910,7 @@ TranslatePciOfwNodes (
     UINT64 TargetLun[2];
 
     TargetLun[1] = 0;
-    NumEntries = sizeof (TargetLun) / sizeof (TargetLun[0]);
+    NumEntries = ARRAY_SIZE (TargetLun);
     if (ParseUnitAddressHexList (
           OfwNode[FirstNonBridge + 2].UnitAddress,
           TargetLun,
@@ -958,7 +958,7 @@ TranslatePciOfwNodes (
     UINTN  RequiredEntries;
     UINT8  *Eui64;
 
-    RequiredEntries = sizeof (Namespace) / sizeof (Namespace[0]);
+    RequiredEntries = ARRAY_SIZE (Namespace);
     NumEntries = RequiredEntries;
     if (ParseUnitAddressHexList (
           OfwNode[FirstNonBridge + 1].UnitAddress,
@@ -1117,12 +1117,12 @@ TranslateMmioOfwNodes (
     //
     // UEFI device path prefix:
     //
-    //   <VenHwString>/HD(
+    //   <VenHwString>
     //
     Written = UnicodeSPrintAsciiFormat (
                 Translated,
                 *TranslatedSize * sizeof (*Translated), // BufferSize in bytes
-                "%s/HD(",
+                "%s",
                 VenHwString
                 );
   } else if (NumNodes >= 3 &&
@@ -1145,7 +1145,7 @@ TranslateMmioOfwNodes (
     UINT64 TargetLun[2];
 
     TargetLun[1] = 0;
-    NumEntries = sizeof (TargetLun) / sizeof (TargetLun[0]);
+    NumEntries = ARRAY_SIZE (TargetLun);
     if (ParseUnitAddressHexList (
           OfwNode[2].UnitAddress,
           TargetLun,
@@ -1803,7 +1803,7 @@ SetBootOrderFromQemu (
   //
   // translate each OpenFirmware path
   //
-  TranslatedSize = sizeof (Translated) / sizeof (Translated[0]);
+  TranslatedSize = ARRAY_SIZE (Translated);
   Status = TranslateOfwPath (&FwCfgPtr, ExtraPciRoots, Translated,
              &TranslatedSize);
   while (Status == RETURN_SUCCESS ||
@@ -1835,7 +1835,7 @@ SetBootOrderFromQemu (
       } // scanned all active boot options
     }   // translation successful
 
-    TranslatedSize = sizeof (Translated) / sizeof (Translated[0]);
+    TranslatedSize = ARRAY_SIZE (Translated);
     Status = TranslateOfwPath (&FwCfgPtr, ExtraPciRoots, Translated,
                &TranslatedSize);
   } // scanning of OpenFirmware paths done

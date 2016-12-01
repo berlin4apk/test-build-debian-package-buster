@@ -617,33 +617,6 @@ FillBufferWithTCG2EventLogFormat (
 }
 
 /**
-  Check if buffer is all zero.
-
-  @param[in] Buffer      Buffer to be checked.
-  @param[in] BufferSize  Size of buffer to be checked.
-
-  @retval TRUE  Buffer is all zero.
-  @retval FALSE Buffer is not all zero.
-**/
-BOOLEAN
-IsZeroBuffer (
-  IN VOID  *Buffer,
-  IN UINTN BufferSize
-  )
-{
-  UINT8 *BufferData;
-  UINTN Index;
-
-  BufferData = Buffer;
-  for (Index = 0; Index < BufferSize; Index++) {
-    if (BufferData[Index] != 0) {
-      return FALSE;
-    }
-  }
-  return TRUE;
-}
-
-/**
   This function publish the TCG2 configuration Form for TPM device.
 
   @param[in, out]  PrivateData   Points to TCG2 configuration private data.

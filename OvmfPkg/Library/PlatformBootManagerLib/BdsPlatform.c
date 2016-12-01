@@ -38,11 +38,6 @@ CONST UINT8 PciHostIrqs[] = {
 };
 
 //
-// Array Size macro
-//
-#define ARRAY_SIZE(array) (sizeof (array) / sizeof (array[0]))
-
-//
 // Type definitions
 //
 
@@ -342,7 +337,7 @@ PlatformBootManagerBeforeConsole (
 
 Routine Description:
 
-  Platform Bds init. Incude the platform firmware vendor, revision
+  Platform Bds init. Include the platform firmware vendor, revision
   and so crc check.
 
 Arguments:
@@ -353,8 +348,9 @@ Returns:
 
 --*/
 {
-  EFI_HANDLE Handle;
-  EFI_STATUS Status;
+  EFI_HANDLE    Handle;
+  EFI_STATUS    Status;
+  RETURN_STATUS PcdStatus;
 
   DEBUG ((EFI_D_INFO, "PlatformBootManagerBeforeConsole\n"));
   InstallDevicePathCallback ();
@@ -393,8 +389,15 @@ Returns:
                   NULL);
   ASSERT_EFI_ERROR (Status);
 
+  //
+  // Dispatch deferred images after EndOfDxe event and ReadyToLock installation.
+  //
+  EfiBootManagerDispatchDeferredImages ();
+
   PlatformInitializeConsole (gPlatformConsole);
-  PcdSet16 (PcdPlatformBootTimeOut, GetFrontPageTimeoutFromQemu ());
+  PcdStatus = PcdSet16S (PcdPlatformBootTimeOut,
+                GetFrontPageTimeoutFromQemu ());
+  ASSERT_RETURN_ERROR (PcdStatus);
 
   PlatformRegisterOptionsAndKeys ();
 }
@@ -566,7 +569,7 @@ GetGopDevicePath (
   }
 
   //
-  // Try to connect this handle, so that GOP dirver could start on this
+  // Try to connect this handle, so that GOP driver could start on this
   // device and create child handles with GraphicsOutput Protocol installed
   // on them, then we get device paths of these child handles and select
   // them as possible console device.
@@ -598,7 +601,7 @@ GetGopDevicePath (
         // In current implementation, we only enable one of the child handles
         // as console device, i.e. sotre one of the child handle's device
         // path to variable "ConOut"
-        // In futhure, we could select all child handles to be console device
+        // In future, we could select all child handles to be console device
         //
 
         *GopDevicePath = TempDevicePath;
@@ -618,7 +621,7 @@ GetGopDevicePath (
 }
 
 EFI_STATUS
-PreparePciVgaDevicePath (
+PreparePciDisplayDevicePath (
   IN EFI_HANDLE                DeviceHandle
   )
 /*++
@@ -868,14 +871,14 @@ DetectAndPreparePlatformPciDevicePath (
   }
 
   //
-  // Here we decide which VGA device to enable in PCI bus
+  // Here we decide which display device to enable in PCI bus
   //
-  if (IS_PCI_VGA (Pci)) {
+  if (IS_PCI_DISPLAY (Pci)) {
     //
     // Add them to ConOut.
     //
-    DEBUG ((EFI_D_INFO, "Found PCI VGA device\n"));
-    PreparePciVgaDevicePath (Handle);
+    DEBUG ((EFI_D_INFO, "Found PCI display device\n"));
+    PreparePciDisplayDevicePath (Handle);
     return EFI_SUCCESS;
   }
 
@@ -915,7 +918,7 @@ Routine Description:
 
 Arguments:
 
-  PlatformConsole         - Predfined platform default console device array.
+  PlatformConsole         - Predefined platform default console device array.
 --*/
 {
   UINTN                              Index;
@@ -936,7 +939,7 @@ Arguments:
 
     //
     // Have chance to connect the platform default console,
-    // the platform default console is the minimue device group
+    // the platform default console is the minimum device group
     // the platform should support
     //
     for (Index = 0; PlatformConsole[Index].DevicePath != NULL; ++Index) {
@@ -1255,8 +1258,8 @@ ConnectRecursivelyIfPciMassStorage (
   This notification function is invoked when the
   EMU Variable FVB has been changed.
 
-  @param  Event                 The event that occured
-  @param  Context               For EFI compatiblity.  Not used.
+  @param  Event                 The event that occurred
+  @param  Context               For EFI compatibility.  Not used.
 
 **/
 VOID
@@ -1281,6 +1284,7 @@ VisitingFileSystemInstance (
 {
   EFI_STATUS      Status;
   STATIC BOOLEAN  ConnectedToFileSystem = FALSE;
+  RETURN_STATUS   PcdStatus;
 
   if (ConnectedToFileSystem) {
     return EFI_ALREADY_STARTED;
@@ -1300,7 +1304,9 @@ VisitingFileSystemInstance (
       NULL,
       &mEmuVariableEventReg
       );
-  PcdSet64 (PcdEmuVariableEvent, (UINT64)(UINTN) mEmuVariableEvent);
+  PcdStatus = PcdSet64S (PcdEmuVariableEvent,
+                (UINT64)(UINTN) mEmuVariableEvent);
+  ASSERT_RETURN_ERROR (PcdStatus);
 
   return EFI_SUCCESS;
 }
@@ -1327,7 +1333,7 @@ PlatformBdsConnectSequence (
 
 Routine Description:
 
-  Connect with predeined platform connect sequence,
+  Connect with predefined platform connect sequence,
   the OEM/IBV can customize with their own connect sequence.
 
 Arguments:
@@ -1409,7 +1415,7 @@ PlatformBootManagerAfterConsole (
 
 Routine Description:
 
-  The function will excute with as the platform policy, current policy
+  The function will execute with as the platform policy, current policy
   is driven by boot mode. IBV/OEM can customize this code for their specific
   policy action.
 
@@ -1445,13 +1451,7 @@ Routine Description:
   //
   // Logo show
   //
-  BootLogoEnableLogo (
-    ImageFormatBmp,                          // ImageFormat
-    PcdGetPtr (PcdLogoFile),                 // Logo
-    EdkiiPlatformLogoDisplayAttributeCenter, // Attribute
-    0,                                       // OffsetX
-    0                                        // OffsetY
-    );
+  BootLogoEnableLogo ();
 
   //
   // Perform some platform specific connect sequence
@@ -1480,8 +1480,8 @@ Routine Description:
   This notification function is invoked when an instance of the
   EFI_DEVICE_PATH_PROTOCOL is produced.
 
-  @param  Event                 The event that occured
-  @param  Context               For EFI compatiblity.  Not used.
+  @param  Event                 The event that occurred
+  @param  Context               For EFI compatibility.  Not used.
 
 **/
 VOID

@@ -429,7 +429,7 @@ PciHostBridgeResourceAllocator (
       //
 
       //
-      // If non-stardard PCI Bridge I/O window alignment is supported,
+      // If non-standard PCI Bridge I/O window alignment is supported,
       // set I/O aligment to minimum possible alignment for root bridge.
       //
       IoBridge = CreateResourceNode (
@@ -868,7 +868,7 @@ PciHostBridgeResourceAllocator (
       Resources[2] = PMem32Bridge;
       Resources[3] = Mem64Bridge;
       Resources[4] = PMem64Bridge;
-      DumpResourceMap (RootBridgeDev, Resources, sizeof (Resources) / sizeof (Resources[0]));
+      DumpResourceMap (RootBridgeDev, Resources, ARRAY_SIZE (Resources));
     );
 
     FreePool (AcpiConfig);

@@ -2,6 +2,7 @@
   Member functions of EFI_SHELL_PARAMETERS_PROTOCOL and functions for creation,
   manipulation, and initialization of EFI_SHELL_PARAMETERS_PROTOCOL.
 
+  (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
   Copyright (C) 2014, Red Hat, Inc.
   (C) Copyright 2013 Hewlett-Packard Development Company, L.P.<BR>
   Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
@@ -18,6 +19,160 @@
 #include "Shell.h"
 
 BOOLEAN AsciiRedirection = FALSE;
+
+/**
+  Return the next parameter's end from a command line string.
+
+  @param[in] String        the string to parse
+**/
+CONST CHAR16*
+FindEndOfParameter(
+  IN CONST CHAR16 *String
+  )
+{
+  CONST CHAR16 *First;
+  CONST CHAR16 *CloseQuote;
+
+  First = FindFirstCharacter(String, L" \"", L'^');
+
+  //
+  // nothing, all one parameter remaining
+  //
+  if (*First == CHAR_NULL) {
+    return (First);
+  }
+
+  //
+  // If space before a quote (or neither found, i.e. both CHAR_NULL),
+  // then that's the end.
+  //
+  if (*First == L' ') {
+    return (First);
+  }
+
+  CloseQuote = FindFirstCharacter (First+1, L"\"", L'^');
+
+  //
+  // We did not find a terminator...
+  //
+  if (*CloseQuote == CHAR_NULL) {
+    return (NULL);
+  }
+
+  return (FindEndOfParameter (CloseQuote+1));
+}
+
+/**
+  Return the next parameter from a command line string.
+
+  This function moves the next parameter from Walker into TempParameter and moves
+  Walker up past that parameter for recursive calling.  When the final parameter
+  is moved *Walker will be set to NULL;
+
+  Temp Parameter must be large enough to hold the parameter before calling this
+  function.
+
+  This will also remove all remaining ^ characters after processing.
+
+  @param[in, out] Walker          pointer to string of command line.  Adjusted to
+                                  reminaing command line on return
+  @param[in, out] TempParameter   pointer to string of command line item extracted.
+  @param[in]      Length          buffer size of TempParameter.
+  @param[in]      StripQuotation  if TRUE then strip the quotation marks surrounding
+                                  the parameters.
+
+  @return   EFI_INALID_PARAMETER  A required parameter was NULL or pointed to a NULL or empty string.
+  @return   EFI_NOT_FOUND         A closing " could not be found on the specified string
+**/
+EFI_STATUS
+GetNextParameter(
+  IN OUT CHAR16   **Walker,
+  IN OUT CHAR16   **TempParameter,
+  IN CONST UINTN  Length,
+  IN BOOLEAN      StripQuotation
+  )
+{
+  CONST CHAR16 *NextDelim;
+
+  if (Walker           == NULL
+    ||*Walker          == NULL
+    ||TempParameter    == NULL
+    ||*TempParameter   == NULL
+    ){
+    return (EFI_INVALID_PARAMETER);
+  }
+
+
+  //
+  // make sure we dont have any leading spaces
+  //
+  while ((*Walker)[0] == L' ') {
+      (*Walker)++;
+  }
+
+  //
+  // make sure we still have some params now...
+  //
+  if (StrLen(*Walker) == 0) {
+DEBUG_CODE_BEGIN();
+    *Walker        = NULL;
+DEBUG_CODE_END();
+    return (EFI_INVALID_PARAMETER);
+  }
+
+  NextDelim = FindEndOfParameter(*Walker);
+
+  if (NextDelim == NULL){
+DEBUG_CODE_BEGIN();
+    *Walker        = NULL;
+DEBUG_CODE_END();
+    return (EFI_NOT_FOUND);
+  }
+
+  StrnCpyS(*TempParameter, Length / sizeof(CHAR16), (*Walker), NextDelim - *Walker);
+
+  //
+  // Add a CHAR_NULL if we didnt get one via the copy
+  //
+  if (*NextDelim != CHAR_NULL) {
+    (*TempParameter)[NextDelim - *Walker] = CHAR_NULL;
+  }
+
+  //
+  // Update Walker for the next iteration through the function
+  //
+  *Walker = (CHAR16*)NextDelim;
+
+  //
+  // Remove any non-escaped quotes in the string
+  // Remove any remaining escape characters in the string
+  //
+  for (NextDelim = FindFirstCharacter(*TempParameter, L"\"^", CHAR_NULL) 
+    ; *NextDelim != CHAR_NULL 
+    ; NextDelim = FindFirstCharacter(NextDelim, L"\"^", CHAR_NULL)
+    ) {
+    if (*NextDelim == L'^') {
+
+      //
+      // eliminate the escape ^
+      //
+      CopyMem ((CHAR16*)NextDelim, NextDelim + 1, StrSize (NextDelim + 1));
+      NextDelim++;
+    } else if (*NextDelim == L'\"') {
+
+      //
+      // eliminate the unescaped quote
+      //
+      if (StripQuotation) {
+        CopyMem ((CHAR16*)NextDelim, NextDelim + 1, StrSize (NextDelim + 1));
+	  } else{
+        NextDelim++;
+	  }
+    }
+  }
+
+  return EFI_SUCCESS;
+}
 
 /**
   Function to populate Argc and Argv.
@@ -39,7 +194,6 @@ BOOLEAN AsciiRedirection = FALSE;
   @return EFI_OUT_OF_RESOURCES  a memory allocation failed.
 **/
 EFI_STATUS
-EFIAPI
 ParseCommandLineToArgs(
   IN CONST CHAR16 *CommandLine,
   IN BOOLEAN      StripQuotation,
@@ -82,7 +236,7 @@ ParseCommandLineToArgs(
       ; Walker != NULL && *Walker != CHAR_NULL
       ; Count++
       ) {
-    if (EFI_ERROR (ShellGetNextParameter (&Walker, TempParameter, Size, TRUE))) {
+    if (EFI_ERROR(GetNextParameter(&Walker, &TempParameter, Size, TRUE))) {
       break;
     }
   }
@@ -100,7 +254,7 @@ ParseCommandLineToArgs(
   Walker = (CHAR16*)NewCommandLine;
   while(Walker != NULL && *Walker != CHAR_NULL) {
     SetMem16(TempParameter, Size, CHAR_NULL);
-    if (EFI_ERROR (ShellGetNextParameter (&Walker, TempParameter, Size, StripQuotation))) {
+    if (EFI_ERROR(GetNextParameter(&Walker, &TempParameter, Size, StripQuotation))) {
       Status = EFI_INVALID_PARAMETER;
       goto Done;
     }
@@ -139,7 +293,6 @@ Done:
   @sa ParseCommandLineToArgs
 **/
 EFI_STATUS
-EFIAPI
 CreatePopulateInstallShellParametersProtocol (
   IN OUT EFI_SHELL_PARAMETERS_PROTOCOL  **NewShellParameters,
   IN OUT BOOLEAN                        *RootShellInstance
@@ -281,7 +434,6 @@ CreatePopulateInstallShellParametersProtocol (
   @sa UninstallProtocolInterface
 **/
 EFI_STATUS
-EFIAPI
 CleanUpShellParametersProtocol (
   IN OUT EFI_SHELL_PARAMETERS_PROTOCOL  *NewShellParameters
   )
@@ -328,7 +480,6 @@ CleanUpShellParametersProtocol (
   @return An error upon failure.
 **/
 EFI_STATUS
-EFIAPI
 IsUnicodeFile(
   IN CONST CHAR16 *FileName
   )
@@ -363,7 +514,6 @@ IsUnicodeFile(
   @param[in, out] TheString  A pointer to the string to update.
 **/
 VOID
-EFIAPI
 StripQuotes (
   IN OUT CHAR16 *TheString
   )
@@ -415,7 +565,6 @@ CalculateEfiHdrCrc (
   @return       The modified FileName.
 **/
 CHAR16*
-EFIAPI
 FixFileName (
   IN CHAR16 *FileName
   )
@@ -458,7 +607,6 @@ FixFileName (
   @return       The modified FileName.
 **/
 CHAR16*
-EFIAPI
 FixVarName (
   IN CHAR16 *FileName
   )
@@ -487,7 +635,6 @@ FixVarName (
   @retval EFI_SUCCESS   The unicode file tag has been moved successfully.
 **/
 EFI_STATUS
-EFIAPI
 RemoveFileTag(
   IN SHELL_FILE_HANDLE *Handle
   )
@@ -551,7 +698,6 @@ WriteFileTag (
   @retval   EFI_OUT_OF_RESOURCES        A memory allocation failed.
 **/
 EFI_STATUS
-EFIAPI
 UpdateStdInStdOutStdErr(
   IN OUT EFI_SHELL_PARAMETERS_PROTOCOL  *ShellParameters,
   IN CHAR16                             *NewCommandLine,
@@ -1018,7 +1164,7 @@ UpdateStdInStdOutStdErr(
         if (TempHandle == NULL) {
           Status = EFI_INVALID_PARAMETER;
         } else {
-          if (StrStr(StdOutFileName, L"NUL")==StdOutFileName) {
+          if (gUnicodeCollation->MetaiMatch (gUnicodeCollation, StdOutFileName, L"NUL")) {
             //no-op
           } else if (!OutAppend && OutUnicode && !EFI_ERROR(Status)) {
             Status = WriteFileTag (TempHandle);
@@ -1151,7 +1297,6 @@ UpdateStdInStdOutStdErr(
   @param[in] SystemTableInfo           Pointer to old system table information.
 **/
 EFI_STATUS
-EFIAPI
 RestoreStdInStdOutStdErr (
   IN OUT EFI_SHELL_PARAMETERS_PROTOCOL  *ShellParameters,
   IN  SHELL_FILE_HANDLE                 *OldStdIn,
@@ -1228,7 +1373,6 @@ RestoreStdInStdOutStdErr (
   @retval   EFI_OUT_OF_RESOURCES        A memory allocation failed.
 **/
 EFI_STATUS
-EFIAPI
 UpdateArgcArgv(
   IN OUT EFI_SHELL_PARAMETERS_PROTOCOL  *ShellParameters,
   IN CONST CHAR16                       *NewCommandLine,
@@ -1270,7 +1414,6 @@ UpdateArgcArgv(
   @param[in] OldArgc                    pointer to old number of items in Argv list
 **/
 VOID
-EFIAPI
 RestoreArgcArgv(
   IN OUT EFI_SHELL_PARAMETERS_PROTOCOL  *ShellParameters,
   IN CHAR16                             ***OldArgv,

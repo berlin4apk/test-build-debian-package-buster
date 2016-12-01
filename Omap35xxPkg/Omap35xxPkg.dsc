@@ -33,7 +33,7 @@
 [LibraryClasses.common]
   DebugLib|MdePkg/Library/BaseDebugLibNull/BaseDebugLibNull.inf
 
-  ArmLib|ArmPkg/Library/ArmLib/ArmV7/ArmV7Lib.inf
+  ArmLib|ArmPkg/Library/ArmLib/ArmBaseLib.inf
   MemoryAllocationLib|MdePkg/Library/UefiMemoryAllocationLib/UefiMemoryAllocationLib.inf
 
   BaseLib|MdePkg/Library/BaseLib/BaseLib.inf
@@ -62,6 +62,8 @@
   UefiApplicationEntryPoint|MdePkg/Library/UefiApplicationEntryPoint/UefiApplicationEntryPoint.inf
   DmaLib|ArmPkg/Library/ArmDmaLib/ArmDmaLib.inf
 
+  TimerLib|Omap35xxPkg/Library/Omap35xxTimerLib/Omap35xxTimerLib.inf
+
 #
 # Assume everything is fixed at build
 #
@@ -80,12 +82,8 @@
 
 
 [LibraryClasses.ARM]
-  #
-  # Note: This NULL library feature is not yet in the edk2/BaseTools, but it is checked in to
-  # the BaseTools project. So you need to build with the BaseTools project util this feature gets synced.
-  #
   NULL|ArmPkg/Library/CompilerIntrinsicsLib/CompilerIntrinsicsLib.inf
-
+  NULL|MdePkg/Library/BaseStackCheckLib/BaseStackCheckLib.inf
 
 [BuildOptions]
   XCODE:*_*_ARM_ARCHCC_FLAGS     == -arch armv7 -march=armv7
@@ -98,6 +96,7 @@
   RVCT:*_*_ARM_ARCHCC_FLAGS     == --cpu 7-A
   RVCT:*_*_ARM_ARCHASM_FLAGS    == --cpu 7-A
 
+  *_*_*_CC_FLAGS = -DDISABLE_NEW_DEPRECATED_INTERFACES
 
 ################################################################################
 #
@@ -140,12 +139,8 @@
 
   gEfiMdePkgTokenSpaceGuid.PcdReportStatusCodePropertyMask|0x07
 
-  gEmbeddedTokenSpaceGuid.PcdPrePiTempMemorySize|0
-  gEmbeddedTokenSpaceGuid.PcdPrePiBfvBaseAddress|0
-  gEmbeddedTokenSpaceGuid.PcdPrePiBfvSize|0
   gEmbeddedTokenSpaceGuid.PcdFlashFvMainBase|0
   gEmbeddedTokenSpaceGuid.PcdFlashFvMainSize|0
-  gEmbeddedTokenSpaceGuid.PcdPrePiHobBase|0x80001000
   gEmbeddedTokenSpaceGuid.PcdPrePiStackBase|0x87FE0000 # stack at top of memory
   gEmbeddedTokenSpaceGuid.PcdPrePiStackSize|0x20000  # 128K stack
   gArmTokenSpaceGuid.PcdCpuVectorBaseAddress|0x80000000
@@ -187,5 +182,13 @@
   Omap35xxPkg/TimerDxe/TimerDxe.inf
   Omap35xxPkg/TPS65950Dxe/TPS65950.inf
 
+  Omap35xxPkg/LcdGraphicsOutputDxe/LcdGraphicsOutputDxe.inf
+  Omap35xxPkg/Library/DebugAgentTimerLib/DebugAgentTimerLib.inf
+  Omap35xxPkg/Library/EblCmdLib/EblCmdLib.inf
+  Omap35xxPkg/Library/GdbSerialLib/GdbSerialLib.inf
+  Omap35xxPkg/Library/RealTimeClockLib/RealTimeClockLib.inf
+  Omap35xxPkg/Library/SerialPortLib/SerialPortLib.inf
+  Omap35xxPkg/MmcHostDxe/MmcHostDxe.inf
+  Omap35xxPkg/PciEmulation/PciEmulation.inf
 
 

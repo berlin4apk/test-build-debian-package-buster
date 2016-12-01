@@ -86,6 +86,81 @@ BdsDxeOnConnectConInCallBack (
     DEBUG ((EFI_D_WARN, "[Bds] Connect ConIn failed - %r!!!\n", Status));
   }
 }
+/**
+  Notify function for event group EFI_EVENT_GROUP_READY_TO_BOOT. This is used to
+  check whether there is remaining deferred load images.
+
+  @param[in]  Event   The Event that is being processed.
+  @param[in]  Context The Event Context.
+
+**/
+VOID
+EFIAPI
+CheckDeferredLoadImageOnReadyToBoot (
+  IN EFI_EVENT        Event,
+  IN VOID             *Context
+  )
+{
+  EFI_STATUS                         Status;
+  EFI_DEFERRED_IMAGE_LOAD_PROTOCOL   *DeferredImage;
+  UINTN                              HandleCount;
+  EFI_HANDLE                         *Handles;
+  UINTN                              Index;
+  UINTN                              ImageIndex;
+  EFI_DEVICE_PATH_PROTOCOL           *ImageDevicePath;
+  VOID                               *Image;
+  UINTN                              ImageSize;
+  BOOLEAN                            BootOption;
+  CHAR16                             *DevicePathStr;
+
+  //
+  // Find all the deferred image load protocols.
+  //
+  HandleCount = 0;
+  Handles = NULL;
+  Status = gBS->LocateHandleBuffer (
+    ByProtocol,
+    &gEfiDeferredImageLoadProtocolGuid,
+    NULL,
+    &HandleCount,
+    &Handles
+  );
+  if (EFI_ERROR (Status)) {
+    return;
+  }
+
+  for (Index = 0; Index < HandleCount; Index++) {
+    Status = gBS->HandleProtocol (Handles[Index], &gEfiDeferredImageLoadProtocolGuid, (VOID **) &DeferredImage);
+    if (EFI_ERROR (Status)) {
+      continue;
+    }
+
+    for (ImageIndex = 0; ; ImageIndex++) {
+      //
+      // Load all the deferred images in this protocol instance.
+      //
+      Status = DeferredImage->GetImageInfo (
+        DeferredImage,
+        ImageIndex,
+        &ImageDevicePath,
+        (VOID **) &Image,
+        &ImageSize,
+        &BootOption
+      );
+      if (EFI_ERROR (Status)) {
+        break;
+      }
+      DevicePathStr = ConvertDevicePathToText (ImageDevicePath, FALSE, FALSE);
+      DEBUG ((DEBUG_LOAD, "[Bds] Image was deferred but not loaded: %s.\n", DevicePathStr));
+      if (DevicePathStr != NULL) {
+        FreePool (DevicePathStr);
+      }
+    }
+  }
+  if (Handles != NULL) {
+    FreePool (Handles);
+  }
+}
 
 /**
 
@@ -119,6 +194,21 @@ BdsInitialize (
                   );
   ASSERT_EFI_ERROR (Status);
 
+  DEBUG_CODE (
+    EFI_EVENT   Event;
+    //
+    // Register notify function to check deferred images on ReadyToBoot Event.
+    //
+    Status = gBS->CreateEventEx (
+                    EVT_NOTIFY_SIGNAL,
+                    TPL_CALLBACK,
+                    CheckDeferredLoadImageOnReadyToBoot,
+                    NULL,
+                    &gEfiEventReadyToBootGuid,
+                    &Event
+                    );
+    ASSERT_EFI_ERROR (Status);
+  );
   return Status;
 }
 
@@ -353,17 +443,28 @@ ProcessLoadOptions (
       LoadOptionType = LoadOptions[Index].OptionType;
     }
     ASSERT (LoadOptionType == LoadOptions[Index].OptionType);
+    ASSERT (LoadOptionType != LoadOptionTypeBoot);
 
     Status = EfiBootManagerProcessLoadOption (&LoadOptions[Index]);
 
+    //
+    // Status indicates whether the load option is loaded and executed
+    // LoadOptions[Index].Status is what the load option returns
+    //
     if (!EFI_ERROR (Status)) {
-      if (LoadOptionType == LoadOptionTypePlatformRecovery) {
-        //
-        // Stop processing if any entry is successful
-        //
+      //
+      // Stop processing if any PlatformRecovery#### returns success.
+      //
+      if ((LoadOptions[Index].Status == EFI_SUCCESS) &&
+          (LoadOptionType == LoadOptionTypePlatformRecovery)) {
         break;
       }
-      if ((LoadOptions[Index].Attributes & LOAD_OPTION_FORCE_RECONNECT) != 0) {
+
+      //
+      // Only set ReconnectAll flag when the load option executes successfully.
+      //
+      if (!EFI_ERROR (LoadOptions[Index].Status) &&
+          (LoadOptions[Index].Attributes & LOAD_OPTION_FORCE_RECONNECT) != 0) {
         ReconnectAll = TRUE;
       }
     }
@@ -654,7 +755,7 @@ BdsEntry (
   Status = gBS->LocateProtocol (&gEdkiiVariableLockProtocolGuid, NULL, (VOID **) &VariableLock);
   DEBUG ((EFI_D_INFO, "[BdsDxe] Locate Variable Lock protocol - %r\n", Status));
   if (!EFI_ERROR (Status)) {
-    for (Index = 0; Index < sizeof (mReadOnlyVariables) / sizeof (mReadOnlyVariables[0]); Index++) {
+    for (Index = 0; Index < ARRAY_SIZE (mReadOnlyVariables); Index++) {
       Status = VariableLock->RequestToLock (VariableLock, mReadOnlyVariables[Index], &gEfiGlobalVariableGuid);
       ASSERT_EFI_ERROR (Status);
     }
@@ -736,7 +837,7 @@ BdsEntry (
   FilePath = FileDevicePath (NULL, EFI_REMOVABLE_MEDIA_FILE_NAME);
   Status = EfiBootManagerInitializeLoadOption (
              &LoadOption,
-             0,
+             LoadOptionNumberUnassigned,
              LoadOptionTypePlatformRecovery,
              LOAD_OPTION_ACTIVE,
              L"Default PlatformRecovery",
@@ -745,9 +846,24 @@ BdsEntry (
              0
              );
   ASSERT_EFI_ERROR (Status);
-  EfiBootManagerLoadOptionToVariable (&LoadOption);
+  LoadOptions = EfiBootManagerGetLoadOptions (&LoadOptionCount, LoadOptionTypePlatformRecovery);
+  if (EfiBootManagerFindLoadOption (&LoadOption, LoadOptions, LoadOptionCount) == -1) {
+    for (Index = 0; Index < LoadOptionCount; Index++) {
+      //
+      // The PlatformRecovery#### options are sorted by OptionNumber.
+      // Find the the smallest unused number as the new OptionNumber.
+      //
+      if (LoadOptions[Index].OptionNumber != Index) {
+        break;
+      }
+    }
+    LoadOption.OptionNumber = Index;
+    Status = EfiBootManagerLoadOptionToVariable (&LoadOption);
+    ASSERT_EFI_ERROR (Status);
+  }
   EfiBootManagerFreeLoadOption (&LoadOption);
   FreePool (FilePath);
+  EfiBootManagerFreeLoadOptions (LoadOptions, LoadOptionCount);
 
   //
   // Report Status Code to indicate connecting drivers will happen

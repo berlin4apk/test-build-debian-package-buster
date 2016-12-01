@@ -460,14 +460,13 @@ DriverCallback(
 
       case HII_KEY_ID_ENTER_PASSWORD:
         return HiiPasswordEntered(Value->string);
+
+      case HII_KEY_ID_ENTER_PSID:
+        return HiiPsidRevert(Value->string);
+
     }
   } else if (Action == EFI_BROWSER_ACTION_CHANGED) {
     switch (HiiKeyId) {
-      case HII_KEY_ID_ENTER_PSID:
-        HiiPsidRevert();
-        *ActionRequest = EFI_BROWSER_ACTION_REQUEST_FORM_APPLY;
-        return EFI_SUCCESS;
-
       case HII_KEY_ID_BLOCKSID:
         HiiSetBlockSid(Value->b);
         *ActionRequest = EFI_BROWSER_ACTION_REQUEST_FORM_APPLY;
@@ -582,12 +581,14 @@ HiiPopulateDiskInfoForm(
 /**
   Reverts the Opal disk to factory default.
 
+  @param   PsidStringId      The string id for the PSID info.
+
   @retval  EFI_SUCCESS       Do the required action success.
 
 **/
 EFI_STATUS
 HiiPsidRevert(
-  VOID
+  EFI_STRING_ID         PsidStringId
   )
 {
   CHAR8                         Response[DEFAULT_RESPONSE_SIZE];
@@ -595,15 +596,19 @@ HiiPsidRevert(
   OPAL_DISK                     *OpalDisk;
   TCG_RESULT                    Ret;
   OPAL_SESSION                  Session;
+  CHAR16                        *UnicodeStr;
   UINT8                         TmpBuf[PSID_CHARACTER_STRING_END_LENGTH];
 
   Ret = TcgResultFailure;
 
-  OpalHiiGetBrowserData();
-
+  UnicodeStr = HiiGetString (gHiiPackageListHandle, PsidStringId, NULL);
   ZeroMem (TmpBuf, sizeof (TmpBuf));
-  UnicodeStrToAsciiStrS (gHiiConfiguration.Psid, (CHAR8*)TmpBuf, PSID_CHARACTER_STRING_END_LENGTH);
+  UnicodeStrToAsciiStrS (UnicodeStr, (CHAR8*)TmpBuf, PSID_CHARACTER_STRING_END_LENGTH);
   CopyMem (Psid.Psid, TmpBuf, PSID_CHARACTER_LENGTH);
+  HiiSetString (gHiiPackageListHandle, PsidStringId, L"", NULL);
+  ZeroMem (TmpBuf, sizeof (TmpBuf));
+  ZeroMem (UnicodeStr, StrSize (UnicodeStr));
+  FreePool (UnicodeStr);
 
   OpalDisk = HiiGetOpalDiskCB (gHiiConfiguration.SelectedDiskIndex);
   if (OpalDisk != NULL) {
@@ -614,6 +619,8 @@ HiiPsidRevert(
 
     Ret = OpalSupportPsidRevert(&Session, Psid.Psid, (UINT32)sizeof(Psid.Psid), OpalDisk->OpalDevicePath);
   }
+
+  ZeroMem (Psid.Psid, PSID_CHARACTER_LENGTH);
 
   if (Ret == TcgResultSuccess) {
     AsciiSPrint( Response, DEFAULT_RESPONSE_SIZE, "%a", "PSID Revert: Success" );
@@ -1020,8 +1027,8 @@ HiiPasswordEntered(
   EFI_STRING_ID            Str
   )
 {
-  OPAL_DISK*                    OpalDisk;
-  CHAR8                         Password[MAX_PASSWORD_CHARACTER_LENGTH + 1];
+  OPAL_DISK*                   OpalDisk;
+  CHAR8                        Password[MAX_PASSWORD_CHARACTER_LENGTH + 1];
   CHAR16*                      UniStr;
   UINT32                       PassLength;
   EFI_STATUS                   Status;
@@ -1045,15 +1052,20 @@ HiiPasswordEntered(
   if (UniStr == NULL) {
     return EFI_NOT_FOUND;
   }
+
+  HiiSetString(gHiiPackageListHandle, Str, L"", NULL);
+
   PassLength = (UINT32) StrLen (UniStr);
   if (PassLength >= sizeof(Password)) {
     HiiSetFormString(STRING_TOKEN(STR_ACTION_STATUS), "Password too long");
-    gBS->FreePool(UniStr);
+    ZeroMem (UniStr, StrSize (UniStr));
+    FreePool(UniStr);
     return EFI_BUFFER_TOO_SMALL;
   }
 
   UnicodeStrToAsciiStrS (UniStr, Password, sizeof (Password));
-  gBS->FreePool(UniStr);
+  ZeroMem (UniStr, StrSize (UniStr));
+  FreePool(UniStr);
 
   if (gHiiConfiguration.SelectedAction == HII_KEY_ID_GOTO_UNLOCK) {
     Status = HiiUnlock (OpalDisk, Password, PassLength);
@@ -1074,6 +1086,8 @@ HiiPasswordEntered(
   } else {
     Status = HiiSetPassword(OpalDisk, Password, PassLength);
   }
+
+  ZeroMem (Password, sizeof (Password));
 
   OpalHiiSetBrowserData ();
 

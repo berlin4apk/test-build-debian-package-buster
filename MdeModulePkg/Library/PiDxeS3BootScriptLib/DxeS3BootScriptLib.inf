@@ -52,8 +52,8 @@
   PcdLib
   UefiLib
   SmbusLib
-  PciLib
-  IoLib 
+  PciSegmentLib
+  IoLib
   LockBoxLib
 
 [Protocols]

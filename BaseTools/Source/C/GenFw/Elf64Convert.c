@@ -1,7 +1,7 @@
 /** @file
 Elf64 convert solution
 
-Copyright (c) 2010 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2010 - 2016, Intel Corporation. All rights reserved.<BR>
 Portions copyright (c) 2013-2014, ARM Ltd. All rights reserved.<BR>
 
 This program and the accompanying materials are licensed and made available
@@ -172,6 +172,10 @@ InitializeElf64 (
   //
   VerboseMsg ("Create COFF Section Offset Buffer");
   mCoffSectionsOffset = (UINT32 *)malloc(mEhdr->e_shnum * sizeof (UINT32));
+  if (mCoffSectionsOffset == NULL) {
+    Error (NULL, 0, 4001, "Resource", "memory cannot be allocated!");
+    return FALSE;
+  }
   memset(mCoffSectionsOffset, 0, mEhdr->e_shnum * sizeof(UINT32));
 
   //
@@ -518,6 +522,10 @@ ScanSections64 (
   // Allocate base Coff file.  Will be expanded later for relocations.
   //
   mCoffFile = (UINT8 *)malloc(mCoffOffset);
+  if (mCoffFile == NULL) {
+    Error (NULL, 0, 4001, "Resource", "memory cannot be allocated!");
+  }
+  assert (mCoffFile != NULL);
   memset(mCoffFile, 0, mCoffOffset);
 
   //
@@ -679,6 +687,20 @@ WriteSections64 (
     //
     Elf_Shdr *RelShdr = GetShdrByIndex(Idx);
     if ((RelShdr->sh_type != SHT_REL) && (RelShdr->sh_type != SHT_RELA)) {
+      continue;
+    }
+
+    //
+    // If this is a ET_DYN (PIE) executable, we will encounter a dynamic SHT_RELA
+    // section that applies to the entire binary, and which will have its section
+    // index set to #0 (which is a NULL section with the SHF_ALLOC bit cleared).
+    //
+    // In the absence of GOT based relocations (which we currently don't support),
+    // this RELA section will contain redundant R_xxx_RELATIVE relocations, one
+    // for every R_xxx_xx64 relocation appearing in the per-section RELA sections.
+    // (i.e., .rela.text and .rela.data)
+    //
+    if (RelShdr->sh_info == 0) {
       continue;
     }
 

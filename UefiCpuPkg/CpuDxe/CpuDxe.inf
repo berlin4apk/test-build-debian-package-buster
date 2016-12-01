@@ -1,5 +1,5 @@
 ## @file
-#  Simple CPU driver installs CPU Architecture Protocol.
+#  CPU driver installs CPU Architecture Protocol and CPU MP protocol.
 #
 #  Copyright (c) 2008 - 2016, Intel Corporation. All rights reserved.<BR>
 #  This program and the accompanying materials
@@ -41,13 +41,11 @@
   UefiCpuLib
   UefiLib
   CpuExceptionHandlerLib
-  TimerLib
-  SynchronizationLib
   HobLib
   ReportStatusCodeLib
+  MpInitLib
 
 [Sources]
-  ApStartup.c
   CpuDxe.c
   CpuDxe.h
   CpuGdt.c
@@ -59,19 +57,15 @@
   Ia32/CpuAsm.asm
   Ia32/CpuAsm.nasm
   Ia32/CpuAsm.S
-  Ia32/MpAsm.asm
-  Ia32/MpAsm.nasm
 
 [Sources.X64]
   X64/CpuAsm.asm
   X64/CpuAsm.nasm
   X64/CpuAsm.S
-  X64/MpAsm.asm
-  X64/MpAsm.nasm
 
 [Protocols]
   gEfiCpuArchProtocolGuid                       ## PRODUCES
-  gEfiMpServiceProtocolGuid                     ## SOMETIMES_PRODUCES
+  gEfiMpServiceProtocolGuid                     ## PRODUCES
 
 [Guids]
   gIdleLoopEventGuid                            ## CONSUMES           ## Event
@@ -80,11 +74,6 @@
 [Ppis]
   gEfiSecPlatformInformation2PpiGuid            ## UNDEFINED # HOB
   gEfiSecPlatformInformationPpiGuid             ## UNDEFINED # HOB
-
-[Pcd]
-  gUefiCpuPkgTokenSpaceGuid.PcdCpuMaxLogicalProcessorNumber    ## CONSUMES
-  gUefiCpuPkgTokenSpaceGuid.PcdCpuApStackSize                  ## CONSUMES
-  gUefiCpuPkgTokenSpaceGuid.PcdCpuApInitTimeOutInMicroSeconds  ## CONSUMES
 
 [Depex]
   TRUE

@@ -64,6 +64,29 @@ VERIFY_SIZE_OF (CHAR8, 1);
 VERIFY_SIZE_OF (CHAR16, 2);
 
 //
+// The following three enum types are used to verify that the compiler
+// configuration for enum types is compliant with Section 2.3.1 of the 
+// UEFI 2.3 Specification. These enum types and enum values are not 
+// intended to be used. A prefix of '__' is used avoid conflicts with
+// other types.
+//
+typedef enum {
+  __VerifyUint8EnumValue = 0xff
+} __VERIFY_UINT8_ENUM_SIZE;
+
+typedef enum {
+  __VerifyUint16EnumValue = 0xffff
+} __VERIFY_UINT16_ENUM_SIZE;
+
+typedef enum {
+  __VerifyUint32EnumValue = 0xffffffff
+} __VERIFY_UINT32_ENUM_SIZE;
+
+VERIFY_SIZE_OF (__VERIFY_UINT8_ENUM_SIZE, 4);
+VERIFY_SIZE_OF (__VERIFY_UINT16_ENUM_SIZE, 4);
+VERIFY_SIZE_OF (__VERIFY_UINT32_ENUM_SIZE, 4);
+
+//
 // The Microsoft* C compiler can removed references to unreferenced data items
 //  if the /OPT:REF linker option is used. We defined a macro as this is a
 //  a non standard extension
@@ -302,7 +325,7 @@ struct _LIST_ENTRY {
 
 //
 //  UEFI specification claims 1 and 0. We are concerned about the
-//  complier portability so we did it this way.
+//  compiler portability so we did it this way.
 //
 
 ///
@@ -321,6 +344,11 @@ struct _LIST_ENTRY {
 /// NULL pointer (VOID *)
 ///
 #define NULL  ((VOID *) 0)
+
+//
+// Null character
+//
+#define CHAR_NULL             0x0000
 
 ///
 /// Maximum values for common UEFI Data Types
@@ -1210,6 +1238,19 @@ typedef UINTN RETURN_STATUS;
   **/
   #define RETURN_ADDRESS(L)     ((VOID *) 0)
 #endif
+
+/**
+  Return the number of elements in an array.
+
+  @param  Array  An object of array type. Array is only used as an argument to
+                 the sizeof operator, therefore Array is never evaluated. The
+                 caller is responsible for ensuring that Array's type is not
+                 incomplete; that is, Array must have known constant size.
+
+  @return The number of elements in Array. The result has type UINTN.
+
+**/
+#define ARRAY_SIZE(Array) (sizeof (Array) / sizeof ((Array)[0]))
 
 #endif
 

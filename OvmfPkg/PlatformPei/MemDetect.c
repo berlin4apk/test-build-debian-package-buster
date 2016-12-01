@@ -107,6 +107,7 @@ GetFirstNonAddress (
   FIRMWARE_CONFIG_ITEM FwCfgItem;
   UINTN                FwCfgSize;
   UINT64               HotPlugMemoryEnd;
+  RETURN_STATUS        PcdStatus;
 
   FirstNonAddress = BASE_4GB + GetSystemMemorySizeAbove4gb ();
 
@@ -154,7 +155,8 @@ GetFirstNonAddress (
     if (mBootMode != BOOT_ON_S3_RESUME) {
       DEBUG ((EFI_D_INFO, "%a: disabling 64-bit PCI host aperture\n",
         __FUNCTION__));
-      PcdSet64 (PcdPciMmio64Size, 0);
+      PcdStatus = PcdSet64S (PcdPciMmio64Size, 0);
+      ASSERT_RETURN_ERROR (PcdStatus);
     }
 
     //
@@ -202,8 +204,11 @@ GetFirstNonAddress (
     // the GCD memory space map through our PciHostBridgeLib instance; here we
     // only need to set the PCDs.
     //
-    PcdSet64 (PcdPciMmio64Base, Pci64Base);
-    PcdSet64 (PcdPciMmio64Size, Pci64Size);
+    PcdStatus = PcdSet64S (PcdPciMmio64Base, Pci64Base);
+    ASSERT_RETURN_ERROR (PcdStatus);
+    PcdStatus = PcdSet64S (PcdPciMmio64Size, Pci64Size);
+    ASSERT_RETURN_ERROR (PcdStatus);
+
     DEBUG ((EFI_D_INFO, "%a: Pci64Base=0x%Lx Pci64Size=0x%Lx\n",
       __FUNCTION__, Pci64Base, Pci64Size));
   }
@@ -433,7 +438,7 @@ QemuInitializeRam (
     // PEI RAM, in a backup buffer allocated with the normal PEI services.
     // CpuMpPei restores the original contents ("returns" the borrowed area) at
     // End-of-PEI. End-of-PEI in turn is emitted by S3Resume2Pei before
-    // transfering control to the OS's wakeup vector in the FACS.
+    // transferring control to the OS's wakeup vector in the FACS.
     //
     // We expect any other PEIMs that "borrow" memory similarly to CpuMpPei to
     // restore the original contents. Furthermore, we expect all such PEIMs

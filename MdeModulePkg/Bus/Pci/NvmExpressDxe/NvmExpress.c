@@ -39,7 +39,10 @@ EFI_DRIVER_SUPPORTED_EFI_VERSION_PROTOCOL gNvmExpressDriverSupportedEfiVersion =
 // Template for NVM Express Pass Thru Mode data structure.
 //
 GLOBAL_REMOVE_IF_UNREFERENCED EFI_NVM_EXPRESS_PASS_THRU_MODE gEfiNvmExpressPassThruMode = {
-  EFI_NVM_EXPRESS_PASS_THRU_ATTRIBUTES_PHYSICAL | EFI_NVM_EXPRESS_PASS_THRU_ATTRIBUTES_LOGICAL | EFI_NVM_EXPRESS_PASS_THRU_ATTRIBUTES_CMD_SET_NVM,
+  EFI_NVM_EXPRESS_PASS_THRU_ATTRIBUTES_PHYSICAL   |
+  EFI_NVM_EXPRESS_PASS_THRU_ATTRIBUTES_LOGICAL    |
+  EFI_NVM_EXPRESS_PASS_THRU_ATTRIBUTES_NONBLOCKIO |
+  EFI_NVM_EXPRESS_PASS_THRU_ATTRIBUTES_CMD_SET_NVM,
   sizeof (UINTN),
   0x10100
 };
@@ -76,6 +79,7 @@ EnumerateNvmeDevNamespace (
   UINT32                                LbaFmtIdx;
   UINT8                                 Sn[21];
   UINT8                                 Mn[41];
+  VOID                                  *DummyInterface;
 
   NewDevicePathNode = NULL;
   DevicePath        = NULL;
@@ -264,7 +268,7 @@ EnumerateNvmeDevNamespace (
     gBS->OpenProtocol (
            Private->ControllerHandle,
            &gEfiNvmExpressPassThruProtocolGuid,
-           (VOID **) &Private->Passthru,
+           (VOID **) &DummyInterface,
            Private->DriverBindingHandle,
            Device->DeviceHandle,
            EFI_OPEN_PROTOCOL_BY_CHILD_CONTROLLER
@@ -392,10 +396,10 @@ UnregisterNvmeNamespace (
   EFI_STATUS                               Status;
   EFI_BLOCK_IO_PROTOCOL                    *BlockIo;
   NVME_DEVICE_PRIVATE_DATA                 *Device;
-  NVME_CONTROLLER_PRIVATE_DATA             *Private;
   EFI_STORAGE_SECURITY_COMMAND_PROTOCOL    *StorageSecurity;
   BOOLEAN                                  IsEmpty;
   EFI_TPL                                  OldTpl;
+  VOID                                     *DummyInterface;
 
   BlockIo = NULL;
 
@@ -412,7 +416,6 @@ UnregisterNvmeNamespace (
   }
 
   Device  = NVME_DEVICE_PRIVATE_DATA_FROM_BLOCK_IO (BlockIo);
-  Private = Device->Controller;
 
   //
   // Wait for the device's asynchronous I/O queue to become empty.
@@ -460,7 +463,7 @@ UnregisterNvmeNamespace (
     gBS->OpenProtocol (
            Controller,
            &gEfiNvmExpressPassThruProtocolGuid,
-           (VOID **) &Private->Passthru,
+           (VOID **) &DummyInterface,
            This->DriverBindingHandle,
            Handle,
            EFI_OPEN_PROTOCOL_BY_CHILD_CONTROLLER
@@ -490,7 +493,7 @@ UnregisterNvmeNamespace (
       gBS->OpenProtocol (
         Controller,
         &gEfiNvmExpressPassThruProtocolGuid,
-        (VOID **) &Private->Passthru,
+        (VOID **) &DummyInterface,
         This->DriverBindingHandle,
         Handle,
         EFI_OPEN_PROTOCOL_BY_CHILD_CONTROLLER

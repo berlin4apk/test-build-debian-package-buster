@@ -18,7 +18,7 @@
 
 #define PXEBC_DHCP6_OPTION_MAX_NUM        16
 #define PXEBC_DHCP6_OPTION_MAX_SIZE       312
-#define PXEBC_DHCP6_PACKET_MAX_SIZE       1472
+#define PXEBC_DHCP6_PACKET_MAX_SIZE       (sizeof (EFI_PXE_BASE_CODE_PACKET))
 #define PXEBC_IP6_POLICY_MAX              0xff
 #define PXEBC_IP6_ROUTE_TABLE_TIMEOUT     10
 
@@ -33,7 +33,8 @@
 #define PXEBC_DHCP6_IDX_BOOT_FILE_URL     1
 #define PXEBC_DHCP6_IDX_BOOT_FILE_PARAM   2
 #define PXEBC_DHCP6_IDX_VENDOR_CLASS      3
-#define PXEBC_DHCP6_IDX_MAX               4
+#define PXEBC_DHCP6_IDX_DNS_SERVER        4
+#define PXEBC_DHCP6_IDX_MAX               5
 
 #define PXEBC_DHCP6_BOOT_FILE_URL_PREFIX  "tftp://"
 #define PXEBC_TFTP_URL_SEPARATOR          '/'
@@ -100,10 +101,12 @@ typedef struct {
   UINT8                   Precedence;
 } PXEBC_DHCP6_OPTION_NODE;
 
+#define PXEBC_CACHED_DHCP6_PACKET_MAX_SIZE  (OFFSET_OF (EFI_DHCP6_PACKET, Dhcp6) + PXEBC_DHCP6_PACKET_MAX_SIZE)
+
 typedef union {
   EFI_DHCP6_PACKET        Offer;
   EFI_DHCP6_PACKET        Ack;
-  UINT8                   Buffer[PXEBC_DHCP6_PACKET_MAX_SIZE];
+  UINT8                   Buffer[PXEBC_CACHED_DHCP6_PACKET_MAX_SIZE];
 } PXEBC_DHCP6_PACKET;
 
 typedef struct {
@@ -128,6 +131,7 @@ PxeBcFreeBootFileOption (
 /**
   Parse the Boot File URL option.
 
+  @param[in]      Private             Pointer to PxeBc private data.
   @param[out]     FileName     The pointer to the boot file name.
   @param[in, out] SrvAddr      The pointer to the boot server address.
   @param[in]      BootFile     The pointer to the boot file URL option data.
@@ -140,6 +144,7 @@ PxeBcFreeBootFileOption (
 **/
 EFI_STATUS
 PxeBcExtractBootFileUrl (
+  IN PXEBC_PRIVATE_DATA      *Private,
      OUT UINT8               **FileName,
   IN OUT EFI_IPv6_ADDRESS    *SrvAddr,
   IN     CHAR8               *BootFile,

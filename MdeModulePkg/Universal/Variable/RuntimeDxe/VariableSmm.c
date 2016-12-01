@@ -14,7 +14,7 @@
   VariableServiceSetVariable(), VariableServiceQueryVariableInfo(), ReclaimForOS(),
   SmmVariableGetStatistics() should also do validation based on its own knowledge.
 
-Copyright (c) 2010 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2010 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -35,7 +35,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Library/SmmMemLib.h>
 
 #include <Guid/SmmVariableCommon.h>
-#include <Guid/ZeroGuid.h>
 #include "Variable.h"
 
 extern VARIABLE_INFO_ENTRY                           *gVariableInfo;
@@ -200,7 +199,7 @@ ReleaseLockOnlyAtBootTime (
 }
 
 /**
-  Retrive the SMM Fault Tolerent Write protocol interface.
+  Retrieve the SMM Fault Tolerent Write protocol interface.
 
   @param[out] FtwProtocol       The interface of SMM Ftw protocol
 
@@ -229,7 +228,7 @@ GetFtwProtocol (
 
 
 /**
-  Retrive the SMM FVB protocol interface by HANDLE.
+  Retrieve the SMM FVB protocol interface by HANDLE.
 
   @param[in]  FvBlockHandle     The handle of SMM FVB protocol that provides services for
                                 reading, writing, and erasing the target block.
@@ -373,7 +372,7 @@ SmmVariableGetStatistics (
 
   CopyGuid (&VendorGuid, &InfoEntry->VendorGuid);
 
-  if (CompareGuid (&VendorGuid, &gZeroGuid)) {
+  if (IsZeroGuid (&VendorGuid)) {
     //
     // Return the first variable info
     //

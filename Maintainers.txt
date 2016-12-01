@@ -127,6 +127,16 @@ W: https://github.com/tianocore/tianocore.github.io/wiki/IntelFrameworkPkg
 M: Michael D Kinney <michael.d.kinney@intel.com>
 M: Jeff Fan <jeff.fan@intel.com>
 
+IntelFsp2Pkg
+W: https://github.com/tianocore/tianocore.github.io/wiki/IntelFsp2Pkg
+M: Jiewen Yao <jiewen.yao@intel.com>
+M: Giri P Mudusuru <giri.p.mudusuru@intel.com>
+
+IntelFsp2WrapperPkg
+W: https://github.com/tianocore/tianocore.github.io/wiki/IntelFsp2WrapperPkg
+M: Jiewen Yao <jiewen.yao@intel.com>
+M: Giri P Mudusuru <giri.p.mudusuru@intel.com>
+
 IntelFspPkg
 W: https://github.com/tianocore/tianocore.github.io/wiki/IntelFspPkg
 M: Jiewen Yao <jiewen.yao@intel.com>
@@ -134,6 +144,11 @@ M: Jiewen Yao <jiewen.yao@intel.com>
 IntelFspWrapperPkg
 W: https://github.com/tianocore/tianocore.github.io/wiki/IntelFspWrapperPkg
 M: Jiewen Yao <jiewen.yao@intel.com>
+
+IntelSiliconPkg
+W: https://github.com/tianocore/tianocore.github.io/wiki/IntelSiliconPkg
+M: Jiewen Yao <jiewen.yao@intel.com>
+M: Giri P Mudusuru <giri.p.mudusuru@intel.com>
 
 MdeModulePkg
 W: https://github.com/tianocore/tianocore.github.io/wiki/MdeModulePkg
@@ -218,8 +233,8 @@ S: Obsolete (Use EmulatorPkg instead)
 
 Vlv2DeviceRefCodePkg
 M: David Wei <david.wei@intel.com>
-M: Tim He <tim.he@intel.com>
+M: Mang Guo <mang.guo@intel.com>
 
 Vlv2TbltDevicePkg
 M: David Wei <david.wei@intel.com>
-M: Tim He <tim.he@intel.com>
+M: Mang Guo <mang.guo@intel.com>

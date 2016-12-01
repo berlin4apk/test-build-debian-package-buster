@@ -202,33 +202,6 @@ InternalDumpHex (
 }
 
 /**
-  Check if buffer is all zero.
-
-  @param[in] Buffer      Buffer to be checked.
-  @param[in] BufferSize  Size of buffer to be checked.
-
-  @retval TRUE  Buffer is all zero.
-  @retval FALSE Buffer is not all zero.
-**/
-BOOLEAN
-IsZeroBuffer (
-  IN VOID  *Buffer,
-  IN UINTN BufferSize
-  )
-{
-  UINT8 *BufferData;
-  UINTN Index;
-
-  BufferData = Buffer;
-  for (Index = 0; Index < BufferSize; Index++) {
-    if (BufferData[Index] != 0) {
-      return FALSE;
-    }
-  }
-  return TRUE;
-}
-
-/**
   Get All processors EFI_CPU_LOCATION in system. LocationBuf is allocated inside the function
   Caller is responsible to free LocationBuf.
 
@@ -891,66 +864,6 @@ TcgDxeLogEvent (
 }
 
 /**
-  This function get digest from digest list.
-
-  @param HashAlg    digest algorithm
-  @param DigestList digest list
-  @param Digest     digest
-
-  @retval EFI_SUCCESS   Sha1Digest is found and returned.
-  @retval EFI_NOT_FOUND Sha1Digest is not found.
-**/
-EFI_STATUS
-Tpm2GetDigestFromDigestList (
-  IN TPMI_ALG_HASH      HashAlg,
-  IN TPML_DIGEST_VALUES *DigestList,
-  IN VOID               *Digest
-  )
-{
-  UINTN  Index;
-  UINT16 DigestSize;
-
-  DigestSize = GetHashSizeFromAlgo (HashAlg);
-  for (Index = 0; Index < DigestList->count; Index++) {
-    if (DigestList->digests[Index].hashAlg == HashAlg) {
-      CopyMem (
-        Digest,
-        &DigestList->digests[Index].digest,
-        DigestSize
-        );
-      return EFI_SUCCESS;
-    }
-  }
-
-  return EFI_NOT_FOUND;
-}
-
-/**
-  Get TPML_DIGEST_VALUES data size.
-
-  @param[in]     DigestList    TPML_DIGEST_VALUES data.
-
-  @return TPML_DIGEST_VALUES data size.
-**/
-UINT32
-GetDigestListSize (
-  IN TPML_DIGEST_VALUES             *DigestList
-  )
-{
-  UINTN  Index;
-  UINT16 DigestSize;
-  UINT32 TotalSize;
-
-  TotalSize = sizeof(DigestList->count);
-  for (Index = 0; Index < DigestList->count; Index++) {
-    DigestSize = GetHashSizeFromAlgo (DigestList->digests[Index].hashAlg);
-    TotalSize += sizeof(DigestList->digests[Index].hashAlg) + DigestSize;
-  }
-
-  return TotalSize;
-}
-
-/**
   Get TPML_DIGEST_VALUES compact binary buffer size.
 
   @param[in]     DigestListBin    TPML_DIGEST_VALUES compact binary buffer.
@@ -985,79 +898,55 @@ GetDigestListBinSize (
 }
 
 /**
-  Return if hash alg is supported in TPM PCR bank.
+  Copy TPML_DIGEST_VALUES compact binary into a buffer
 
-  @param HashAlg  Hash algorithm to be checked.
+  @param[in,out]    Buffer                  Buffer to hold copied TPML_DIGEST_VALUES compact binary.
+  @param[in]        DigestListBin           TPML_DIGEST_VALUES compact binary buffer.
+  @param[in]        HashAlgorithmMask       HASH bits corresponding to the desired digests to copy.
+  @param[out]       HashAlgorithmMaskCopied Pointer to HASH bits corresponding to the digests copied.
 
-  @retval TRUE  Hash algorithm is supported.
-  @retval FALSE Hash algorithm is not supported.
-**/
-BOOLEAN
-IsHashAlgSupportedInPcrBank (
-  IN TPMI_ALG_HASH  HashAlg
-  )
-{
-  switch (HashAlg) {
-  case TPM_ALG_SHA1:
-    if ((mTcgDxeData.BsCap.ActivePcrBanks & EFI_TCG2_BOOT_HASH_ALG_SHA1) != 0) {
-      return TRUE;
-    }
-    break;
-  case TPM_ALG_SHA256:
-    if ((mTcgDxeData.BsCap.ActivePcrBanks & EFI_TCG2_BOOT_HASH_ALG_SHA256) != 0) {
-      return TRUE;
-    }
-    break;
-  case TPM_ALG_SHA384:
-    if ((mTcgDxeData.BsCap.ActivePcrBanks & EFI_TCG2_BOOT_HASH_ALG_SHA384) != 0) {
-      return TRUE;
-    }
-    break;
-  case TPM_ALG_SHA512:
-    if ((mTcgDxeData.BsCap.ActivePcrBanks & EFI_TCG2_BOOT_HASH_ALG_SHA512) != 0) {
-      return TRUE;
-    }
-    break;
-  case TPM_ALG_SM3_256:
-    if ((mTcgDxeData.BsCap.ActivePcrBanks & EFI_TCG2_BOOT_HASH_ALG_SM3_256) != 0) {
-      return TRUE;
-    }
-    break;
-  }
-
-  return FALSE;
-}
-
-/**
-  Copy TPML_DIGEST_VALUES into a buffer
-
-  @param[in,out] Buffer        Buffer to hold TPML_DIGEST_VALUES.
-  @param[in]     DigestList    TPML_DIGEST_VALUES to be copied.
-
-  @return The end of buffer to hold TPML_DIGEST_VALUES.
+  @return The end of buffer to hold TPML_DIGEST_VALUES compact binary.
 **/
 VOID *
-CopyDigestListToBuffer (
+CopyDigestListBinToBuffer (
   IN OUT VOID                       *Buffer,
-  IN TPML_DIGEST_VALUES             *DigestList
+  IN VOID                           *DigestListBin,
+  IN UINT32                         HashAlgorithmMask,
+  OUT UINT32                        *HashAlgorithmMaskCopied
   )
 {
-  UINTN  Index;
-  UINT16 DigestSize;
+  UINTN         Index;
+  UINT16        DigestSize;
+  UINT32        Count;
+  TPMI_ALG_HASH HashAlg;
+  UINT32        DigestListCount;
+  UINT32        *DigestListCountPtr;
 
-  CopyMem (Buffer, &DigestList->count, sizeof(DigestList->count));
-  Buffer = (UINT8 *)Buffer + sizeof(DigestList->count);
-  for (Index = 0; Index < DigestList->count; Index++) {
-    if (!IsHashAlgSupportedInPcrBank (DigestList->digests[Index].hashAlg)) {
-      DEBUG ((EFI_D_ERROR, "WARNING: TPM2 Event log has HashAlg unsupported by PCR bank (0x%x)\n", DigestList->digests[Index].hashAlg));
-      continue;
+  DigestListCountPtr = (UINT32 *) Buffer;
+  DigestListCount = 0;
+  (*HashAlgorithmMaskCopied) = 0;
+
+  Count = ReadUnaligned32 (DigestListBin);
+  Buffer = (UINT8 *)Buffer + sizeof(Count);
+  DigestListBin = (UINT8 *)DigestListBin + sizeof(Count);
+  for (Index = 0; Index < Count; Index++) {
+    HashAlg = ReadUnaligned16 (DigestListBin);
+    DigestListBin = (UINT8 *)DigestListBin + sizeof(HashAlg);
+    DigestSize = GetHashSizeFromAlgo (HashAlg);
+
+    if (IsHashAlgSupportedInHashAlgorithmMask(HashAlg, HashAlgorithmMask)) {
+      CopyMem (Buffer, &HashAlg, sizeof(HashAlg));
+      Buffer = (UINT8 *)Buffer + sizeof(HashAlg);
+      CopyMem (Buffer, DigestListBin, DigestSize);
+      Buffer = (UINT8 *)Buffer + DigestSize;
+      DigestListCount++;
+      (*HashAlgorithmMaskCopied) |= GetHashMaskFromAlgo (HashAlg);
+    } else {
+      DEBUG ((DEBUG_ERROR, "WARNING: CopyDigestListBinToBuffer Event log has HashAlg unsupported by PCR bank (0x%x)\n", HashAlg));
     }
-    CopyMem (Buffer, &DigestList->digests[Index].hashAlg, sizeof(DigestList->digests[Index].hashAlg));
-    Buffer = (UINT8 *)Buffer + sizeof(DigestList->digests[Index].hashAlg);
-    DigestSize = GetHashSizeFromAlgo (DigestList->digests[Index].hashAlg);
-    CopyMem (Buffer, &DigestList->digests[Index].digest, DigestSize);
-    Buffer = (UINT8 *)Buffer + DigestSize;
+    DigestListBin = (UINT8 *)DigestListBin + DigestSize;
   }
+  WriteUnaligned32 (DigestListCountPtr, DigestListCount);
 
   return Buffer;
 }
@@ -1085,6 +974,7 @@ TcgDxeLogHashEvent (
   EFI_STATUS                        RetStatus;
   TCG_PCR_EVENT2                    TcgPcrEvent2;
   UINT8                             *DigestBuffer;
+  UINT32                            *EventSizePtr;
 
   DEBUG ((EFI_D_INFO, "SupportedEventLogs - 0x%08x\n", mTcgDxeData.BsCap.SupportedEventLogs));
 
@@ -1094,7 +984,7 @@ TcgDxeLogHashEvent (
       DEBUG ((EFI_D_INFO, "  LogFormat - 0x%08x\n", mTcg2EventInfo[Index].LogFormat));
       switch (mTcg2EventInfo[Index].LogFormat) {
       case EFI_TCG2_EVENT_LOG_FORMAT_TCG_1_2:
-        Status = Tpm2GetDigestFromDigestList (TPM_ALG_SHA1, DigestList, &NewEventHdr->Digest);
+        Status = GetDigestFromDigestList (TPM_ALG_SHA1, DigestList, &NewEventHdr->Digest);
         if (!EFI_ERROR (Status)) {
           //
           // Enter critical region
@@ -1121,9 +1011,8 @@ TcgDxeLogHashEvent (
         TcgPcrEvent2.PCRIndex = NewEventHdr->PCRIndex;
         TcgPcrEvent2.EventType = NewEventHdr->EventType;
         DigestBuffer = (UINT8 *)&TcgPcrEvent2.Digest;
-        DigestBuffer = CopyDigestListToBuffer (DigestBuffer, DigestList);
-        CopyMem (DigestBuffer, &NewEventHdr->EventSize, sizeof(NewEventHdr->EventSize));
-        DigestBuffer = DigestBuffer + sizeof(NewEventHdr->EventSize);
+        EventSizePtr = CopyDigestListToBuffer (DigestBuffer, DigestList, mTcgDxeData.BsCap.ActivePcrBanks);
+        CopyMem (EventSizePtr, &NewEventHdr->EventSize, sizeof(NewEventHdr->EventSize));
 
         //
         // Enter critical region
@@ -1132,7 +1021,7 @@ TcgDxeLogHashEvent (
         Status = TcgDxeLogEvent (
                    mTcg2EventInfo[Index].LogFormat,
                    &TcgPcrEvent2,
-                   sizeof(TcgPcrEvent2.PCRIndex) + sizeof(TcgPcrEvent2.EventType) + GetDigestListSize (DigestList) + sizeof(TcgPcrEvent2.EventSize),
+                   sizeof(TcgPcrEvent2.PCRIndex) + sizeof(TcgPcrEvent2.EventType) + GetDigestListBinSize (DigestBuffer) + sizeof(TcgPcrEvent2.EventSize),
                    NewEventData,
                    NewEventHdr->EventSize
                    );
@@ -1482,8 +1371,13 @@ SetupEventLog (
   EFI_PEI_HOB_POINTERS            GuidHob;
   EFI_PHYSICAL_ADDRESS            Lasa;
   UINTN                           Index;
+  VOID                            *DigestListBin;
+  TPML_DIGEST_VALUES              TempDigestListBin;
   UINT32                          DigestListBinSize;
+  UINT8                           *Event;
   UINT32                          EventSize;
+  UINT32                          *EventSizePtr;
+  UINT32                          HashAlgorithmMaskCopied;
   TCG_EfiSpecIDEventStruct        *TcgEfiSpecIdEventStruct;
   UINT8                           TempBuf[sizeof(TCG_EfiSpecIDEventStruct) + sizeof(UINT32) + (HASH_COUNT * sizeof(TCG_EfiSpecIdEventAlgorithmSize)) + sizeof(UINT8)];
   TCG_PCR_EVENT_HDR               FirstPcrEvent;
@@ -1662,7 +1556,8 @@ SetupEventLog (
       Status = EFI_SUCCESS;
       while (!EFI_ERROR (Status) && 
              (GuidHob.Raw = GetNextGuidHob (mTcg2EventInfo[Index].EventGuid, GuidHob.Raw)) != NULL) {
-        TcgEvent    = GET_GUID_HOB_DATA (GuidHob.Guid);
+        TcgEvent    = AllocateCopyPool (GET_GUID_HOB_DATA_SIZE (GuidHob.Guid), GET_GUID_HOB_DATA (GuidHob.Guid));
+        ASSERT (TcgEvent != NULL);
         GuidHob.Raw = GET_NEXT_HOB (GuidHob);
         switch (mTcg2EventInfo[Index].LogFormat) {
         case EFI_TCG2_EVENT_LOG_FORMAT_TCG_1_2:
@@ -1675,17 +1570,47 @@ SetupEventLog (
                      );
           break;
         case EFI_TCG2_EVENT_LOG_FORMAT_TCG_2:
-          DigestListBinSize = GetDigestListBinSize ((UINT8 *)TcgEvent + sizeof(TCG_PCRINDEX) + sizeof(TCG_EVENTTYPE));
-          CopyMem (&EventSize, (UINT8 *)TcgEvent + sizeof(TCG_PCRINDEX) + sizeof(TCG_EVENTTYPE) + DigestListBinSize, sizeof(UINT32));
+          DigestListBin = (UINT8 *)TcgEvent + sizeof(TCG_PCRINDEX) + sizeof(TCG_EVENTTYPE);
+          DigestListBinSize = GetDigestListBinSize (DigestListBin);
+          //
+          // Save event size.
+          //
+          CopyMem (&EventSize, (UINT8 *)DigestListBin + DigestListBinSize, sizeof(UINT32));
+          Event = (UINT8 *)DigestListBin + DigestListBinSize + sizeof(UINT32);
+          //
+          // Filter inactive digest in the event2 log from PEI HOB.
+          //
+          CopyMem (&TempDigestListBin, DigestListBin, GetDigestListBinSize (DigestListBin));
+          EventSizePtr = CopyDigestListBinToBuffer (
+                           DigestListBin,
+                           &TempDigestListBin,
+                           mTcgDxeData.BsCap.ActivePcrBanks,
+                           &HashAlgorithmMaskCopied
+                           );
+          if (HashAlgorithmMaskCopied != mTcgDxeData.BsCap.ActivePcrBanks) {
+            DEBUG ((
+              DEBUG_ERROR,
+              "ERROR: The event2 log includes digest hash mask 0x%x, but required digest hash mask is 0x%x\n",
+              HashAlgorithmMaskCopied,
+              mTcgDxeData.BsCap.ActivePcrBanks
+              ));
+          }
+          //
+          // Restore event size.
+          //
+          CopyMem (EventSizePtr, &EventSize, sizeof(UINT32));
+          DigestListBinSize = GetDigestListBinSize (DigestListBin);
+
           Status = TcgDxeLogEvent (
                      mTcg2EventInfo[Index].LogFormat,
                      TcgEvent,
                      sizeof(TCG_PCRINDEX) + sizeof(TCG_EVENTTYPE) + DigestListBinSize + sizeof(UINT32),
-                     (UINT8 *)TcgEvent + sizeof(TCG_PCRINDEX) + sizeof(TCG_EVENTTYPE) + DigestListBinSize + sizeof(UINT32),
+                     Event,
                      EventSize
                      );
           break;
         }
+        FreePool (TcgEvent);
       }
     }
   }
@@ -1878,6 +1803,7 @@ MeasureVariable (
                (UINT8*)VarLog
                );
   } else {
+    ASSERT (VarData != NULL);
     Status = TcgDxeHashLogExtendEvent (
                0,
                (UINT8*)VarData,
@@ -2238,7 +2164,7 @@ OnReadyToBoot (
     for (PcrIndex = 0; PcrIndex < 7; PcrIndex++) {
       Status = MeasureSeparatorEvent (PcrIndex);
       if (EFI_ERROR (Status)) {
-        DEBUG ((EFI_D_ERROR, "Seperator Event not Measured. Error!\n"));
+        DEBUG ((DEBUG_ERROR, "Separator Event not Measured. Error!\n"));
       }
     }
 
@@ -2387,7 +2313,6 @@ DriverEntry (
   VOID                              *Registration;
   UINT32                            MaxCommandSize;
   UINT32                            MaxResponseSize;
-  TPML_PCR_SELECTION                Pcrs;
   UINTN                             Index;
   EFI_TCG2_EVENT_ALGORITHM_BITMAP   TpmHashAlgorithmBitmap;
   UINT32                            ActivePCRBanks;
@@ -2457,51 +2382,9 @@ DriverEntry (
   //
   // Get supported PCR and current Active PCRs
   //
-  Status = Tpm2GetCapabilityPcrs (&Pcrs);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((EFI_D_ERROR, "Tpm2GetCapabilityPcrs fail!\n"));
-    TpmHashAlgorithmBitmap = EFI_TCG2_BOOT_HASH_ALG_SHA1;
-    ActivePCRBanks = EFI_TCG2_BOOT_HASH_ALG_SHA1;
-  } else {
-    DEBUG ((EFI_D_INFO, "Tpm2GetCapabilityPcrs Count - %08x\n", Pcrs.count));
-    TpmHashAlgorithmBitmap = 0;
-    ActivePCRBanks = 0;
-    for (Index = 0; Index < Pcrs.count; Index++) {
-      DEBUG ((EFI_D_INFO, "hash - %x\n", Pcrs.pcrSelections[Index].hash));
-      switch (Pcrs.pcrSelections[Index].hash) {
-      case TPM_ALG_SHA1:
-        TpmHashAlgorithmBitmap |= EFI_TCG2_BOOT_HASH_ALG_SHA1;
-        if (!IsZeroBuffer (Pcrs.pcrSelections[Index].pcrSelect, Pcrs.pcrSelections[Index].sizeofSelect)) {
-          ActivePCRBanks |= EFI_TCG2_BOOT_HASH_ALG_SHA1;
-        }        
-        break;
-      case TPM_ALG_SHA256:
-        TpmHashAlgorithmBitmap |= EFI_TCG2_BOOT_HASH_ALG_SHA256;
-        if (!IsZeroBuffer (Pcrs.pcrSelections[Index].pcrSelect, Pcrs.pcrSelections[Index].sizeofSelect)) {
-          ActivePCRBanks |= EFI_TCG2_BOOT_HASH_ALG_SHA256;
-        }
-        break;
-      case TPM_ALG_SHA384:
-        TpmHashAlgorithmBitmap |= EFI_TCG2_BOOT_HASH_ALG_SHA384;
-        if (!IsZeroBuffer (Pcrs.pcrSelections[Index].pcrSelect, Pcrs.pcrSelections[Index].sizeofSelect)) {
-          ActivePCRBanks |= EFI_TCG2_BOOT_HASH_ALG_SHA384;
-        }
-        break;
-      case TPM_ALG_SHA512:
-        TpmHashAlgorithmBitmap |= EFI_TCG2_BOOT_HASH_ALG_SHA512;
-        if (!IsZeroBuffer (Pcrs.pcrSelections[Index].pcrSelect, Pcrs.pcrSelections[Index].sizeofSelect)) {
-          ActivePCRBanks |= EFI_TCG2_BOOT_HASH_ALG_SHA512;
-        }
-        break;
-      case TPM_ALG_SM3_256:
-        TpmHashAlgorithmBitmap |= EFI_TCG2_BOOT_HASH_ALG_SM3_256;
-        if (!IsZeroBuffer (Pcrs.pcrSelections[Index].pcrSelect, Pcrs.pcrSelections[Index].sizeofSelect)) {
-          ActivePCRBanks |= EFI_TCG2_BOOT_HASH_ALG_SM3_256;
-        }
-        break;
-      }
-    }
-  }
+  Status = Tpm2GetCapabilitySupportedAndActivePcrs (&TpmHashAlgorithmBitmap, &ActivePCRBanks);
+  ASSERT_EFI_ERROR (Status);
+
   mTcgDxeData.BsCap.HashAlgorithmBitmap = TpmHashAlgorithmBitmap & PcdGet32 (PcdTcg2HashAlgorithmBitmap);
   mTcgDxeData.BsCap.ActivePcrBanks = ActivePCRBanks & PcdGet32 (PcdTcg2HashAlgorithmBitmap);
 

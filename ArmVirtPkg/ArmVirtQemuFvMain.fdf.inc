@@ -146,12 +146,18 @@ READ_LOCK_STATUS   = TRUE
   #
   INF MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableDxe.inf
   INF OvmfPkg/AcpiPlatformDxe/QemuFwCfgAcpiPlatformDxe.inf
+
+  #
+  # EBC support
+  #
+  INF MdeModulePkg/Universal/EbcDxe/EbcDxe.inf
 !endif
 
   #
   # PCI support
   #
-  INF ArmVirtPkg/PciHostBridgeDxe/PciHostBridgeDxe.inf
+  INF ArmPkg/Drivers/ArmPciCpuIo2Dxe/ArmPciCpuIo2Dxe.inf
+  INF MdeModulePkg/Bus/Pci/PciHostBridgeDxe/PciHostBridgeDxe.inf
   INF MdeModulePkg/Bus/Pci/PciBusDxe/PciBusDxe.inf
   INF OvmfPkg/VirtioPciDeviceDxe/VirtioPciDeviceDxe.inf
   INF OvmfPkg/Virtio10Dxe/Virtio10.inf
@@ -160,6 +166,7 @@ READ_LOCK_STATUS   = TRUE
   # Video support
   #
   INF OvmfPkg/QemuVideoDxe/QemuVideoDxe.inf
+  INF OvmfPkg/VirtioGpuDxe/VirtioGpu.inf
   INF OvmfPkg/PlatformDxe/Platform.inf
 
   #
@@ -174,6 +181,9 @@ READ_LOCK_STATUS   = TRUE
   #
   # TianoCore logo (splash screen)
   #
-  FILE FREEFORM = PCD(gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdLogoFile) {
-    SECTION RAW = MdeModulePkg/Logo/Logo.bmp
-  }
+  INF MdeModulePkg/Logo/LogoDxe.inf
+
+  #
+  # Ramdisk support
+  #
+  INF MdeModulePkg/Universal/Disk/RamDiskDxe/RamDiskDxe.inf
