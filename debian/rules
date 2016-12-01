@@ -3,7 +3,8 @@
 SHELL=/bin/bash
 
 # various bits that have to be pulled in to create the full source tarball
-OPENSSL_SRC= openssl-1.0.2j.tar.gz
+OPENSSL_VER= 1.0.2j
+OPENSSL_SRC= openssl-$(OPENSSL_VER).tar.gz
 OPENSSL_URL= http://www.openssl.org/source/$(OPENSSL_SRC)
 SHELL_SRC  = https://efi-shell.svn.sourceforge.net/svnroot/efi-shell/trunk/Shell
 SHELL_REV  = 64
@@ -123,7 +124,7 @@ get-orig-source:
 	wget $(OPENSSL_URL)
 	tar zxvf $(OPENSSL_SRC) -C edk2-$(ver)/CryptoPkg/Library/OpensslLib
 	cd edk2-$(ver)/CryptoPkg/Library/OpensslLib/$$(basename $(OPENSSL_SRC) .tar.gz) && \
-		patch -p1 < ../EDKII_openssl-1.0.2j.patch
+		patch -p1 < ../EDKII_openssl-$(OPENSSL_VER).patch
 	# efi shell
 	svn export -r$(SHELL_REV) $(SHELL_SRC) edk2-$(ver)/Shell
 	cd edk2-$(ver)/Shell && patch -p1 < ../EdkShellPkg/ShellR$(SHELL_REV).patch 
