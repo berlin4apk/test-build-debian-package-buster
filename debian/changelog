@@ -8,6 +8,8 @@ edk2 (0~20161124.4575a602-1) UNRELEASED; urgency=medium
     upstream commit 8866d337.
   * d/p/arm64-no-pie-for-you.diff: Fix FTBFS w/ GCC that has PIE
     enabled by default (now the case in Debian).
+  * debian/control: Clarify the package/guest architecture mapping.
+    Closes: #837092.
 
  -- dann frazier <dannf@debian.org>  Wed, 30 Nov 2016 19:45:00 -0700
 
