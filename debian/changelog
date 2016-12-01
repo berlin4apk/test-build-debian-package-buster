@@ -6,6 +6,8 @@ edk2 (0~20161124.4575a602-1) UNRELEASED; urgency=medium
   * debian/rules: Set OpenSSL version in one place.
   * d/p/arm64-reorder-blocks-algorithm.diff: Drop; superseded by
     upstream commit 8866d337.
+  * d/p/arm64-no-pie-for-you.diff: Fix FTBFS w/ GCC that has PIE
+    enabled by default (now the case in Debian).
 
  -- dann frazier <dannf@debian.org>  Wed, 30 Nov 2016 19:45:00 -0700
 

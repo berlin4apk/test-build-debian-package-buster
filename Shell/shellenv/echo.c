@@ -57,6 +57,7 @@ SHELL_VAR_CHECK_ITEM    EchoCheckList[] = {
 };
 
 EFI_STATUS
+EFIAPI
 SEnvCmdEcho (
   IN EFI_HANDLE           ImageHandle,
   IN EFI_SYSTEM_TABLE     *SystemTable

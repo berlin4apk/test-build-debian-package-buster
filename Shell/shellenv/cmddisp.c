@@ -269,12 +269,14 @@ InitializeUnload (
   );
 
 EFI_STATUS
+EFIAPI
 GuidMain (
   IN EFI_HANDLE               ImageHandle,
   IN EFI_SYSTEM_TABLE         *SystemTable
   );
 
 EFI_STATUS
+EFIAPI
 OpeninfoMain (
   IN EFI_HANDLE         ImageHandle,
   IN EFI_SYSTEM_TABLE   *SystemTable

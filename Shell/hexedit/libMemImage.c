@@ -43,6 +43,7 @@ HEFI_EDITOR_MEM_IMAGE             HMemImageConst = {
 };
 
 EFI_STATUS
+EFIAPI
 DummyMemRead (
   IN EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL              * This,
   IN     EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_WIDTH    Width,
@@ -52,6 +53,7 @@ DummyMemRead (
   );
 
 EFI_STATUS
+EFIAPI
 DummyMemWrite (
   IN EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL              * This,
   IN     EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_WIDTH    Width,
@@ -386,6 +388,7 @@ Returns:
 }
 
 EFI_STATUS
+EFIAPI
 DummyMemRead (
   IN EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL              * This,
   IN     EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_WIDTH    Width,
@@ -398,6 +401,7 @@ DummyMemRead (
 }
 
 EFI_STATUS
+EFIAPI
 DummyMemWrite (
   IN EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL              * This,
   IN     EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_WIDTH    Width,
