@@ -2,4 +2,3 @@ shell-efiapi.patch
 no-missing-braces.diff
 no-stack-protector-all-archs.diff
 shell-proper-valist.patch
-arm64-reorder-blocks-algorithm.diff
