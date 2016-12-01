@@ -283,7 +283,7 @@ Returns:
   ps.Output   = Output;
   ps.Context  = spc;
   ps.fmt.u.pw = fmt;
-  VA_COPY(ps.args, args);
+  ps.args     = args;
   _Print (&ps);
 }
 
@@ -635,7 +635,7 @@ Returns:
     ps.fmt.u.pc   = fmta;
   }
 
-  VA_COPY(ps.args, args);
+  ps.args = args;
 
   if (Column != (UINTN) -1) {
     Out->SetCursorPosition (Out, Column, Row);
@@ -1984,7 +1984,7 @@ Returns:
   ps.Output     = _DbgOut;
   ps.fmt.Ascii  = TRUE;
   ps.fmt.u.pc   = fmt;
-  VA_COPY(ps.args, args);
+  ps.args       = args;
   ps.Attr       = EFI_TEXT_ATTR (EFI_LIGHTGRAY, EFI_RED);
 
   DbgOut        = LibRuntimeDebugOut;
