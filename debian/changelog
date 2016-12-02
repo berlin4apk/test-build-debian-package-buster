@@ -1,4 +1,4 @@
-edk2 (0~20161124.4575a602-1) UNRELEASED; urgency=medium
+edk2 (0~20161202.7bbe0b3e-1) UNRELEASED; urgency=medium
 
   * New upstream release.
     - GOP driver for the VirtIo GPU (virtio-gpu-pci). Closes: #842680.
@@ -13,7 +13,7 @@ edk2 (0~20161124.4575a602-1) UNRELEASED; urgency=medium
   * d/p/no-missing-braces.diff: Refresh.
   * d/p/no-stack-protector-all-archs.diff: Refresh.
 
- -- dann frazier <dannf@debian.org>  Wed, 30 Nov 2016 19:45:00 -0700
+ -- dann frazier <dannf@debian.org>  Fri, 02 Dec 2016 11:55:26 -0700
 
 edk2 (0~20160813.de74668f-2) unstable; urgency=medium
 
