@@ -222,11 +222,14 @@ CProcedureInvoke:
 RendezvousFunnelProcEnd:
 
 ;-------------------------------------------------------------------------------------
-;  AsmRelocateApLoop (MwaitSupport, ApTargetCState, PmCodeSegment);
+;  AsmRelocateApLoop (MwaitSupport, ApTargetCState, PmCodeSegment, TopOfApStack, CountTofinish);
 ;-------------------------------------------------------------------------------------
 global ASM_PFX(AsmRelocateApLoop)
 ASM_PFX(AsmRelocateApLoop):
 AsmRelocateApLoopStart:
+    mov        rax, [rsp + 40]   ; CountTofinish
+    lock dec   dword [rax]       ; (*CountTofinish)--
+    mov        rsp, r9
     push       rcx
     push       rdx
 
@@ -263,15 +266,14 @@ MwaitLoop:
     xor        ecx, ecx           ; ecx = 0
     xor        edx, edx           ; edx = 0
     monitor
-    shl        ebx, 4
     mov        eax, ebx           ; Mwait Cx, Target C-State per eax[7:4]
+    shl        eax, 4
     mwait
     jmp        MwaitLoop
 HltLoop:
     cli
     hlt
     jmp        HltLoop
-    ret
 BITS 64
 AsmRelocateApLoopEnd:
 

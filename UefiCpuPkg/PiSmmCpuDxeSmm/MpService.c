@@ -17,7 +17,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 //
 // Slots for all MTRR( FIXED MTRR + VARIABLE MTRR + MTRR_LIB_IA32_MTRR_DEF_TYPE)
 //
-UINT64                                      gSmiMtrrs[MTRR_NUMBER_OF_FIXED_MTRR + 2 * MTRR_NUMBER_OF_VARIABLE_MTRR + 1];
+MTRR_SETTINGS                               gSmiMtrrs;
 UINT64                                      gPhyMask;
 SMM_DISPATCHER_MP_SYNC_DATA                 *mSmmMpSyncData = NULL;
 UINTN                                       mSmmMpSyncDataSize;
@@ -283,20 +283,12 @@ ReplaceOSMtrrs (
   IN      UINTN                     CpuIndex
   )
 {
-  PROCESSOR_SMM_DESCRIPTOR       *Psd;
-  UINT64                         *SmiMtrrs;
-  MTRR_SETTINGS                  *BiosMtrr;
-
-  Psd = (PROCESSOR_SMM_DESCRIPTOR*)(mCpuHotPlugData.SmBase[CpuIndex] + SMM_PSD_OFFSET);
-  SmiMtrrs = (UINT64*)(UINTN)Psd->MtrrBaseMaskPtr;
-
   SmmCpuFeaturesDisableSmrr ();
 
   //
   // Replace all MTRRs registers
   //
-  BiosMtrr  = (MTRR_SETTINGS*)SmiMtrrs;
-  MtrrSetAllMtrrs(BiosMtrr);
+  MtrrSetAllMtrrs (&gSmiMtrrs);
 }
 
 /**
@@ -1357,6 +1349,9 @@ InitializeMpSyncData (
         (UINT32 *)((UINTN)mSmmCpuSemaphores.SemaphoreCpu.Run + mSemaphoreSize * CpuIndex);
       mSmmMpSyncData->CpuData[CpuIndex].Present =
         (BOOLEAN *)((UINTN)mSmmCpuSemaphores.SemaphoreCpu.Present + mSemaphoreSize * CpuIndex);
+      *(mSmmMpSyncData->CpuData[CpuIndex].Busy)    = 0;
+      *(mSmmMpSyncData->CpuData[CpuIndex].Run)     = 0;
+      *(mSmmMpSyncData->CpuData[CpuIndex].Present) = FALSE;
     }
   }
 }
@@ -1376,8 +1371,6 @@ InitializeMpServiceData (
 {
   UINT32                    Cr3;
   UINTN                     Index;
-  MTRR_SETTINGS             *Mtrr;
-  PROCESSOR_SMM_DESCRIPTOR  *Psd;
   UINT8                     *GdtTssTables;
   UINTN                     GdtTableStepSize;
 
@@ -1412,24 +1405,16 @@ InitializeMpServiceData (
   GdtTssTables = InitGdt (Cr3, &GdtTableStepSize);
 
   //
-  // Initialize PROCESSOR_SMM_DESCRIPTOR for each CPU
+  // Install SMI handler for each CPU
   //
   for (Index = 0; Index < mMaxNumberOfCpus; Index++) {
-    Psd = (PROCESSOR_SMM_DESCRIPTOR *)(VOID *)(UINTN)(mCpuHotPlugData.SmBase[Index] + SMM_PSD_OFFSET);
-    CopyMem (Psd, &gcPsd, sizeof (gcPsd));
-    Psd->SmmGdtPtr = (UINT64)(UINTN)(GdtTssTables + GdtTableStepSize * Index);
-    Psd->SmmGdtSize = gcSmiGdtr.Limit + 1;
-
-    //
-    // Install SMI handler
-    //
     InstallSmiHandler (
       Index,
       (UINT32)mCpuHotPlugData.SmBase[Index],
       (VOID*)((UINTN)Stacks + (StackSize * Index)),
       StackSize,
-      (UINTN)Psd->SmmGdtPtr,
-      Psd->SmmGdtSize,
+      (UINTN)(GdtTssTables + GdtTableStepSize * Index),
+      gcSmiGdtr.Limit + 1,
       gcSmiIdtr.Base,
       gcSmiIdtr.Limit + 1,
       Cr3
@@ -1439,9 +1424,8 @@ InitializeMpServiceData (
   //
   // Record current MTRR settings
   //
-  ZeroMem(gSmiMtrrs, sizeof (gSmiMtrrs));
-  Mtrr =  (MTRR_SETTINGS*)gSmiMtrrs;
-  MtrrGetAllMtrrs (Mtrr);
+  ZeroMem (&gSmiMtrrs, sizeof (gSmiMtrrs));
+  MtrrGetAllMtrrs (&gSmiMtrrs);
 
   return Cr3;
 }

@@ -18,6 +18,7 @@
 #include <Library/UefiBootServicesTableLib.h>
 
 #define  AP_CHECK_INTERVAL     (EFI_TIMER_PERIOD_MILLISECONDS (100))
+#define  AP_SAFE_STACK_SIZE    128
 
 CPU_MP_DATA      *mCpuMpData = NULL;
 EFI_EVENT        mCheckAllApsEvent = NULL;
@@ -25,6 +26,8 @@ EFI_EVENT        mMpInitExitBootServicesEvent = NULL;
 EFI_EVENT        mLegacyBootEvent = NULL;
 volatile BOOLEAN mStopCheckAllApsStatus = TRUE;
 VOID             *mReservedApLoopFunc = NULL;
+UINTN            mReservedTopOfApStack;
+volatile UINT32  mNumberToFinish = 0;
 
 /**
   Get the pointer to CPU MP Data structure.
@@ -241,11 +244,19 @@ RelocateApLoop (
   CPU_MP_DATA            *CpuMpData;
   BOOLEAN                MwaitSupport;
   ASM_RELOCATE_AP_LOOP   AsmRelocateApLoopFunc;
+  UINTN                  ProcessorNumber;
 
+  MpInitLibWhoAmI (&ProcessorNumber); 
   CpuMpData    = GetCpuMpData ();
   MwaitSupport = IsMwaitSupport ();
-  AsmRelocateApLoopFunc = (ASM_RELOCATE_AP_LOOP) (UINTN) Buffer;
-  AsmRelocateApLoopFunc (MwaitSupport, CpuMpData->ApTargetCState, CpuMpData->PmCodeSegment);
+  AsmRelocateApLoopFunc = (ASM_RELOCATE_AP_LOOP) (UINTN) mReservedApLoopFunc;
+  AsmRelocateApLoopFunc (
+    MwaitSupport,
+    CpuMpData->ApTargetCState,
+    CpuMpData->PmCodeSegment,
+    mReservedTopOfApStack - ProcessorNumber * AP_SAFE_STACK_SIZE,
+    (UINTN) &mNumberToFinish
+    );
   //
   // It should never reach here
   //
@@ -273,7 +284,11 @@ MpInitChangeApLoopCallback (
   CpuMpData->SaveRestoreFlag = TRUE;
   CpuMpData->PmCodeSegment = GetProtectedModeCS ();
   CpuMpData->ApLoopMode = PcdGet8 (PcdCpuApLoopMode);
-  WakeUpAP (CpuMpData, TRUE, 0, RelocateApLoop, mReservedApLoopFunc);
+  mNumberToFinish = CpuMpData->CpuCount - 1;
+  WakeUpAP (CpuMpData, TRUE, 0, RelocateApLoop, NULL);
+  while (mNumberToFinish > 0) {
+    CpuPause ();
+  }
   DEBUG ((DEBUG_INFO, "%a() done!\n", __FUNCTION__));
 }
 
@@ -289,6 +304,7 @@ InitMpGlobalData (
 {
   EFI_STATUS                 Status;
   EFI_PHYSICAL_ADDRESS       Address;
+  UINTN                      ApSafeBufferSize;
 
   SaveCpuMpData (CpuMpData);
 
@@ -307,16 +323,21 @@ InitMpGlobalData (
   // Allocating it in advance since memory services are not available in
   // Exit Boot Services callback function.
   //
+  ApSafeBufferSize  = CpuMpData->AddressMap.RelocateApLoopFuncSize;
+  ApSafeBufferSize += CpuMpData->CpuCount * AP_SAFE_STACK_SIZE;
+
   Address = BASE_4GB - 1;
   Status  = gBS->AllocatePages (
                    AllocateMaxAddress,
                    EfiReservedMemoryType,
-                   EFI_SIZE_TO_PAGES (sizeof (CpuMpData->AddressMap.RelocateApLoopFuncSize)),
+                   EFI_SIZE_TO_PAGES (ApSafeBufferSize),
                    &Address
                    );
   ASSERT_EFI_ERROR (Status);
   mReservedApLoopFunc = (VOID *) (UINTN) Address;
   ASSERT (mReservedApLoopFunc != NULL);
+  mReservedTopOfApStack = (UINTN) Address + EFI_PAGES_TO_SIZE (EFI_SIZE_TO_PAGES (ApSafeBufferSize));
+  ASSERT ((mReservedTopOfApStack & (UINTN)(CPU_STACK_ALIGNMENT - 1)) == 0);
   CopyMem (
     mReservedApLoopFunc,
     CpuMpData->AddressMap.RelocateApLoopFuncAddress,

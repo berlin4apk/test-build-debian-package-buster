@@ -37,8 +37,6 @@
   UncachedMemoryAllocationLib
   IoLib
   BaseMemoryLib
-  ArmLib
-
 
 [Protocols]
   gEfiCpuArchProtocolGuid
@@ -46,6 +44,7 @@
 [Guids]
 
 [Pcd]
+  gArmTokenSpaceGuid.PcdArmDmaDeviceOffset
 
 [Depex]
   gEfiCpuArchProtocolGuid

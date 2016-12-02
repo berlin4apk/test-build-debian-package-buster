@@ -299,7 +299,7 @@ SplitPage (
       for (Index = 0; Index < SIZE_4KB / sizeof(UINT64); Index++) {
         NewPageEntry[Index] = BaseAddress + SIZE_4KB * Index + ((*PageEntry) & PAGE_PROGATE_BITS);
       }
-      (*PageEntry) = (UINT64)(UINTN)NewPageEntry + ((*PageEntry) & PAGE_PROGATE_BITS);
+      (*PageEntry) = (UINT64)(UINTN)NewPageEntry + PAGE_ATTRIBUTE_BITS;
       return RETURN_SUCCESS;
     } else {
       return RETURN_UNSUPPORTED;
@@ -320,7 +320,7 @@ SplitPage (
       for (Index = 0; Index < SIZE_4KB / sizeof(UINT64); Index++) {
         NewPageEntry[Index] = BaseAddress + SIZE_2MB * Index + IA32_PG_PS + ((*PageEntry) & PAGE_PROGATE_BITS);
       }
-      (*PageEntry) = (UINT64)(UINTN)NewPageEntry + ((*PageEntry) & PAGE_PROGATE_BITS);
+      (*PageEntry) = (UINT64)(UINTN)NewPageEntry + PAGE_ATTRIBUTE_BITS;
       return RETURN_SUCCESS;
     } else {
       return RETURN_UNSUPPORTED;
@@ -684,7 +684,7 @@ PatchSmmSaveStateMap (
 
   TileCodeSize = GetSmiHandlerSize ();
   TileCodeSize = ALIGN_VALUE(TileCodeSize, SIZE_4KB);
-  TileDataSize = sizeof (SMRAM_SAVE_STATE_MAP) + sizeof (PROCESSOR_SMM_DESCRIPTOR);
+  TileDataSize = (SMRAM_SAVE_STATE_MAP_OFFSET - SMM_PSD_OFFSET) + sizeof (SMRAM_SAVE_STATE_MAP);
   TileDataSize = ALIGN_VALUE(TileDataSize, SIZE_4KB);
   TileSize = TileDataSize + TileCodeSize - 1;
   TileSize = 2 * GetPowerOfTwo32 ((UINT32)TileSize);

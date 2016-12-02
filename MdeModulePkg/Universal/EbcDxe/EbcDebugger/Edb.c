@@ -27,6 +27,10 @@ EFI_DEBUGGER_PRIVATE_DATA mDebuggerPrivate = {
     EBC_DEBUGGER_MINOR_VERSION,              // EfiDebuggerRevision
   (VM_MAJOR_VERSION << 16) |
     VM_MINOR_VERSION,                        // EbcVmRevision
+  {
+    EFI_DEBUGGER_CONFIGURATION_VERSION,
+    &mDebuggerPrivate,
+  },                                         // DebuggerConfiguration
   NULL,                                      // DebugImageInfoTableHeader
   NULL,                                      // Vol
   NULL,                                      // PciRootBridgeIo
@@ -194,7 +198,6 @@ Returns:
 {
   UINT64   Address;
   UINTN    Index;
-  UINT16   OldInstruction;
   BOOLEAN  IsHitBreakpoint;
 
   //
@@ -209,7 +212,6 @@ Returns:
   for (Index = 0; (Index < DebuggerPrivate->DebuggerBreakpointCount) && (Index < EFI_DEBUGGER_BREAKPOINT_MAX); Index++) {
     if ((DebuggerPrivate->DebuggerBreakpointContext[Index].BreakpointAddress == Address) &&
         (DebuggerPrivate->DebuggerBreakpointContext[Index].State)) {
-      OldInstruction = (UINT16)DebuggerPrivate->DebuggerBreakpointContext[Index].OldInstruction;
       IsHitBreakpoint = TRUE;
       break;
     }
@@ -244,7 +246,6 @@ Returns:
     for (Index = 0; (Index < DebuggerPrivate->DebuggerBreakpointCount) && (Index < EFI_DEBUGGER_BREAKPOINT_MAX); Index++) {
       if ((DebuggerPrivate->DebuggerBreakpointContext[Index].BreakpointAddress == Address) &&
           (DebuggerPrivate->DebuggerBreakpointContext[Index].State)) {
-        OldInstruction = (UINT16)DebuggerPrivate->DebuggerBreakpointContext[Index].OldInstruction;
         IsHitBreakpoint = TRUE;
         break;
       }

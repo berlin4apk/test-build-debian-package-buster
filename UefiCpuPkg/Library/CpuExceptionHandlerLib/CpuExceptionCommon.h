@@ -55,7 +55,6 @@ typedef struct {
 extern CONST UINT32                mErrorCodeFlag;
 extern CONST UINTN                 mImageAlignSize;
 extern CONST UINTN                 mDoFarReturnFlag;
-extern RESERVED_VECTORS_DATA       *mReservedVectors;
 
 /**
   Return address map of exception handler template so that C code can generate
@@ -197,27 +196,29 @@ UpdateIdtTable (
 /**
   Save CPU exception context when handling EFI_VECTOR_HANDOFF_HOOK_AFTER case.
 
-  @param[in] ExceptionType  Exception type.
-  @param[in] SystemContext  Pointer to EFI_SYSTEM_CONTEXT.
-
+  @param[in] ExceptionType        Exception type.
+  @param[in] SystemContext        Pointer to EFI_SYSTEM_CONTEXT.
+  @param[in] ExceptionHandlerData Pointer to exception handler data.
 **/
 VOID
 ArchSaveExceptionContext (
-  IN UINTN                ExceptionType,
-  IN EFI_SYSTEM_CONTEXT   SystemContext 
+  IN UINTN                        ExceptionType,
+  IN EFI_SYSTEM_CONTEXT           SystemContext,
+  IN EXCEPTION_HANDLER_DATA       *ExceptionHandlerData
   );
 
 /**
   Restore CPU exception context when handling EFI_VECTOR_HANDOFF_HOOK_AFTER case.
 
-  @param[in] ExceptionType  Exception type.
-  @param[in] SystemContext  Pointer to EFI_SYSTEM_CONTEXT.
-
+  @param[in] ExceptionType        Exception type.
+  @param[in] SystemContext        Pointer to EFI_SYSTEM_CONTEXT.
+  @param[in] ExceptionHandlerData Pointer to exception handler data.
 **/
 VOID
 ArchRestoreExceptionContext (
-  IN UINTN                ExceptionType,
-  IN EFI_SYSTEM_CONTEXT   SystemContext 
+  IN UINTN                        ExceptionType,
+  IN EFI_SYSTEM_CONTEXT           SystemContext,
+  IN EXCEPTION_HANDLER_DATA       *ExceptionHandlerData
   );
 
 /**

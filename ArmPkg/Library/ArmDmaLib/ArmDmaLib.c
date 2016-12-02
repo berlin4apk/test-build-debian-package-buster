@@ -22,13 +22,12 @@
 #include <Library/UncachedMemoryAllocationLib.h>
 #include <Library/IoLib.h>
 #include <Library/BaseMemoryLib.h>
-#include <Library/ArmLib.h>
 
 #include <Protocol/Cpu.h>
 
 typedef struct {
   EFI_PHYSICAL_ADDRESS      HostAddress;
-  EFI_PHYSICAL_ADDRESS      DeviceAddress;
+  VOID                      *BufferAddress;
   UINTN                     NumberOfBytes;
   DMA_MAP_OPERATION         Operation;
   BOOLEAN                   DoubleBuffer;
@@ -36,8 +35,16 @@ typedef struct {
 
 
 
-EFI_CPU_ARCH_PROTOCOL      *gCpu;
-UINTN                      gCacheAlignment = 0;
+STATIC EFI_CPU_ARCH_PROTOCOL      *mCpu;
+
+STATIC
+PHYSICAL_ADDRESS
+HostToDeviceAddress (
+  IN  PHYSICAL_ADDRESS  HostAddress
+  )
+{
+  return HostAddress + PcdGet64 (PcdArmDmaDeviceOffset);
+}
 
 /**
   Provides the DMA controller-specific addresses needed to access system memory.
@@ -82,7 +89,14 @@ DmaMap (
     return EFI_INVALID_PARAMETER;
   }
 
-  *DeviceAddress = ConvertToPhysicalAddress (HostAddress);
+  //
+  // The debug implementation of UncachedMemoryAllocationLib in ArmPkg returns
+  // a virtual uncached alias, and unmaps the cached ID mapping of the buffer,
+  // in order to catch inadvertent references to the cached mapping.
+  // Since HostToDeviceAddress () expects ID mapped input addresses, convert
+  // the host address to an ID mapped address first.
+  //
+  *DeviceAddress = HostToDeviceAddress (ConvertToPhysicalAddress (HostAddress));
 
   // Remember range so we can flush on the other side
   Map = AllocatePool (sizeof (MAP_INFO_INSTANCE));
@@ -90,11 +104,11 @@ DmaMap (
     return  EFI_OUT_OF_RESOURCES;
   }
 
-  if ((((UINTN)HostAddress & (gCacheAlignment - 1)) != 0) ||
-      ((*NumberOfBytes & (gCacheAlignment - 1)) != 0)) {
+  if ((((UINTN)HostAddress & (mCpu->DmaBufferAlignment - 1)) != 0) ||
+      ((*NumberOfBytes & (mCpu->DmaBufferAlignment - 1)) != 0)) {
 
     // Get the cacheability of the region
-    Status = gDS->GetMemorySpaceDescriptor (*DeviceAddress, &GcdDescriptor);
+    Status = gDS->GetMemorySpaceDescriptor ((UINTN)HostAddress, &GcdDescriptor);
     if (EFI_ERROR(Status)) {
       goto FreeMapInfo;
     }
@@ -128,7 +142,8 @@ DmaMap (
         CopyMem (Buffer, HostAddress, *NumberOfBytes);
       }
 
-      *DeviceAddress = (PHYSICAL_ADDRESS)(UINTN)Buffer;
+      *DeviceAddress = HostToDeviceAddress (ConvertToPhysicalAddress (Buffer));
+      Map->BufferAddress = Buffer;
     } else {
       Map->DoubleBuffer  = FALSE;
     }
@@ -144,7 +159,7 @@ DmaMap (
     // So duplicate the check here when running in DEBUG mode, just to assert
     // that we are not trying to create a consistent mapping for cached memory.
     //
-    Status = gDS->GetMemorySpaceDescriptor (*DeviceAddress, &GcdDescriptor);
+    Status = gDS->GetMemorySpaceDescriptor ((UINTN)HostAddress, &GcdDescriptor);
     ASSERT_EFI_ERROR(Status);
 
     ASSERT (Operation != MapOperationBusMasterCommonBuffer ||
@@ -153,11 +168,11 @@ DmaMap (
     DEBUG_CODE_END ();
 
     // Flush the Data Cache (should not have any effect if the memory region is uncached)
-    gCpu->FlushDataCache (gCpu, *DeviceAddress, *NumberOfBytes, EfiCpuFlushTypeWriteBackInvalidate);
+    mCpu->FlushDataCache (mCpu, (UINTN)HostAddress, *NumberOfBytes,
+            EfiCpuFlushTypeWriteBackInvalidate);
   }
 
   Map->HostAddress   = (UINTN)HostAddress;
-  Map->DeviceAddress = *DeviceAddress;
   Map->NumberOfBytes = *NumberOfBytes;
   Map->Operation     = Operation;
 
@@ -207,17 +222,19 @@ DmaUnmap (
     if (Map->Operation == MapOperationBusMasterCommonBuffer) {
       Status = EFI_INVALID_PARAMETER;
     } else if (Map->Operation == MapOperationBusMasterWrite) {
-      CopyMem ((VOID *)(UINTN)Map->HostAddress, (VOID *)(UINTN)Map->DeviceAddress, Map->NumberOfBytes);
+      CopyMem ((VOID *)(UINTN)Map->HostAddress, Map->BufferAddress,
+        Map->NumberOfBytes);
     }
 
-    DmaFreeBuffer (EFI_SIZE_TO_PAGES (Map->NumberOfBytes), (VOID *)(UINTN)Map->DeviceAddress);
+    DmaFreeBuffer (EFI_SIZE_TO_PAGES (Map->NumberOfBytes), Map->BufferAddress);
 
   } else {
     if (Map->Operation == MapOperationBusMasterWrite) {
       //
       // Make sure we read buffer from uncached memory and not the cache
       //
-      gCpu->FlushDataCache (gCpu, Map->HostAddress, Map->NumberOfBytes, EfiCpuFlushTypeInvalidate);
+      mCpu->FlushDataCache (mCpu, Map->HostAddress, Map->NumberOfBytes,
+              EfiCpuFlushTypeInvalidate);
     }
   }
 
@@ -317,10 +334,8 @@ ArmDmaLibConstructor (
   EFI_STATUS              Status;
 
   // Get the Cpu protocol for later use
-  Status = gBS->LocateProtocol (&gEfiCpuArchProtocolGuid, NULL, (VOID **)&gCpu);
+  Status = gBS->LocateProtocol (&gEfiCpuArchProtocolGuid, NULL, (VOID **)&mCpu);
   ASSERT_EFI_ERROR(Status);
-
-  gCacheAlignment = ArmCacheWritebackGranule ();
 
   return Status;
 }

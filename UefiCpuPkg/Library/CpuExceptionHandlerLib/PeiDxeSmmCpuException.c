@@ -55,7 +55,7 @@ CommonExceptionHandlerWorker (
         // Need to execute old IDT handler before running this exception handler
         //
         ReservedVectors[ExceptionType].ApicId = GetApicId ();
-        ArchSaveExceptionContext (ExceptionType, SystemContext);
+        ArchSaveExceptionContext (ExceptionType, SystemContext, ExceptionHandlerData);
         ExceptionHandlerContext->ExceptionDataFlag = (mErrorCodeFlag & (1 << ExceptionType)) ? TRUE : FALSE;
         ExceptionHandlerContext->OldIdtHandler     = ReservedVectors[ExceptionType].ExceptonHandler;
         return;
@@ -68,7 +68,7 @@ CommonExceptionHandlerWorker (
         // Old IDT handler has been executed, then restore CPU exception content to
         // run new exception handler.
         //
-        ArchRestoreExceptionContext (ExceptionType, SystemContext);
+        ArchRestoreExceptionContext (ExceptionType, SystemContext, ExceptionHandlerData);
         //
         // Rlease spin lock for ApicId
         //
