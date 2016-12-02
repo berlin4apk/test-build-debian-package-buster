@@ -119,6 +119,8 @@ get-orig-source:
 		edk2-$(ver)/BeagleBoardPkg/Debugger_scripts/rvi_dummy.axf \
 		edk2-$(ver)/BaseTools/Source/Python/*/*.pyd \
 		edk2-$(ver)/BaseTools/Source/Python/UPT/Dll/sqlite3.dll \
+		edk2-$(ver)/Vlv2TbltDevicePkg/GenBiosId \
+		edk2-$(ver)/Vlv2TbltDevicePkg/*.exe \
 		edk2-$(ver)/debian
 	# openssl
 	wget $(OPENSSL_URL)

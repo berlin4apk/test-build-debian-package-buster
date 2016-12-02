@@ -2,6 +2,7 @@ edk2 (0~20161202.7bbe0b3e-1) UNRELEASED; urgency=medium
 
   * New upstream release.
     - GOP driver for the VirtIo GPU (virtio-gpu-pci). Closes: #842680.
+    - Drop precompiled binaries from Vlv2TbltDevicePkg/.
   * Add myself to Uploaders.
   * debian/rules: Set OpenSSL version in one place.
   * d/p/arm64-reorder-blocks-algorithm.diff: Drop; superseded by
