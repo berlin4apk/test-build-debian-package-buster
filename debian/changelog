@@ -9,7 +9,7 @@ edk2 (0~20161202.7bbe0b3e-1) UNRELEASED; urgency=medium
   * d/p/arm64-reorder-blocks-algorithm.diff: Drop; superseded by
     upstream commit 8866d337.
   * d/p/arm64-no-pie-for-you.diff: Fix FTBFS w/ GCC that has PIE
-    enabled by default (now the case in Debian).
+    enabled by default (now the case in Debian). Closes: #846690.
   * debian/control: Clarify the package/guest architecture mapping.
     Closes: #837092.
   * d/p/no-missing-braces.diff: Refresh.
