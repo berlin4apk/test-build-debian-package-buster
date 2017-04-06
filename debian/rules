@@ -91,10 +91,10 @@ build-qemu-efi: setup-build
 			-p ArmVirtPkg/ArmVirtQemu.dsc \
 			-DSECURE_BOOT_ENABLE=TRUE \
 			-DINTEL_BDS \
-			-b RELEASE; \
-		dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/AAVMF_CODE.fd bs=1M seek=64 count=0; \
-		dd if=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/QEMU_EFI.fd of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/AAVMF_CODE.fd conv=notrunc; \
-		dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/AAVMF_VARS.fd bs=1M seek=64 count=0
+			-b RELEASE
+	dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/AAVMF_CODE.fd bs=1M seek=64 count=0; \
+	dd if=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/QEMU_EFI.fd of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/AAVMF_CODE.fd conv=notrunc; \
+	dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/AAVMF_VARS.fd bs=1M seek=64 count=0
 
 override_dh_auto_clean:
 	set -e; \
