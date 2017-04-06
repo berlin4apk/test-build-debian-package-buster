@@ -19,6 +19,7 @@ DEB_HOST_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
 # liblto*.a binaries that we strip from our orig.tar.xz.
 EDK2_TOOLCHAIN = GCC49
 export $(EDK2_TOOLCHAIN)_AARCH64_PREFIX=aarch64-linux-gnu-
+export $(EDK2_TOOLCHAIN)_ARM_PREFIX=arm-linux-gnueabihf-
 
 ifeq ($(DEB_BUILD_ARCH),amd64)
 	EDK2_BUILD_ARCH=X64
@@ -42,7 +43,7 @@ ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
 %:
 	dh $@
 
-override_dh_auto_build: build-qemu-efi-aarch64 build-ovmf
+override_dh_auto_build: build-qemu-efi-aarch64 build-qemu-efi-arm build-ovmf
 
 setup-build:
 	make -C BaseTools ARCH=$(EDK2_BUILD_ARCH)
@@ -90,12 +91,15 @@ build-qemu-efi: setup-build
 			-DSECURE_BOOT_ENABLE=TRUE \
 			-DINTEL_BDS \
 			-b RELEASE
-	dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/AAVMF_CODE.fd bs=1M seek=64 count=0; \
-	dd if=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/QEMU_EFI.fd of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/AAVMF_CODE.fd conv=notrunc; \
-	dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/AAVMF_VARS.fd bs=1M seek=64 count=0
+	dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/$(FW_NAME)_CODE.fd bs=1M seek=64 count=0
+	dd if=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/QEMU_EFI.fd of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/$(FW_NAME)_CODE.fd conv=notrunc
+	dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/$(FW_NAME)_VARS.fd bs=1M seek=64 count=0
 
 build-qemu-efi-aarch64:
-	$(MAKE) -f debian/rules build-qemu-efi EDK2_ARCH_DIR=AArch64 EDK2_HOST_ARCH=AARCH64
+	$(MAKE) -f debian/rules build-qemu-efi EDK2_ARCH_DIR=AArch64 EDK2_HOST_ARCH=AARCH64 FW_NAME=AAVMF
+
+build-qemu-efi-arm:
+	$(MAKE) -f debian/rules build-qemu-efi EDK2_ARCH_DIR=Arm EDK2_HOST_ARCH=ARM FW_NAME=AAVMF32
 
 override_dh_auto_clean:
 	set -e; \
