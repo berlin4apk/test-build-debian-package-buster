@@ -42,7 +42,7 @@ ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
 %:
 	dh $@
 
-override_dh_auto_build: build-qemu-efi build-ovmf
+override_dh_auto_build: build-qemu-efi-aarch64 build-ovmf
 
 setup-build:
 	make -C BaseTools ARCH=$(EDK2_BUILD_ARCH)
@@ -72,8 +72,6 @@ ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 			-b RELEASE -t $(EDK2_TOOLCHAIN)
 endif
 
-build-qemu-efi: EDK2_ARCH_DIR=AArch64
-build-qemu-efi: EDK2_HOST_ARCH=AARCH64
 build-qemu-efi: setup-build
 	mkdir -p ShellBinPkg/UefiShell/$(EDK2_ARCH_DIR) FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
 	set -e; . ./edksetup.sh; \
@@ -95,6 +93,9 @@ build-qemu-efi: setup-build
 	dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/AAVMF_CODE.fd bs=1M seek=64 count=0; \
 	dd if=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/QEMU_EFI.fd of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/AAVMF_CODE.fd conv=notrunc; \
 	dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/AAVMF_VARS.fd bs=1M seek=64 count=0
+
+build-qemu-efi-aarch64:
+	$(MAKE) -f debian/rules build-qemu-efi EDK2_ARCH_DIR=AArch64 EDK2_HOST_ARCH=AARCH64
 
 override_dh_auto_clean:
 	set -e; \
