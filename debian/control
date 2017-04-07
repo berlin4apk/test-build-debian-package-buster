@@ -19,9 +19,17 @@ Description: UEFI firmware for 64-bit x86 virtual machines
  machines. It includes full support for UEFI, including Secure Boot, allowing
  use of UEFI in place of a traditional BIOS in your VM.
 
-Package: qemu-efi
+Package: qemu-efi-aarch64
 Architecture: all
 Depends: ${misc:Depends}
+Breaks: qemu-efi (<< 0~20161202.7bbe0b3e-2)
 Description: UEFI firmware for 64-bit ARM virtual machines
- qemu-efi is a build of EDK II for 64-bit ARM virtual machines. It includes
- full support for UEFI, including Secure Boot.
+ qemu-efi-aarch64 is a build of EDK II for 64-bit ARM virtual machines. It
+ includes full support for UEFI, including Secure Boot.
+
+Package: qemu-efi
+Architecture: all
+Depends: qemu-efi-aarch64, ${misc:Depends}
+Description: transitional dummy package
+ This is a transitional dummy package. It contains a compatibility symlink
+ of /usr/share/qemu-efi/QEMU_EFI.fd to /usr/share/qemu-efi-aarch64/QEMU_EFI.fd.

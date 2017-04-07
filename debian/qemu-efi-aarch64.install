@@ -1,0 +1,2 @@
+Build/ArmVirtQemu-AARCH64/RELEASE_*GCC*/FV/QEMU_EFI.fd /usr/share/qemu-efi-aarch64
+Build/ArmVirtQemu-AARCH64/RELEASE_*GCC*/FV/AAVMF_*.fd /usr/share/AAVMF
