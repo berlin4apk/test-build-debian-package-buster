@@ -1,6 +1,7 @@
-/*++
+/** @file
+  Definitions for on-disk FAT structures.
 
-Copyright (c) 2005, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2005 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials are licensed and made available
 under the terms and conditions of the BSD License which accompanies this
 distribution. The full text of the license may be found at
@@ -10,17 +11,7 @@ THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
 WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 
-Module Name:
-
-  FatFileSystem.h
-
-Abstract:
-
-  Definitions for on-disk FAT structures
-
-Revision History
-
---*/
+**/
 
 #ifndef _FATFILESYSTEM_H_
 #define _FATFILESYSTEM_H_
@@ -35,7 +26,7 @@ Revision History
 //
 // FAT entry values
 //
-#define FAT_CLUSTER_SPECIAL_EXT       (-1 & (~0xF))
+#define FAT_CLUSTER_SPECIAL_EXT       (MAX_UINTN & (~0xF))
 #define FAT_CLUSTER_SPECIAL           ((FAT_CLUSTER_SPECIAL_EXT) | 0x07)
 #define FAT_CLUSTER_FREE              0
 #define FAT_CLUSTER_RESERVED          (FAT_CLUSTER_SPECIAL)
@@ -146,12 +137,14 @@ typedef struct {
   CHAR8   SystemId[8];
 } FAT32_BOOT_SECTOR_EXT;
 
-typedef struct {
-  FAT_BOOT_SECTOR_BASIC   FatBsb;
-  union {
+typedef union {
     FAT_BOOT_SECTOR_EXT   FatBse;
     FAT32_BOOT_SECTOR_EXT Fat32Bse;
-  } FatBse;
+  } FAT_BSE;
+
+typedef struct {
+  FAT_BOOT_SECTOR_BASIC   FatBsb;
+  FAT_BSE  FatBse;
 } FAT_BOOT_SECTOR;
 
 //

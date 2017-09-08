@@ -1,7 +1,7 @@
 /** @file
   UEFI HTTP boot driver's private data structure and interfaces declaration.
 
-Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2015 - 2017, Intel Corporation. All rights reserved.<BR>
 (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials are licensed and made available under 
 the terms and conditions of the BSD License that accompanies this distribution.  
@@ -36,6 +36,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Library/HttpLib.h>
 #include <Library/HiiLib.h>
 #include <Library/PrintLib.h>
+#include <Library/DpcLib.h>
 
 //
 // UEFI Driver Model Protocols
@@ -61,6 +62,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 // Produced Protocols
 //
 #include <Protocol/LoadFile.h>
+#include <Protocol/HttpBootCallback.h>
 
 //
 // Consumed Guids
@@ -73,10 +75,12 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #define HTTP_BOOT_DXE_VERSION  0xa
 
 //
-// Provisional Standard Media Types defined in 
-// http://www.iana.org/assignments/provisional-standard-media-types/provisional-standard-media-types.xhtml
+// Standard Media Types defined in 
+// http://www.iana.org/assignments/media-types
 //
 #define HTTP_CONTENT_TYPE_APP_EFI           "application/efi"
+#define HTTP_CONTENT_TYPE_APP_IMG           "application/vnd.efi-img"
+#define HTTP_CONTENT_TYPE_APP_ISO           "application/vnd.efi-iso"
 
 //
 // Protocol instances
@@ -130,6 +134,14 @@ struct _HTTP_BOOT_VIRTUAL_NIC {
   CallbackInfo, \
   HTTP_BOOT_PRIVATE_DATA_SIGNATURE \
   )
+  
+#define HTTP_BOOT_PRIVATE_DATA_FROM_CALLBACK_PROTOCOL(CallbackProtocol) \
+    CR ( \
+    CallbackProtocol, \
+    HTTP_BOOT_PRIVATE_DATA, \
+    LoadFileCallback, \
+    HTTP_BOOT_PRIVATE_DATA_SIGNATURE \
+    )
 
 struct _HTTP_BOOT_PRIVATE_DATA {
   UINT32                                    Signature;
@@ -165,6 +177,15 @@ struct _HTTP_BOOT_PRIVATE_DATA {
   EFI_LOAD_FILE_PROTOCOL                    LoadFile;
   EFI_DEVICE_PATH_PROTOCOL                  *DevicePath;
   UINT32                                    Id;
+  EFI_HTTP_BOOT_CALLBACK_PROTOCOL           *HttpBootCallback;
+  EFI_HTTP_BOOT_CALLBACK_PROTOCOL           LoadFileCallback;
+
+  //
+  // Data for the default HTTP Boot callback protocol
+  //
+  UINT64                                    FileSize;
+  UINT64                                    ReceivedSize;
+  UINT32                                    Percentage;
 
   //
   // HII callback info block
@@ -181,6 +202,8 @@ struct _HTTP_BOOT_PRIVATE_DATA {
   EFI_IP_ADDRESS                            GatewayIp;
   EFI_IP_ADDRESS                            ServerIp;
   UINT16                                    Port;
+  UINT32                                    DnsServerCount;
+  EFI_IP_ADDRESS                            *DnsServerIp;
 
   //
   // The URI string attempt to download through HTTP, may point to

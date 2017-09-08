@@ -1,7 +1,7 @@
 /** @file
   Provides interface to advanced shell functionality for parsing both handle and protocol database.
 
-  Copyright (c) 2010 - 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2010 - 2017, Intel Corporation. All rights reserved.<BR>
   (C) Copyright 2013-2015 Hewlett-Packard Development Company, L.P.<BR>
   (C) Copyright 2015-2016 Hewlett Packard Enterprise Development LP<BR>
   This program and the accompanying materials
@@ -16,11 +16,73 @@
 
 #include "UefiHandleParsingLib.h"
 #include "IndustryStandard/Acpi10.h"
+#include <PiDxe.h>
+#include <Protocol/FirmwareVolume2.h>
 
 EFI_HANDLE        mHandleParsingHiiHandle = NULL;
 HANDLE_INDEX_LIST mHandleList = {{{NULL,NULL},0,0},0};
-GUID_INFO_BLOCK   *GuidList;
-UINTN             GuidListCount;
+GUID_INFO_BLOCK   *mGuidList;
+UINTN             mGuidListCount;
+
+/**
+  Function to find the file name associated with a LoadedImageProtocol.
+
+  @param[in] LoadedImage     An instance of LoadedImageProtocol.
+
+  @retval                    A string representation of the file name associated
+                             with LoadedImage, or NULL if no name can be found.
+**/
+CHAR16*
+FindLoadedImageFileName (
+  IN EFI_LOADED_IMAGE_PROTOCOL *LoadedImage
+  )
+{
+  EFI_GUID                       *NameGuid;
+  EFI_STATUS                     Status;
+  EFI_FIRMWARE_VOLUME2_PROTOCOL  *Fv;
+  VOID                           *Buffer;
+  UINTN                          BufferSize;
+  UINT32                         AuthenticationStatus;
+
+  if ((LoadedImage == NULL) || (LoadedImage->FilePath == NULL)) {
+    return NULL;
+  }
+
+  NameGuid = EfiGetNameGuidFromFwVolDevicePathNode((MEDIA_FW_VOL_FILEPATH_DEVICE_PATH *)LoadedImage->FilePath);
+
+  if (NameGuid == NULL) {
+    return NULL;
+  }
+
+  //
+  // Get the FirmwareVolume2Protocol of the device handle that this image was loaded from.
+  //
+  Status = gBS->HandleProtocol (LoadedImage->DeviceHandle, &gEfiFirmwareVolume2ProtocolGuid, (VOID**) &Fv);
+
+  //
+  // FirmwareVolume2Protocol is PI, and is not required to be available.
+  //
+  if (EFI_ERROR (Status)) {
+    return NULL;
+  }
+
+  //
+  // Read the user interface section of the image.
+  //
+  Buffer = NULL;
+  Status = Fv->ReadSection(Fv, NameGuid, EFI_SECTION_USER_INTERFACE, 0, &Buffer, &BufferSize, &AuthenticationStatus);
+
+  if (EFI_ERROR (Status)) {
+    return NULL;
+  }
+
+  //
+  // ReadSection returns just the section data, without any section header. For
+  // a user interface section, the only data is the file name.
+  //
+  return Buffer;
+}
+
 /**
   Function to translate the EFI_MEMORY_TYPE into a string.
 
@@ -98,8 +160,8 @@ HandleParsingLibConstructor (
   IN EFI_SYSTEM_TABLE  *SystemTable
   )
 {
-  GuidListCount = 0;
-  GuidList      = NULL;
+  mGuidListCount = 0;
+  mGuidList      = NULL;
 
   //
   // Do nothing with mHandleParsingHiiHandle.  Initialize HII as needed.
@@ -137,11 +199,11 @@ HandleParsingLibDestructor (
 {
   UINTN                 LoopCount;
 
-  for (LoopCount = 0; GuidList != NULL && LoopCount < GuidListCount; LoopCount++) {
-    SHELL_FREE_NON_NULL(GuidList[LoopCount].GuidId);
+  for (LoopCount = 0; mGuidList != NULL && LoopCount < mGuidListCount; LoopCount++) {
+    SHELL_FREE_NON_NULL(mGuidList[LoopCount].GuidId);
   }
 
-  SHELL_FREE_NON_NULL(GuidList);
+  SHELL_FREE_NON_NULL(mGuidList);
   if (mHandleParsingHiiHandle != NULL) {
     HiiRemovePackages(mHandleParsingHiiHandle);
   }
@@ -169,18 +231,13 @@ LoadedImageProtocolDumpInformation(
   EFI_STATUS                        Status;
   CHAR16                            *RetVal;
   CHAR16                            *Temp;
+  CHAR16                            *FileName;
+  CHAR16                            *FilePath;
   CHAR16                            *CodeType;
   CHAR16                            *DataType;
 
   if (!Verbose) {
     return (CatSPrint(NULL, L"LoadedImage"));
-  }
-
-  HandleParsingHiiInit();
-
-  Temp = HiiGetString(mHandleParsingHiiHandle, STRING_TOKEN(STR_LI_DUMP_MAIN), NULL);
-  if (Temp == NULL) {
-    return NULL;
   }
 
   Status = gBS->OpenProtocol (
@@ -193,21 +250,43 @@ LoadedImageProtocolDumpInformation(
                );
 
   if (EFI_ERROR (Status)) {
-    SHELL_FREE_NON_NULL (Temp);
     return NULL;
   }
+
+  HandleParsingHiiInit();
+
+  FileName = FindLoadedImageFileName(LoadedImage);
+
+  RetVal = NULL;
+  if (FileName != NULL) {
+    Temp = HiiGetString(mHandleParsingHiiHandle, STRING_TOKEN(STR_LI_DUMP_NAME), NULL);
+
+    if (Temp != NULL) {
+      RetVal = CatSPrint(NULL, Temp, FileName);
+    }
+
+    SHELL_FREE_NON_NULL(Temp);
+    SHELL_FREE_NON_NULL(FileName);
+  }
+
+  Temp = HiiGetString(mHandleParsingHiiHandle, STRING_TOKEN(STR_LI_DUMP_MAIN), NULL);
+  if (Temp == NULL) {
+    return NULL;
+  }
+
+  FilePath = ConvertDevicePathToText(LoadedImage->FilePath, TRUE, TRUE);
 
   DataType = ConvertMemoryType(LoadedImage->ImageDataType);
   CodeType = ConvertMemoryType(LoadedImage->ImageCodeType);
 
   RetVal = CatSPrint(
-             NULL,
+             RetVal,
              Temp,
              LoadedImage->Revision,
              LoadedImage->ParentHandle,
              LoadedImage->SystemTable,
              LoadedImage->DeviceHandle,
-             LoadedImage->FilePath,
+             FilePath,
              LoadedImage->LoadOptionsSize,
              LoadedImage->LoadOptions,
              LoadedImage->ImageBase,
@@ -219,6 +298,7 @@ LoadedImageProtocolDumpInformation(
 
 
   SHELL_FREE_NON_NULL(Temp);
+  SHELL_FREE_NON_NULL(FilePath);
   SHELL_FREE_NON_NULL(CodeType);
   SHELL_FREE_NON_NULL(DataType);
 
@@ -933,25 +1013,22 @@ AdapterInformationDumpInformation (
       } else {
 
         GuidStr = GetStringNameFromGuid (&InfoTypesBuffer[GuidIndex], NULL);
+        if (GuidStr == NULL) {
+          TempRetVal = CatSPrint (RetVal, TempStr, L"UnknownInfoType");
+          SHELL_FREE_NON_NULL (RetVal);
+          RetVal = TempRetVal;
 
-        if (GuidStr != NULL) {
-          if (StrCmp(GuidStr, L"UnknownDevice") == 0) {
-            TempRetVal = CatSPrint (RetVal, TempStr, L"UnknownInfoType");
-            SHELL_FREE_NON_NULL (RetVal);
-            RetVal = TempRetVal;
-
-            SHELL_FREE_NON_NULL (TempStr);
-            SHELL_FREE_NON_NULL(GuidStr);
-            //
-            // So that we never have to pass this UnknownInfoType to the parsing function "GetInformation" service of AIP
-            //
-            continue;
-          } else {
-            TempRetVal = CatSPrint (RetVal, TempStr, GuidStr);
-            SHELL_FREE_NON_NULL (RetVal);
-            RetVal = TempRetVal;
-            SHELL_FREE_NON_NULL(GuidStr);
-          }
+          SHELL_FREE_NON_NULL (TempStr);
+          SHELL_FREE_NON_NULL(GuidStr);
+          //
+          // So that we never have to pass this UnknownInfoType to the parsing function "GetInformation" service of AIP
+          //
+          continue;
+        } else {
+          TempRetVal = CatSPrint (RetVal, TempStr, GuidStr);
+          SHELL_FREE_NON_NULL (RetVal);
+          RetVal = TempRetVal;
+          SHELL_FREE_NON_NULL(GuidStr);
         }
       }
 
@@ -1500,7 +1577,7 @@ STATIC CONST GUID_INFO_BLOCK mGuidStringListNT[] = {
   {STRING_TOKEN(STR_WINNT_THUNK),           (EFI_GUID*)&WinNtThunkProtocolGuid,               NULL},
   {STRING_TOKEN(STR_WINNT_DRIVER_IO),       (EFI_GUID*)&WinNtIoProtocolGuid,                  NULL},
   {STRING_TOKEN(STR_WINNT_SERIAL_PORT),     (EFI_GUID*)&WinNtSerialPortGuid,                  NULL},
-  {STRING_TOKEN(STR_UNKNOWN_DEVICE),        NULL,                                             NULL},
+  {0,                                       NULL,                                             NULL},
 };
 
 STATIC CONST GUID_INFO_BLOCK mGuidStringList[] = {
@@ -1816,7 +1893,7 @@ STATIC CONST GUID_INFO_BLOCK mGuidStringList[] = {
 //
 // terminator
 //
-  {STRING_TOKEN(STR_UNKNOWN_DEVICE),        NULL,                                             NULL},
+  {0,                                       NULL,                                             NULL},
 };
 
 /**
@@ -1838,7 +1915,7 @@ InternalShellGetNodeFromGuid(
 
   ASSERT(Guid != NULL);
 
-  for (LoopCount = 0, ListWalker = GuidList; GuidList != NULL && LoopCount < GuidListCount; LoopCount++, ListWalker++) {
+  for (LoopCount = 0, ListWalker = mGuidList; mGuidList != NULL && LoopCount < mGuidListCount; LoopCount++, ListWalker++) {
     if (CompareGuid(ListWalker->GuidId, Guid)) {
       return (ListWalker);
     }
@@ -1881,18 +1958,18 @@ InsertNewGuidNameMapping(
   ASSERT(Guid   != NULL);
   ASSERT(NameID != 0);
 
-  GuidList = ReallocatePool(GuidListCount * sizeof(GUID_INFO_BLOCK), GuidListCount+1 * sizeof(GUID_INFO_BLOCK), GuidList);
-  if (GuidList == NULL) {
-    GuidListCount = 0;
+  mGuidList = ReallocatePool(mGuidListCount * sizeof(GUID_INFO_BLOCK), mGuidListCount+1 * sizeof(GUID_INFO_BLOCK), mGuidList);
+  if (mGuidList == NULL) {
+    mGuidListCount = 0;
     return (EFI_OUT_OF_RESOURCES);
   }
-  GuidListCount++;
+  mGuidListCount++;
 
-  GuidList[GuidListCount - 1].GuidId   = AllocateCopyPool(sizeof(EFI_GUID), Guid);
-  GuidList[GuidListCount - 1].StringId = NameID;
-  GuidList[GuidListCount - 1].DumpInfo = DumpFunc;
+  mGuidList[mGuidListCount - 1].GuidId   = AllocateCopyPool(sizeof(EFI_GUID), Guid);
+  mGuidList[mGuidListCount - 1].StringId = NameID;
+  mGuidList[mGuidListCount - 1].DumpInfo = DumpFunc;
 
-  if (GuidList[GuidListCount - 1].GuidId == NULL) {
+  if (mGuidList[mGuidListCount - 1].GuidId == NULL) {
     return (EFI_OUT_OF_RESOURCES);
   }
 
@@ -1964,7 +2041,10 @@ GetStringNameFromGuid(
   HandleParsingHiiInit();
 
   Id = InternalShellGetNodeFromGuid(Guid);
-  return (HiiGetString(mHandleParsingHiiHandle, Id==NULL?STRING_TOKEN(STR_UNKNOWN_DEVICE):Id->StringId, Lang));
+  if (Id == NULL) {
+    return NULL;
+  }
+  return HiiGetString (mHandleParsingHiiHandle, Id->StringId, Lang);
 }
 
 /**
@@ -2061,7 +2141,7 @@ GetGuidFromStringName(
     }
   }
 
-  for (LoopCount = 0, ListWalker = GuidList; GuidList != NULL && LoopCount < GuidListCount; LoopCount++, ListWalker++) {
+  for (LoopCount = 0, ListWalker = mGuidList; mGuidList != NULL && LoopCount < mGuidListCount; LoopCount++, ListWalker++) {
     String = HiiGetString(mHandleParsingHiiHandle, ListWalker->StringId, Lang);
     if (Name != NULL && String != NULL && StringNoCaseCompare (&Name, &String) == 0) {
       *Guid = ListWalker->GuidId;
@@ -2331,7 +2411,9 @@ ConvertHandleIndexToHandle(
       // Verify that LinkWalker->TheHandle is valid handle
       //
       Status = gBS->ProtocolsPerHandle(ListWalker->TheHandle, &ProtocolBuffer, &ProtocolCount);
-      if (EFI_ERROR (Status)) {
+      if (!EFI_ERROR (Status)) {
+        FreePool (ProtocolBuffer);
+      } else {
         //
         // TheHandle is not valid, so do not add to handle list
         //
@@ -3078,4 +3160,56 @@ GetHandleListByProtocolList (
   }
 
   return (HandleList);
+}
+
+/**
+  Return all supported GUIDs.
+
+  @param[out]     Guids  The buffer to return all supported GUIDs.
+  @param[in, out] Count  On input, the count of GUIDs the buffer can hold,
+                         On output, the count of GUIDs to return.
+
+  @retval EFI_INVALID_PARAMETER Count is NULL.
+  @retval EFI_BUFFER_TOO_SMALL  Buffer is not enough to hold all GUIDs.
+  @retval EFI_SUCCESS           GUIDs are returned successfully.
+**/
+EFI_STATUS
+EFIAPI
+GetAllMappingGuids (
+  OUT EFI_GUID *Guids,
+  IN OUT UINTN *Count
+  )
+{
+  UINTN GuidCount;
+  UINTN NtGuidCount;
+  UINTN Index;
+
+  if (Count == NULL) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  NtGuidCount = 0;
+  if (PcdGetBool (PcdShellIncludeNtGuids)) {
+    NtGuidCount = ARRAY_SIZE (mGuidStringListNT) - 1;
+  }
+  GuidCount   = ARRAY_SIZE (mGuidStringList) - 1;
+
+  if (*Count < NtGuidCount + GuidCount + mGuidListCount) {
+    *Count = NtGuidCount + GuidCount + mGuidListCount;
+    return EFI_BUFFER_TOO_SMALL;
+  }
+
+  for (Index = 0; Index < NtGuidCount; Index++) {
+    CopyGuid (&Guids[Index], mGuidStringListNT[Index].GuidId);
+  }
+
+  for (Index = 0; Index < GuidCount; Index++) {
+    CopyGuid (&Guids[NtGuidCount + Index], mGuidStringList[Index].GuidId);
+  }
+
+  for (Index = 0; Index < mGuidListCount; Index++) {
+    CopyGuid (&Guids[NtGuidCount + GuidCount + Index], mGuidList[Index].GuidId);
+  }
+
+  return EFI_SUCCESS;
 }

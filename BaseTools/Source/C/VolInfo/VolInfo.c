@@ -1,7 +1,7 @@
 /** @file
 The tool dumps the contents of a firmware volume
 
-Copyright (c) 1999 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 1999 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -148,6 +148,65 @@ Usage (
   VOID
   );
 
+UINT32
+UnicodeStrLen (
+  IN CHAR16 *String
+  )
+  /*++
+
+  Routine Description:
+
+  Returns the length of a null-terminated unicode string.
+
+  Arguments:
+
+    String - The pointer to a null-terminated unicode string.
+
+  Returns:
+
+    N/A
+
+  --*/
+{
+  UINT32  Length;
+
+  for (Length = 0; *String != L'\0'; String++, Length++) {
+    ;
+  }
+  return Length;
+}
+
+VOID
+Unicode2AsciiString (
+  IN  CHAR16 *Source,
+  OUT CHAR8  *Destination
+  )
+  /*++
+
+  Routine Description:
+
+  Convert a null-terminated unicode string to a null-terminated ascii string.
+
+  Arguments:
+
+    Source      - The pointer to the null-terminated input unicode string.
+    Destination - The pointer to the null-terminated output ascii string.
+
+  Returns:
+
+    N/A
+
+  --*/
+{
+  while (*Source != '\0') {
+    *(Destination++) = (CHAR8) *(Source++);
+  }
+  //
+  // End the ascii with a NULL.
+  //
+  *Destination = '\0';
+}
+
 int
 main (
   int       argc,
@@ -272,7 +331,10 @@ Returns:
       if (OpenSslEnv == NULL) {
         OpenSslPath = OpenSslCommand;
       } else {
-        OpenSslPath = malloc(strlen(OpenSslEnv)+strlen(OpenSslCommand)+1);
+        //
+        // We add quotes to the Openssl Path in case it has space characters
+        //
+        OpenSslPath = malloc(2+strlen(OpenSslEnv)+strlen(OpenSslCommand)+1);
         if (OpenSslPath == NULL) {
           Error (NULL, 0, 4001, "Resource", "memory cannot be allocated!");
           return GetUtilityStatus ();
@@ -1531,10 +1593,13 @@ CombinePath (
 )
 {
   UINT32 DefaultPathLen;
+  UINT64 Index;
+  CHAR8  QuotesStr[] = "\"";
+  strcpy(NewPath, QuotesStr);
   DefaultPathLen = strlen(DefaultPath);
-  strcpy(NewPath, DefaultPath);
-  UINT64 Index = 0;
-  for (; Index < DefaultPathLen; Index ++) {
+  strcat(NewPath, DefaultPath);
+  Index = 0;
+  for (; Index < DefaultPathLen + 1; Index ++) {
     if (NewPath[Index] == '\\' || NewPath[Index] == '/') {
       if (NewPath[Index + 1] != '\0') {
         NewPath[Index] = '/';
@@ -1546,6 +1611,7 @@ CombinePath (
     NewPath[Index + 1] = '\0';
   }
   strcat(NewPath, AppendPath);
+  strcat(NewPath, QuotesStr);
   return EFI_SUCCESS;
 }
 
@@ -1606,6 +1672,7 @@ Returns:
   UINT32              RealHdrLen;
   CHAR8               *ToolInputFileName;
   CHAR8               *ToolOutputFileName;
+  CHAR8               *UIFileName;
 
   ParsedLength = 0;
   ToolInputFileName = NULL;
@@ -1714,7 +1781,14 @@ Returns:
       break;
 
     case EFI_SECTION_USER_INTERFACE:
-      printf ("  String: %ls\n", (wchar_t *) &((EFI_USER_INTERFACE_SECTION *) Ptr)->FileNameString);
+      UIFileName = (CHAR8 *) malloc (UnicodeStrLen (((EFI_USER_INTERFACE_SECTION *) Ptr)->FileNameString) + 1);
+      if (UIFileName == NULL) {
+        Error (NULL, 0, 4001, "Resource", "memory cannot be allocated!");
+        return EFI_OUT_OF_RESOURCES;
+      }
+      Unicode2AsciiString (((EFI_USER_INTERFACE_SECTION *) Ptr)->FileNameString, UIFileName);
+      printf ("  String: %s\n", UIFileName);
+      free (UIFileName);
       break;
 
     case EFI_SECTION_FIRMWARE_VOLUME_IMAGE:
@@ -2175,8 +2249,7 @@ Returns:
 {
   FILE              *Fptr;
   CHAR8             Line[MAX_LINE_LEN];
-  CHAR8             *FormatString;
-  INTN              FormatLength;
+  CHAR8             FormatString[MAX_LINE_LEN];
   GUID_TO_BASENAME  *GPtr;
 
   if ((Fptr = fopen (LongFilePath (FileName), "r")) == NULL) {
@@ -2187,23 +2260,8 @@ Returns:
   //
   // Generate the format string for fscanf
   //
-  FormatLength = snprintf (
-                   NULL,
-                   0,
-                   "%%%us %%%us",
-                   (unsigned) sizeof (GPtr->Guid) - 1,
-                   (unsigned) sizeof (GPtr->BaseName) - 1
-                   ) + 1;
-
-  FormatString = (CHAR8 *) malloc (FormatLength);
-  if (FormatString == NULL) {
-    fclose (Fptr);
-    return EFI_OUT_OF_RESOURCES;
-  }
-
-  snprintf (
+  sprintf (
     FormatString,
-    FormatLength,
     "%%%us %%%us",
     (unsigned) sizeof (GPtr->Guid) - 1,
     (unsigned) sizeof (GPtr->BaseName) - 1
@@ -2215,7 +2273,6 @@ Returns:
     //
     GPtr = malloc (sizeof (GUID_TO_BASENAME));
     if (GPtr == NULL) {
-      free (FormatString);
       fclose (Fptr);
       return EFI_OUT_OF_RESOURCES;
     }
@@ -2232,7 +2289,6 @@ Returns:
     }
   }
 
-  free (FormatString);
   fclose (Fptr);
   return EFI_SUCCESS;
 }

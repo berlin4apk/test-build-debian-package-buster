@@ -1,7 +1,7 @@
 /** @file
 This file contains functions required to generate a Firmware File System file.
 
-Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials                          
 are licensed and made available under the terms and conditions of the BSD License         
 which accompanies this distribution.  The full text of the license may be found at        
@@ -43,8 +43,10 @@ STATIC CHAR8 *mFfsFileType[] = {
   "EFI_FV_FILETYPE_SMM",                  // 0x0A
   "EFI_FV_FILETYPE_FIRMWARE_VOLUME_IMAGE",// 0x0B
   "EFI_FV_FILETYPE_COMBINED_SMM_DXE",     // 0x0C
-  "EFI_FV_FILETYPE_SMM_CORE"              // 0x0D
- };
+  "EFI_FV_FILETYPE_SMM_CORE",             // 0x0D
+  "EFI_FV_FILETYPE_MM_STANDALONE",        // 0x0E
+  "EFI_FV_FILETYPE_MM_CORE_STANDALONE"    // 0x0F
+};
 
 STATIC CHAR8 *mAlignName[] = {
   "1", "2", "4", "8", "16", "32", "64", "128", "256", "512",
@@ -114,7 +116,7 @@ Returns:
   //
   // Copyright declaration
   // 
-  fprintf (stdout, "Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.\n\n");
+  fprintf (stdout, "Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.\n\n");
 
   //
   // Details Option
@@ -130,6 +132,8 @@ Returns:
                         EFI_FV_FILETYPE_DRIVER, EFI_FV_FILETYPE_APPLICATION,\n\
                         EFI_FV_FILETYPE_COMBINED_PEIM_DRIVER,\n\
                         EFI_FV_FILETYPE_SMM, EFI_FV_FILETYPE_SMM_CORE,\n\
+                        EFI_FV_FILETYPE_MM_STANDALONE,\n\
+                        EFI_FV_FILETYPE_MM_CORE_STANDALONE,\n\
                         EFI_FV_FILETYPE_COMBINED_SMM_DXE, \n\
                         EFI_FV_FILETYPE_FIRMWARE_VOLUME_IMAGE.\n");
   fprintf (stdout, "  -g FileGuid, --fileguid FileGuid\n\
@@ -732,7 +736,7 @@ Returns:
       continue;
     }
 
-    Error (NULL, 0, 1000, "Unknown option", argv[0]);
+    Error (NULL, 0, 1000, "Unknown option", "%s", argv[0]);
     goto Finish;
   }
 

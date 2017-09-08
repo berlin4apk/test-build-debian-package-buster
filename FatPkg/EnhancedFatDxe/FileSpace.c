@@ -1,4 +1,5 @@
-/*++
+/** @file
+  Routines dealing with disk spaces and FAT table entries.
 
 Copyright (c) 2005 - 2013, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials are licensed and made available
@@ -10,43 +11,28 @@ THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
 WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 
-Module Name:
 
-  FileSpace.c
-
-Abstract:
-
-  Routines dealing with disk spaces and FAT table entries
-
-Revision History
-
---*/
+**/
 
 #include "Fat.h"
 
 
+/**
+
+  Get the FAT entry of the volume, which is identified with the Index.
+
+  @param  Volume                - FAT file system volume.
+  @param  Index                 - The index of the FAT entry of the volume.
+
+  @return The buffer of the FAT entry
+
+**/
 STATIC
 VOID *
 FatLoadFatEntry (
   IN FAT_VOLUME       *Volume,
   IN UINTN            Index
   )
-/*++
-
-Routine Description:
-
-  Get the FAT entry of the volume, which is identified with the Index.
-
-Arguments:
-
-  Volume                - FAT file system volume.
-  Index                 - The index of the FAT entry of the volume.
-
-Returns:
-
-  The buffer of the FAT entry
-
---*/
 {
   UINTN       Pos;
   EFI_STATUS  Status;
@@ -59,11 +45,11 @@ Returns:
   // Compute buffer position needed
   //
   switch (Volume->FatType) {
-  case FAT12:
+  case Fat12:
     Pos = FAT_POS_FAT12 (Index);
     break;
 
-  case FAT16:
+  case Fat16:
     Pos = FAT_POS_FAT16 (Index);
     break;
 
@@ -76,7 +62,7 @@ Returns:
   Volume->FatEntryPos = Volume->FatPos + Pos;
   Status = FatDiskIo (
              Volume,
-             READ_FAT,
+             ReadFat,
              Volume->FatEntryPos,
              Volume->FatEntrySize,
              &Volume->FatEntryBuffer,
@@ -89,33 +75,27 @@ Returns:
   return &Volume->FatEntryBuffer;
 }
 
+/**
+
+  Get the FAT entry value of the volume, which is identified with the Index.
+
+  @param  Volume                - FAT file system volume.
+  @param  Index                 - The index of the FAT entry of the volume.
+
+  @return  The value of the FAT entry.
+
+**/
 STATIC
 UINTN
 FatGetFatEntry (
   IN FAT_VOLUME       *Volume,
   IN UINTN            Index
   )
-/*++
-
-Routine Description:
-
-  Get the FAT entry value of the volume, which is identified with the Index.
-
-Arguments:
-
-  Volume                - FAT file system volume.
-  Index                 - The index of the FAT entry of the volume.
-
-Returns:
-
-  The value of the FAT entry.
-
---*/
 {
   VOID    *Pos;
-  UINT8   *E12;
-  UINT16  *E16;
-  UINT32  *E32;
+  UINT8   *En12;
+  UINT16  *En16;
+  UINT32  *En32;
   UINTN   Accum;
 
   Pos = FatLoadFatEntry (Volume, Index);
@@ -125,28 +105,41 @@ Returns:
   }
 
   switch (Volume->FatType) {
-  case FAT12:
-    E12   = Pos;
-    Accum = E12[0] | (E12[1] << 8);
+  case Fat12:
+    En12   = Pos;
+    Accum = En12[0] | (En12[1] << 8);
     Accum = FAT_ODD_CLUSTER_FAT12 (Index) ? (Accum >> 4) : (Accum & FAT_CLUSTER_MASK_FAT12);
     Accum = Accum | ((Accum >= FAT_CLUSTER_SPECIAL_FAT12) ? FAT_CLUSTER_SPECIAL_EXT : 0);
     break;
 
-  case FAT16:
-    E16   = Pos;
-    Accum = *E16;
+  case Fat16:
+    En16   = Pos;
+    Accum = *En16;
     Accum = Accum | ((Accum >= FAT_CLUSTER_SPECIAL_FAT16) ? FAT_CLUSTER_SPECIAL_EXT : 0);
     break;
 
   default:
-    E32   = Pos;
-    Accum = *E32 & FAT_CLUSTER_MASK_FAT32;
+    En32   = Pos;
+    Accum = *En32 & FAT_CLUSTER_MASK_FAT32;
     Accum = Accum | ((Accum >= FAT_CLUSTER_SPECIAL_FAT32) ? FAT_CLUSTER_SPECIAL_EXT : 0);
   }
 
   return Accum;
 }
 
+/**
+
+  Set the FAT entry value of the volume, which is identified with the Index.
+
+  @param  Volume                - FAT file system volume.
+  @param  Index                 - The index of the FAT entry of the volume.
+  @param  Value                 - The new value of the FAT entry.
+
+  @retval EFI_SUCCESS           - Set the new FAT entry value sucessfully.
+  @retval EFI_VOLUME_CORRUPTED  - The FAT type of the volume is error.
+  @return other                 - An error occurred when operation the FAT entries.
+
+**/
 STATIC
 EFI_STATUS
 FatSetFatEntry (
@@ -154,30 +147,11 @@ FatSetFatEntry (
   IN UINTN            Index,
   IN UINTN            Value
   )
-/*++
-
-Routine Description:
-
-  Set the FAT entry value of the volume, which is identified with the Index.
-
-Arguments:
-
-  Volume                - FAT file system volume.
-  Index                 - The index of the FAT entry of the volume.
-  Value                 - The new value of the FAT entry.
-
-Returns:
-
-  EFI_SUCCESS           - Set the new FAT entry value sucessfully.
-  EFI_VOLUME_CORRUPTED  - The FAT type of the volume is error.
-  other                 - An error occurred when operation the FAT entries.
-
---*/
 {
   VOID        *Pos;
-  UINT8       *E12;
-  UINT16      *E16;
-  UINT32      *E32;
+  UINT8       *En12;
+  UINT16      *En16;
+  UINT32      *En32;
   UINTN       Accum;
   EFI_STATUS  Status;
   UINTN       OriginalVal;
@@ -206,9 +180,9 @@ Returns:
   // Update the value
   //
   switch (Volume->FatType) {
-  case FAT12:
-    E12   = Pos;
-    Accum = E12[0] | (E12[1] << 8);
+  case Fat12:
+    En12   = Pos;
+    Accum = En12[0] | (En12[1] << 8);
     Value = Value & FAT_CLUSTER_MASK_FAT12;
 
     if (FAT_ODD_CLUSTER_FAT12 (Index)) {
@@ -217,25 +191,25 @@ Returns:
       Accum = Value | (Accum & FAT_CLUSTER_UNMASK_FAT12);
     }
 
-    E12[0]  = (UINT8) (Accum & 0xFF);
-    E12[1]  = (UINT8) (Accum >> 8);
+    En12[0]  = (UINT8) (Accum & 0xFF);
+    En12[1]  = (UINT8) (Accum >> 8);
     break;
 
-  case FAT16:
-    E16   = Pos;
-    *E16  = (UINT16) Value;
+  case Fat16:
+    En16   = Pos;
+    *En16  = (UINT16) Value;
     break;
 
   default:
-    E32   = Pos;
-    *E32  = (*E32 & FAT_CLUSTER_UNMASK_FAT32) | (UINT32) (Value & FAT_CLUSTER_MASK_FAT32);
+    En32   = Pos;
+    *En32  = (*En32 & FAT_CLUSTER_UNMASK_FAT32) | (UINT32) (Value & FAT_CLUSTER_MASK_FAT32);
   }
   //
   // If the volume's dirty bit is not set, set it now
   //
-  if (!Volume->FatDirty && Volume->FatType != FAT12) {
+  if (!Volume->FatDirty && Volume->FatType != Fat12) {
     Volume->FatDirty = TRUE;
-    FatAccessVolumeDirty (Volume, WRITE_FAT, &Volume->DirtyValue);
+    FatAccessVolumeDirty (Volume, WriteFat, &Volume->DirtyValue);
   }
   //
   // Write the updated fat entry value to the volume
@@ -244,7 +218,7 @@ Returns:
   //
   Status = FatDiskIo (
              Volume,
-             WRITE_FAT,
+             WriteFat,
              Volume->FatEntryPos,
              Volume->FatEntrySize,
              &Volume->FatEntryBuffer,
@@ -253,29 +227,23 @@ Returns:
   return Status;
 }
 
+/**
+
+  Free the cluster clain.
+
+  @param  Volume                - FAT file system volume.
+  @param  Cluster               - The first cluster of cluster chain.
+
+  @retval EFI_SUCCESS           - The cluster chain is freed successfully.
+  @retval EFI_VOLUME_CORRUPTED  - There are errors in the file's clusters.
+
+**/
 STATIC
 EFI_STATUS
 FatFreeClusters (
   IN FAT_VOLUME           *Volume,
   IN UINTN                Cluster
   )
-/*++
-
-Routine Description:
-
-  Free the cluster clain.
-
-Arguments:
-
-  Volume                - FAT file system volume.
-  Cluster               - The first cluster of cluster chain.
-
-Returns:
-
-  EFI_SUCCESS           - The cluster chain is freed successfully.
-  EFI_VOLUME_CORRUPTED  - There are errors in the file's clusters.
-
---*/
 {
   UINTN LastCluster;
 
@@ -294,26 +262,20 @@ Returns:
   return EFI_SUCCESS;
 }
 
+/**
+
+  Allocate a free cluster and return the cluster index.
+
+  @param  Volume                - FAT file system volume.
+
+  @return The index of the free cluster
+
+**/
 STATIC
 UINTN
 FatAllocateCluster (
   IN FAT_VOLUME   *Volume
   )
-/*++
-
-Routine Description:
-
-  Allocate a free cluster and return the cluster index.
-
-Arguments:
-
-  Volume                - FAT file system volume.
-
-Returns:
-
-  The index of the free cluster
-
---*/
 {
   UINTN Cluster;
 
@@ -354,28 +316,22 @@ Returns:
   return Cluster;
 }
 
+/**
+
+  Count the number of clusters given a size.
+
+  @param  Volume                - The file system volume.
+  @param  Size                  - The size in bytes.
+
+  @return The number of the clusters.
+
+**/
 STATIC
 UINTN
 FatSizeToClusters (
   IN FAT_VOLUME       *Volume,
   IN UINTN            Size
   )
-/*++
-
-Routine Description:
-
-  Count the number of clusters given a size
-
-Arguments:
-
-  Volume                - The file system volume.
-  Size                  - The size in bytes.
-
-Returns:
-
-  The number of the clusters.
-
---*/
 {
   UINTN Clusters;
 
@@ -387,26 +343,20 @@ Returns:
   return Clusters;
 }
 
+/**
+
+  Shrink the end of the open file base on the file size.
+
+  @param  OFile                 - The open file.
+
+  @retval EFI_SUCCESS           - Shrinked sucessfully.
+  @retval EFI_VOLUME_CORRUPTED  - There are errors in the file's clusters.
+
+**/
 EFI_STATUS
 FatShrinkEof (
   IN FAT_OFILE            *OFile
   )
-/*++
-
-Routine Description:
-
-  Shrink the end of the open file base on the file size.
-
-Arguments:
-
-  OFile                 - The open file.
-
-Returns:
-
-  EFI_SUCCESS           - Shrinked sucessfully.
-  EFI_VOLUME_CORRUPTED  - There are errors in the file's clusters.
-
---*/
 {
   FAT_VOLUME  *Volume;
   UINTN       NewSize;
@@ -465,30 +415,24 @@ Returns:
   return FatFreeClusters (Volume, Cluster);
 }
 
+/**
+
+  Grow the end of the open file base on the NewSizeInBytes.
+
+  @param  OFile                 - The open file.
+  @param  NewSizeInBytes        - The new size in bytes of the open file.
+
+  @retval EFI_SUCCESS           - The file is grown sucessfully.
+  @retval EFI_UNSUPPORTED       - The file size is larger than 4GB.
+  @retval EFI_VOLUME_CORRUPTED  - There are errors in the files' clusters.
+  @retval EFI_VOLUME_FULL       - The volume is full and can not grow the file.
+
+**/
 EFI_STATUS
 FatGrowEof (
   IN FAT_OFILE            *OFile,
   IN UINT64               NewSizeInBytes
   )
-/*++
-
-Routine Description:
-
-  Grow the end of the open file base on the NewSizeInBytes.
-
-Arguments:
-
-  OFile                 - The open file.
-  NewSizeInBytes        - The new size in bytes of the open file.
-
-Returns:
-
-  EFI_SUCCESS           - The file is grown sucessfully.
-  EFI_UNSUPPORTED       - The file size is larger than 4GB.
-  EFI_VOLUME_CORRUPTED  - There are errors in the files' clusters.
-  EFI_VOLUME_FULL       - The volume is full and can not grow the file.
-
---*/
 {
   FAT_VOLUME  *Volume;
   EFI_STATUS  Status;
@@ -591,31 +535,25 @@ Done:
   return Status;
 }
 
+/**
+
+  Seek OFile to requested position, and calculate the number of
+  consecutive clusters from the position in the file
+
+  @param  OFile                 - The open file.
+  @param  Position              - The file's position which will be accessed.
+  @param  PosLimit              - The maximum length current reading/writing may access
+
+  @retval EFI_SUCCESS           - Set the info successfully.
+  @retval EFI_VOLUME_CORRUPTED  - Cluster chain corrupt.
+
+**/
 EFI_STATUS
 FatOFilePosition (
   IN FAT_OFILE            *OFile,
   IN UINTN                Position,
   IN UINTN                PosLimit
   )
-/*++
-
-Routine Description:
-
-  Seek OFile to requested position, and calculate the number of
-  consecutive clusters from the position in the file
-
-Arguments:
-
-  OFile                 - The open file.
-  Position              - The file's position which will be accessed.
-  PosLimit              - The maximum length current reading/writing may access
-
-Returns:
-
-  EFI_SUCCESS           - Set the info successfully.
-  EFI_VOLUME_CORRUPTED  - Cluster chain corrupt.
-
---*/
 {
   FAT_VOLUME  *Volume;
   UINTN       ClusterSize;
@@ -691,28 +629,22 @@ Returns:
   return EFI_SUCCESS;
 }
 
+/**
+
+  Get the size of directory of the open file.
+
+  @param  Volume                - The File System Volume.
+  @param  Cluster               - The Starting cluster.
+
+  @return The physical size of the file starting at the input cluster, if there is error in the
+  cluster chain, the return value is 0.
+
+**/
 UINTN
 FatPhysicalDirSize (
   IN FAT_VOLUME            *Volume,
   IN UINTN                 Cluster
   )
-/*++
-
-Routine Description:
-
- Get the size of directory of the open file
-
-Arguments:
-
-  Volume                - The File System Volume.
-  Cluster               - The Starting cluster.
-
-Returns:
-
-  The physical size of the file starting at the input cluster, if there is error in the
-  cluster chain, the return value is 0.
-
---*/
 {
   UINTN Size;
   ASSERT_VOLUME_LOCKED (Volume);
@@ -742,27 +674,21 @@ Returns:
   return Size;
 }
 
+/**
+
+  Get the physical size of a file on the disk.
+
+  @param  Volume                - The file system volume.
+  @param  RealSize              - The real size of a file.
+
+  @return The physical size of a file on the disk.
+
+**/
 UINT64
 FatPhysicalFileSize (
   IN FAT_VOLUME            *Volume,
   IN UINTN                 RealSize
   )
-/*++
-
-Routine Description:
-
- Get the physical size of a file on the disk.
-
-Arguments:
-
-  Volume                - The file system volume.
-  RealSize              - The real size of a file.
-
-Returns:
-
-  The physical size of a file on the disk.
-
---*/
 {
   UINTN   ClusterSizeMask;
   UINT64  PhysicalSize;
@@ -771,25 +697,17 @@ Returns:
   return PhysicalSize;
 }
 
+/**
+
+  Update the free cluster info of FatInfoSector of the volume.
+
+  @param  Volume                - FAT file system volume.
+
+**/
 VOID
 FatComputeFreeInfo (
   IN FAT_VOLUME *Volume
   )
-/*++
-
-Routine Description:
-
-  Update the free cluster info of FatInfoSector of the volume.
-
-Arguments:
-
-  Volume                - FAT file system volume.
-
-Returns:
-
-  None.
-
---*/
 {
   UINTN Index;
 

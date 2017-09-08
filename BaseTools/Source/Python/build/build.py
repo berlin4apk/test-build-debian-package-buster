@@ -2,7 +2,7 @@
 # build a platform or a module
 #
 #  Copyright (c) 2014, Hewlett-Packard Development Company, L.P.<BR>
-#  Copyright (c) 2007 - 2016, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
 #
 #  This program and the accompanying materials
 #  are licensed and made available under the terms and conditions of the BSD License
@@ -54,7 +54,7 @@ import Common.GlobalData as GlobalData
 # Version and Copyright
 VersionNumber = "0.60" + ' ' + gBUILD_VERSION
 __version__ = "%prog Version " + VersionNumber
-__copyright__ = "Copyright (c) 2007 - 2016, Intel Corporation  All rights reserved."
+__copyright__ = "Copyright (c) 2007 - 2017, Intel Corporation  All rights reserved."
 
 ## standard targets of build command
 gSupportedTarget = ['all', 'genc', 'genmake', 'modules', 'libraries', 'fds', 'clean', 'cleanall', 'cleanlib', 'run']
@@ -796,8 +796,6 @@ class Build():
         self.BuildModules = []
         self.Db_Flag = False
         self.LaunchPrebuildFlag = False
-        self.PrebuildScript = ''
-        self.PostbuildScript = ''
         self.PlatformBuildPath = os.path.join(GlobalData.gConfDirectory,'.cache', '.PlatformBuild')
         if BuildOptions.CommandLength:
             GlobalData.gCommandMaxLength = BuildOptions.CommandLength
@@ -819,11 +817,11 @@ class Build():
         EdkLogger.quiet("%-16s = %s" % ("CONF_PATH", GlobalData.gConfDirectory))
         self.InitPreBuild()
         self.InitPostBuild()
-        if self.PrebuildScript:
-            EdkLogger.quiet("%-16s = %s" % ("PREBUILD", self.PrebuildScript))
-        if self.PostbuildScript:
-            EdkLogger.quiet("%-16s = %s" % ("POSTBUILD", self.PostbuildScript))
-        if self.PrebuildScript:
+        if self.Prebuild:
+            EdkLogger.quiet("%-16s = %s" % ("PREBUILD", self.Prebuild))
+        if self.Postbuild:
+            EdkLogger.quiet("%-16s = %s" % ("POSTBUILD", self.Postbuild))
+        if self.Prebuild:
             self.LaunchPrebuild()
             self.TargetTxt = TargetTxtClassObject()
             self.ToolDef   = ToolDefClassObject()
@@ -890,7 +888,7 @@ class Build():
         for Tool in self.ToolChainList:
             if TAB_TOD_DEFINES_FAMILY not in ToolDefinition or Tool not in ToolDefinition[TAB_TOD_DEFINES_FAMILY] \
                or not ToolDefinition[TAB_TOD_DEFINES_FAMILY][Tool]:
-                EdkLogger.warn("No tool chain family found in configuration for %s. Default to MSFT." % Tool)
+                EdkLogger.warn("build", "No tool chain family found in configuration for %s. Default to MSFT." % Tool)
                 ToolChainFamily.append("MSFT")
             else:
                 ToolChainFamily.append(ToolDefinition[TAB_TOD_DEFINES_FAMILY][Tool])
@@ -964,16 +962,37 @@ class Build():
             Platform = self.Db._MapPlatform(str(self.PlatformFile))
             self.Prebuild = str(Platform.Prebuild)
         if self.Prebuild:
-            PrebuildList = self.Prebuild.split()
-            if not os.path.isabs(PrebuildList[0]):
-                PrebuildList[0] = mws.join(self.WorkspaceDir, PrebuildList[0])
-            if os.path.isfile(PrebuildList[0]):
-                self.PrebuildScript = PrebuildList[0]
-                self.Prebuild = ' '.join(PrebuildList)
-                self.Prebuild += self.PassCommandOption(self.BuildTargetList, self.ArchList, self.ToolChainList)
-                #self.LaunchPrebuild()
-            else:
-                EdkLogger.error("Prebuild", PREBUILD_ERROR, "the prebuild script %s is not exist.\n If you'd like to disable the Prebuild process, please use the format: -D PREBUILD=\"\" " %(PrebuildList[0]))
+            PrebuildList = []
+            #
+            # Evaluate all arguments and convert arguments that are WORKSPACE
+            # relative paths to absolute paths.  Filter arguments that look like
+            # flags or do not follow the file/dir naming rules to avoid false
+            # positives on this conversion.
+            #
+            for Arg in self.Prebuild.split():
+                #
+                # Do not modify Arg if it looks like a flag or an absolute file path
+                #
+                if Arg.startswith('-')  or os.path.isabs(Arg):
+                    PrebuildList.append(Arg)
+                    continue
+                #
+                # Do not modify Arg if it does not look like a Workspace relative
+                # path that starts with a valid package directory name
+                #
+                if not Arg[0].isalpha() or os.path.dirname(Arg) == '':
+                    PrebuildList.append(Arg)
+                    continue
+                #
+                # If Arg looks like a WORKSPACE relative path, then convert to an
+                # absolute path and check to see if the file exists.
+                #
+                Temp = mws.join(self.WorkspaceDir, Arg)
+                if os.path.isfile(Temp):
+                    Arg = Temp
+                PrebuildList.append(Arg)
+            self.Prebuild       = ' '.join(PrebuildList)
+            self.Prebuild += self.PassCommandOption(self.BuildTargetList, self.ArchList, self.ToolChainList, self.PlatformFile, self.Target)
 
     def InitPostBuild(self):
         if 'POSTBUILD' in GlobalData.gCommandLineDefines.keys():
@@ -982,24 +1001,46 @@ class Build():
             Platform = self.Db._MapPlatform(str(self.PlatformFile))
             self.Postbuild = str(Platform.Postbuild)
         if self.Postbuild:
-            PostbuildList = self.Postbuild.split()
-            if not os.path.isabs(PostbuildList[0]):
-                PostbuildList[0] = mws.join(self.WorkspaceDir, PostbuildList[0])
-            if os.path.isfile(PostbuildList[0]):
-                self.PostbuildScript = PostbuildList[0]
-                self.Postbuild = ' '.join(PostbuildList)
-                self.Postbuild += self.PassCommandOption(self.BuildTargetList, self.ArchList, self.ToolChainList)
-                #self.LanuchPostbuild()
-            else:
-                EdkLogger.error("Postbuild", POSTBUILD_ERROR, "the postbuild script %s is not exist.\n If you'd like to disable the Postbuild process, please use the format: -D POSTBUILD=\"\" " %(PostbuildList[0]))
+            PostbuildList = []
+            #
+            # Evaluate all arguments and convert arguments that are WORKSPACE
+            # relative paths to absolute paths.  Filter arguments that look like
+            # flags or do not follow the file/dir naming rules to avoid false
+            # positives on this conversion.
+            #
+            for Arg in self.Postbuild.split():
+                #
+                # Do not modify Arg if it looks like a flag or an absolute file path
+                #
+                if Arg.startswith('-')  or os.path.isabs(Arg):
+                    PostbuildList.append(Arg)
+                    continue
+                #
+                # Do not modify Arg if it does not look like a Workspace relative
+                # path that starts with a valid package directory name
+                #
+                if not Arg[0].isalpha() or os.path.dirname(Arg) == '':
+                    PostbuildList.append(Arg)
+                    continue
+                #
+                # If Arg looks like a WORKSPACE relative path, then convert to an
+                # absolute path and check to see if the file exists.
+                #
+                Temp = mws.join(self.WorkspaceDir, Arg)
+                if os.path.isfile(Temp):
+                    Arg = Temp
+                PostbuildList.append(Arg)
+            self.Postbuild       = ' '.join(PostbuildList)
+            self.Postbuild += self.PassCommandOption(self.BuildTargetList, self.ArchList, self.ToolChainList, self.PlatformFile, self.Target)
 
-    def PassCommandOption(self, BuildTarget, TargetArch, ToolChain):
+    def PassCommandOption(self, BuildTarget, TargetArch, ToolChain, PlatformFile, Target):
         BuildStr = ''
         if GlobalData.gCommand and isinstance(GlobalData.gCommand, list):
             BuildStr += ' ' + ' '.join(GlobalData.gCommand)
         TargetFlag = False
         ArchFlag = False
         ToolChainFlag = False
+        PlatformFileFlag = False
 
         if GlobalData.gOptions and not GlobalData.gOptions.BuildTarget:
             TargetFlag = True
@@ -1007,6 +1048,8 @@ class Build():
             ArchFlag = True
         if GlobalData.gOptions and not GlobalData.gOptions.ToolChain:
             ToolChainFlag = True
+        if GlobalData.gOptions and not GlobalData.gOptions.PlatformFile:
+            PlatformFileFlag = True
 
         if TargetFlag and BuildTarget:
             if isinstance(BuildTarget, list) or isinstance(BuildTarget, tuple):
@@ -1023,6 +1066,14 @@ class Build():
                 BuildStr += ' -t ' + ' -t '.join(ToolChain)
             elif isinstance(ToolChain, str):
                 BuildStr += ' -t ' + ToolChain
+        if PlatformFileFlag and PlatformFile:
+            if isinstance(PlatformFile, list) or isinstance(PlatformFile, tuple):
+                BuildStr += ' -p ' + ' -p '.join(PlatformFile)
+            elif isinstance(PlatformFile, str):
+                BuildStr += ' -p' + PlatformFile
+        BuildStr += ' --conf=' + GlobalData.gConfDirectory
+        if Target:
+            BuildStr += ' ' + Target
 
         return BuildStr
 
@@ -1030,6 +1081,11 @@ class Build():
         if self.Prebuild:
             EdkLogger.info("\n- Prebuild Start -\n")
             self.LaunchPrebuildFlag = True
+            #
+            # The purpose of .PrebuildEnv file is capture environment variable settings set by the prebuild script
+            # and preserve them for the rest of the main build step, because the child process environment will
+            # evaporate as soon as it exits, we cannot get it in build step.
+            #
             PrebuildEnvFile = os.path.join(GlobalData.gConfDirectory,'.cache','.PrebuildEnv')
             if os.path.isfile(PrebuildEnvFile):
                 os.remove(PrebuildEnvFile)
@@ -1037,10 +1093,10 @@ class Build():
                 os.remove(self.PlatformBuildPath)
             if sys.platform == "win32":
                 args = ' && '.join((self.Prebuild, 'set > ' + PrebuildEnvFile))
-                Process = Popen(args, stdout=PIPE, stderr=PIPE)
+                Process = Popen(args, stdout=PIPE, stderr=PIPE, shell=True)
             else:
                 args = ' && '.join((self.Prebuild, 'env > ' + PrebuildEnvFile))
-                Process = Popen(args, stdout=PIPE, stderr=PIPE, shell=True, executable="/bin/bash")
+                Process = Popen(args, stdout=PIPE, stderr=PIPE, shell=True)
 
             # launch two threads to read the STDOUT and STDERR
             EndOfProcedure = Event()
@@ -1076,13 +1132,13 @@ class Build():
                 os.environ.update(dict(envs))
             EdkLogger.info("\n- Prebuild Done -\n")
 
-    def LanuchPostbuild(self):
+    def LaunchPostbuild(self):
         if self.Postbuild:
             EdkLogger.info("\n- Postbuild Start -\n")
             if sys.platform == "win32":
-                Process = Popen(self.Postbuild, stdout=PIPE, stderr=PIPE)
+                Process = Popen(self.Postbuild, stdout=PIPE, stderr=PIPE, shell=True)
             else:
-                Process = Popen(self.Postbuild, stdout=PIPE, stderr=PIPE, shell=True, executable="/bin/bash")
+                Process = Popen(self.Postbuild, stdout=PIPE, stderr=PIPE, shell=True)
             # launch two threads to read the STDOUT and STDERR
             EndOfProcedure = Event()
             EndOfProcedure.clear()
@@ -1500,7 +1556,7 @@ class Build():
                         if IsIpfPlatform and ImageInfo.Image.Size % 0x2000 != 0:
                             ImageInfo.Image.Size = (ImageInfo.Image.Size / 0x2000 + 1) * 0x2000
                         RtSize += ImageInfo.Image.Size
-                    elif Module.ModuleType in ['SMM_CORE', 'DXE_SMM_DRIVER']:
+                    elif Module.ModuleType in ['SMM_CORE', 'DXE_SMM_DRIVER', 'MM_STANDALONE', 'MM_CORE_STANDALONE']:
                         SmmModuleList[Module.MetaFile] = ImageInfo
                         SmmSize += ImageInfo.Image.Size
                         if Module.ModuleType == 'DXE_SMM_DRIVER':
@@ -1737,12 +1793,15 @@ class Build():
                 MaList = []
                 for Arch in Wa.ArchList:
                     GlobalData.gGlobalDefines['ARCH'] = Arch
-                    Ma = ModuleAutoGen(Wa, self.ModuleFile, BuildTarget, ToolChain, Arch, self.PlatformFile)
-                    if Ma == None: continue
-                    MaList.append(Ma)
-                    self.BuildModules.append(Ma)
-                    if not Ma.IsBinaryModule:
-                        self._Build(self.Target, Ma, BuildModule=True)
+                    Pa = PlatformAutoGen(Wa, self.PlatformFile, BuildTarget, ToolChain, Arch)
+                    for Module in Pa.Platform.Modules:
+                        if self.ModuleFile.Dir == Module.Dir and self.ModuleFile.File == Module.File:
+                            Ma = ModuleAutoGen(Wa, Module, BuildTarget, ToolChain, Arch, self.PlatformFile)
+                            if Ma == None: continue
+                            MaList.append(Ma)
+                            self.BuildModules.append(Ma)
+                            if not Ma.IsBinaryModule:
+                                self._Build(self.Target, Ma, BuildModule=True)
 
                 self.BuildReport.AddPlatformReport(Wa, MaList)
                 if MaList == []:
@@ -2145,7 +2204,7 @@ def MyOptionParser():
     Parser.add_option("-y", "--report-file", action="store", dest="ReportFile", help="Create/overwrite the report to the specified filename.")
     Parser.add_option("-Y", "--report-type", action="append", type="choice", choices=['PCD','LIBRARY','FLASH','DEPEX','BUILD_FLAGS','FIXED_ADDRESS','HASH','EXECUTION_ORDER'], dest="ReportType", default=[],
         help="Flags that control the type of build report to generate.  Must be one of: [PCD, LIBRARY, FLASH, DEPEX, BUILD_FLAGS, FIXED_ADDRESS, HASH, EXECUTION_ORDER].  "\
-             "To specify more than one flag, repeat this option on the command line and the default flag set is [PCD, LIBRARY, FLASH, DEPEX, BUILD_FLAGS, FIXED_ADDRESS]")
+             "To specify more than one flag, repeat this option on the command line and the default flag set is [PCD, LIBRARY, FLASH, DEPEX, HASH, BUILD_FLAGS, FIXED_ADDRESS]")
     Parser.add_option("-F", "--flag", action="store", type="string", dest="Flag",
         help="Specify the specific option to parse EDK UNI file. Must be one of: [-c, -s]. -c is for EDK framework UNI file, and -s is for EDK UEFI UNI file. "\
              "This option can also be specified by setting *_*_*_BUILD_FLAGS in [BuildOptions] section of platform DSC. If they are both specified, this value "\
@@ -2331,7 +2390,7 @@ def Main():
 
     if ReturnCode == 0:
         try:
-            MyBuild.LanuchPostbuild()
+            MyBuild.LaunchPostbuild()
             Conclusion = "Done"
         except:
             Conclusion = "Failed"

@@ -1006,3 +1006,124 @@
                                                                                                    "TRUE  - All PCI MMIO BARs of a device will be located below 4 GB if it has an option ROM.<BR>"
                                                                                                    "FALSE - PCI MMIO BARs of a device may be located above 4 GB even if it has an option ROM.<BR>"
 
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdStatusCodeSubClassCapsule_PROMPT  #language en-US "Status Code for Capsule subclass definitions"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdStatusCodeSubClassCapsule_HELP  #language en-US "Status Code for Capsule subclass definitions.<BR><BR>\n"
+                                                                                              "EFI_OEM_SPECIFIC_SUBCLASS_CAPSULE  = 0x00810000<BR>\n"
+                                                                                              "NOTE: The default value of this PCD may collide with other OEM specific status codes.\n"
+                                                                                              "Override the value of this PCD in the platform DSC file as needed."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleStatusCodeProcessCapsulesBegin_PROMPT  #language en-US "Status Code for Capsule Process Begin"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleStatusCodeProcessCapsulesBegin_HELP  #language en-US "Status Code for Capsule Process Begin.<BR><BR>\n"
+                                                                                                          "EFI_CAPSULE_PROCESS_CAPSULES_BEGIN  = (EFI_OEM_SPECIFIC | 0x00000001) = 0x00008001<BR>\n"
+                                                                                                          "NOTE: The default value of this PCD may collide with other OEM specific status codes.\n"
+                                                                                                          "Override the value of this PCD in the platform DSC file as needed."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleStatusCodeProcessCapsulesEnd_PROMPT  #language en-US "Status Code for Capsule Process End"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleStatusCodeProcessCapsulesEnd_HELP  #language en-US "Status Code for Capsule Process End.<BR><BR>\n"
+                                                                                                        "EFI_CAPSULE_PROCESS_CAPSULES_END    = (EFI_OEM_SPECIFIC | 0x00000002) = 0x00008002<BR>\n"
+                                                                                                        "NOTE: The default value of this PCD may collide with other OEM specific status codes.\n"
+                                                                                                        "Override the value of this PCD in the platform DSC file as needed."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleStatusCodeUpdatingFirmware_PROMPT  #language en-US "Status Code for Capsule Process Updating Firmware"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleStatusCodeUpdatingFirmware_HELP  #language en-US "Status Code for Capsule Process Updating Firmware.<BR><BR>\n"
+                                                                                                      "EFI_CAPSULE_UPDATING_FIRMWARE       = (EFI_OEM_SPECIFIC | 0x00000003) = 0x00008003<BR>\n"
+                                                                                                      "NOTE: The default value of this PCD may collide with other OEM specific status codes.\n"
+                                                                                                      "Override the value of this PCD in the platform DSC file as needed."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleStatusCodeUpdateFirmwareSuccess_PROMPT  #language en-US "Status Code for Capsule Process Update Firmware Success"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleStatusCodeUpdateFirmwareSuccess_HELP  #language en-US "Status Code for Capsule Process Update Firmware Success.<BR><BR>\n"
+                                                                                                           "EFI_CAPSULE_UPDATE_FIRMWARE_SUCCESS = (EFI_OEM_SPECIFIC | 0x00000004) = 0x00008004<BR>\n"
+                                                                                                           "NOTE: The default value of this PCD may collide with other OEM specific status codes.\n"
+                                                                                                           "Override the value of this PCD in the platform DSC file as needed."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleStatusCodeUpdateFirmwareFailed_PROMPT  #language en-US "Status Code for Capsule Process Update Firmware Failed"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleStatusCodeUpdateFirmwareFailed_HELP  #language en-US "Status Code for Capsule Process Update Firmware Failed.<BR><BR>\n"
+                                                                                                          "EFI_CAPSULE_UPDATE_FIRMWARE_FAILED  = (EFI_OEM_SPECIFIC | 0x00000005) = 0x00008005<BR>\n"
+                                                                                                          "NOTE: The default value of this PCD may collide with other OEM specific status codes.\n"
+                                                                                                          "Override the value of this PCD in the platform DSC file as needed."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleStatusCodeResettingSystem_PROMPT  #language en-US "Status Code for Capsule Resetting System"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleStatusCodeResettingSystem_HELP  #language en-US "Status Code for Capsule Resetting System.<BR><BR>\n"
+                                                                                                     "EFI_CAPSULE_RESETTING_SYSTEM        = (EFI_OEM_SPECIFIC | 0x00000006) = 0x00008006<BR>\n"
+                                                                                                     "NOTE: The default value of this PCD may collide with other OEM specific status codes.\n"
+                                                                                                     "Override the value of this PCD in the platform DSC file as needed."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleMax_PROMPT  #language en-US "CapsuleMax value in capsule report variable."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdCapsuleMax_HELP  #language en-US "CapsuleMax value in capsule report variable."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdRecoveryFileName_PROMPT  #language en-US "Recover file name in PEI phase"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdRecoveryFileName_HELP  #language en-US "This is recover file name in PEI phase.\n"
+                                                                                     "The file must be in the root directory.\n"
+                                                                                     "The file name must be the 8.3 format.\n"
+                                                                                     "The PCD data must be in UNICODE format."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdSystemFmpCapsuleImageTypeIdGuid_PROMPT  #language en-US "A list of system FMP ImageTypeId GUIDs"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdSystemFmpCapsuleImageTypeIdGuid_HELP  #language en-US "This PCD hold a list GUIDs for the ImageTypeId to indicate the\n"
+                                                                                                    "FMP capsule is a system FMP."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdTestKeyUsed_PROMPT  #language en-US "If there is any test key used by the platform."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdTestKeyUsed_HELP  #language en-US "This dynamic PCD holds the information if there is any test key used by the platform."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdSmiHandlerProfilePropertyMask_PROMPT  #language en-US "SmiHandlerProfile Property."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdSmiHandlerProfilePropertyMask_HELP  #language en-US "The mask is used to control SmiHandlerProfile behavior.<BR><BR>\n"
+                                                                                                  "BIT0 - Enable SmiHandlerProfile.<BR>"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdImageProtectionPolicy_PROMPT  #language en-US "Set image protection policy."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdImageProtectionPolicy_HELP  #language en-US "Set image protection policy. The policy is bitwise.\n"
+                                                                                          "If a bit is set, the image will be protected by DxeCore if it is aligned.\n"
+                                                                                          "The code section becomes read-only, and the data section becomes non-executable.\n"
+                                                                                          "If a bit is clear, the image will not be protected.<BR><BR>\n"
+                                                                                          "BIT0       - Image from unknown device. <BR>\n"
+                                                                                          "BIT1       - Image from firmware volume.<BR>"
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdDxeNxMemoryProtectionPolicy_PROMPT  #language en-US "Set DXE memory protection policy."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdDxeNxMemoryProtectionPolicy_HELP  #language en-US "Set DXE memory protection policy. The policy is bitwise.\n"
+                                                                                                "If a bit is set, memory regions of the associated type will be mapped\n"
+                                                                                                "non-executable.<BR><BR>\n"
+                                                                                                "\n"
+                                                                                                "Below is bit mask for this PCD: (Order is same as UEFI spec)<BR>\n"
+                                                                                                "EfiReservedMemoryType          0x0001<BR>\n"
+                                                                                                "EfiLoaderCode                  0x0002<BR>\n"
+                                                                                                "EfiLoaderData                  0x0004<BR>\n"
+                                                                                                "EfiBootServicesCode            0x0008<BR>\n"
+                                                                                                "EfiBootServicesData            0x0010<BR>\n"
+                                                                                                "EfiRuntimeServicesCode         0x0020<BR>\n"
+                                                                                                "EfiRuntimeServicesData         0x0040<BR>\n"
+                                                                                                "EfiConventionalMemory          0x0080<BR>\n"
+                                                                                                "EfiUnusableMemory              0x0100<BR>\n"
+                                                                                                "EfiACPIReclaimMemory           0x0200<BR>\n"
+                                                                                                "EfiACPIMemoryNVS               0x0400<BR>\n"
+                                                                                                "EfiMemoryMappedIO              0x0800<BR>\n"
+                                                                                                "EfiMemoryMappedIOPortSpace     0x1000<BR>\n"
+                                                                                                "EfiPalCode                     0x2000<BR>\n"
+                                                                                                "EfiPersistentMemory            0x4000<BR>\n"
+                                                                                                "OEM Reserved       0x4000000000000000<BR>\n"
+                                                                                                "OS Reserved        0x8000000000000000<BR>\n"
+                                                                                                "\n"
+                                                                                                "NOTE: User must NOT set NX protection for EfiLoaderCode / EfiBootServicesCode / EfiRuntimeServicesCode. <BR>\n"
+                                                                                                "User MUST set the same NX protection for EfiBootServicesData and EfiConventionalMemory. <BR>\n"
+                                                                                                "\n"
+                                                                                                "e.g. 0x7FD5 can be used for all memory except Code. <BR>\n"
+                                                                                                "e.g. 0x7BD4 can be used for all memory except Code and ACPINVS/Reserved. <BR>\n"
+                                                                                                ""
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdPteMemoryEncryptionAddressOrMask_PROMPT  #language en-US "The address mask when memory encryption is enabled."
+
+#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdPteMemoryEncryptionAddressOrMask_HELP  #language en-US "This PCD holds the address mask for page table entries when memory encryption is\n"
+                                                                                                     "enabled on AMD processors supporting the Secure Encrypted Virtualization (SEV) feature.\n"
+                                                                                                     "This mask should be applied when creating 1:1 virtual to physical mapping tables."
+

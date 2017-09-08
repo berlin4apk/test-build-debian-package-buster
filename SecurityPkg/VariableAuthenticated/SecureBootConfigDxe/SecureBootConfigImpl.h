@@ -2,7 +2,7 @@
   The header file of HII Config Access protocol implementation of SecureBoot
   configuration module.
 
-Copyright (c) 2011 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2011 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -47,6 +47,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Guid/FileSystemVolumeLabelInfo.h>
 #include <Guid/ImageAuthentication.h>
 #include <Guid/FileInfo.h>
+#include <Guid/WinCertificate.h>
 
 #include "SecureBootConfigNvData.h"
 
@@ -67,10 +68,7 @@ extern  EFI_IFR_GUID_LABEL         *mEndLabel;
 #define MAX_CHAR              480
 #define TWO_BYTE_ENCODE       0x82
 
-//
-// SHA-1 digest size in bytes.
-//
-#define SHA1_DIGEST_SIZE    20
+
 //
 // SHA-256 digest size in bytes
 //
@@ -94,13 +92,12 @@ extern  EFI_IFR_GUID_LABEL         *mEndLabel;
 //
 // Support hash types
 //
-#define HASHALG_SHA1                           0x00000000
-#define HASHALG_SHA224                         0x00000001
-#define HASHALG_SHA256                         0x00000002
-#define HASHALG_SHA384                         0x00000003
-#define HASHALG_SHA512                         0x00000004
-#define HASHALG_RAW                            0x00000005
-#define HASHALG_MAX                            0x00000005
+#define HASHALG_SHA224                         0x00000000
+#define HASHALG_SHA256                         0x00000001
+#define HASHALG_SHA384                         0x00000002
+#define HASHALG_SHA512                         0x00000003
+#define HASHALG_RAW                            0x00000004
+#define HASHALG_MAX                            0x00000004
 
 
 typedef struct {
@@ -112,6 +109,7 @@ typedef struct {
 typedef struct {
   EFI_FILE_HANDLE                   FHandle;
   UINT16                            *FileName;
+  UINT8                             FileType;
 } SECUREBOOT_FILE_CONTEXT;
 
 
@@ -478,26 +476,6 @@ Int2OctStr (
      OUT UINT8             *OctetString,
   IN     UINTN             OSSizeInBytes
   );
-
-
-/**
-  Convert a String to Guid Value.
-
-  @param[in]   Str        Specifies the String to be converted.
-  @param[in]   StrLen     Number of Unicode Characters of String (exclusive \0)
-  @param[out]  Guid       Return the result Guid value.
-
-  @retval    EFI_SUCCESS           The operation is finished successfully.
-  @retval    EFI_NOT_FOUND         Invalid string.
-
-**/
-EFI_STATUS
-StringToGuid (
-  IN   CHAR16           *Str,
-  IN   UINTN            StrLen,
-  OUT  EFI_GUID         *Guid
-  );
-
 
 /**
   Worker function that prints an EFI_GUID into specified Buffer.

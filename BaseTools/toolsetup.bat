@@ -3,7 +3,7 @@
 @REM   however it may be executed directly from the BaseTools project folder
 @REM   if the file is not executed within a WORKSPACE\BaseTools folder.
 @REM
-@REM Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
+@REM Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
 @REM (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 @REM
 @REM This program and the accompanying materials are licensed and made available
@@ -118,15 +118,13 @@ if /I "%1"=="/?" goto Usage
 :set_PATH
   if defined WORKSPACE_TOOLS_PATH goto check_PATH
   if not defined EDK_TOOLS_BIN (
-    if exist %EDK_TOOLS_PATH%\Bin\Win32 (
-      set EDK_TOOLS_BIN=%EDK_TOOLS_PATH%\Bin\Win32
-    ) else (
+    set EDK_TOOLS_BIN=%EDK_TOOLS_PATH%\Bin\Win32
+    if not exist %EDK_TOOLS_PATH%\Bin\Win32 (
       echo.
       echo !!! ERROR !!! Cannot find BaseTools Bin Win32!!!
       echo Please check the directory %EDK_TOOLS_PATH%\Bin\Win32
       echo Or configure EDK_TOOLS_BIN env to point Win32 directory.
       echo. 
-      goto end
     )
   )
   set PATH=%EDK_TOOLS_BIN%;%PATH%
@@ -136,15 +134,13 @@ if /I "%1"=="/?" goto Usage
 :check_PATH
   if "%EDK_TOOLS_PATH%"=="%WORKSPACE_TOOLS_PATH%" goto PATH_ok
   if not defined EDK_TOOLS_BIN (
-    if exist %EDK_TOOLS_PATH%\Bin\Win32 (
-      set EDK_TOOLS_BIN=%EDK_TOOLS_PATH%\Bin\Win32
-    ) else (
+    set EDK_TOOLS_BIN=%EDK_TOOLS_PATH%\Bin\Win32
+    if not exist %EDK_TOOLS_PATH%\Bin\Win32 (
       echo.
       echo !!! ERROR !!! Cannot find BaseTools Bin Win32!!!
       echo Please check the directory %EDK_TOOLS_PATH%\Bin\Win32
       echo Or configure EDK_TOOLS_BIN env to point Win32 directory.
       echo. 
-      goto end
     )
   )
   set PATH=%EDK_TOOLS_BIN%;%PATH%
@@ -258,6 +254,7 @@ echo.
 if defined FORCE_REBUILD goto check_build_environment
 if defined REBUILD goto check_build_environment
 if not exist "%EDK_TOOLS_PATH%" goto check_build_environment
+if not exist "%EDK_TOOLS_BIN%"  goto check_build_environment
 
 IF NOT EXIST "%EDK_TOOLS_BIN%\BootSectImage.exe" goto check_c_tools
 IF NOT EXIST "%EDK_TOOLS_BIN%\EfiLdrImage.exe" goto check_c_tools
@@ -280,7 +277,7 @@ goto check_python_tools
   echo.
   echo !!! ERROR !!! Binary C tools are missing. They are requried to be built from BaseTools Source.
   echo.
-  goto end
+  goto check_build_environment
 
 :check_python_tools
 IF NOT EXIST "%EDK_TOOLS_BIN%\build.exe" goto check_build_environment
@@ -307,7 +304,7 @@ goto end
       set PYTHON_HOME=%PYTHONHOME%
     ) else (
       echo.
-      echo  !!! ERROR !!! Binary python tools are missing. PYTHON_HOME environment variable is not set. 
+      echo !!! ERROR !!! Binary python tools are missing. PYTHON_HOME environment variable is not set. 
       echo PYTHON_HOME is required to build or execute the python tools.
       echo.
       goto end

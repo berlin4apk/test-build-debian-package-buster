@@ -6,7 +6,7 @@
   CapsuleAuthenticateSystemFirmware(), ExtractAuthenticatedImage() will receive
   untrusted input and do basic validation.
 
-  Copyright (c) 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2016 - 2017, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -386,7 +386,7 @@ ExtractAuthenticatedImage (
     DEBUG((DEBUG_ERROR, "ExtractAuthenticatedImage - dwLength too small\n"));
     return FALSE;
   }
-  if (ImageAuth->AuthInfo.Hdr.dwLength > MAX_UINTN - sizeof(UINT64)) {
+  if ((UINTN) ImageAuth->AuthInfo.Hdr.dwLength > MAX_UINTN - sizeof(UINT64)) {
     DEBUG((DEBUG_ERROR, "ExtractAuthenticatedImage - dwLength too big\n"));
     return FALSE;
   }
@@ -415,6 +415,8 @@ ExtractAuthenticatedImage (
   } else {
     return FALSE;
   }
+  ASSERT (PublicKeyData != NULL);
+  ASSERT (PublicKeyDataLength != 0);
 
   Status = AuthenticateFmpImage(
              ImageAuth,
@@ -641,7 +643,7 @@ CapsuleAuthenticateSystemFirmware (
       return EFI_SECURITY_VIOLATION;
     }
   } else {
-    if (CurrentImageFmpInfo->Version < ImageFmpInfo->LowestSupportedImageVersion) {
+    if (ImageFmpInfo->Version < CurrentImageFmpInfo->LowestSupportedImageVersion) {
       *LastAttemptStatus = LAST_ATTEMPT_STATUS_ERROR_INCORRECT_VERSION;
       DEBUG((DEBUG_INFO, "LowestSupportedImageVersion check - fail\n"));
       return EFI_SECURITY_VIOLATION;

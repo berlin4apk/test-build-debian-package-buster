@@ -1,7 +1,7 @@
 /** @file
   This is THE shell (application)
 
-  Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2017, Intel Corporation. All rights reserved.<BR>
   (C) Copyright 2013-2014 Hewlett-Packard Development Company, L.P.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -1022,7 +1022,7 @@ ProcessCommandLine(
       }
     } else if (UnicodeCollation->StriColl (
                                    UnicodeCollation,
-                                   L"-_exit",
+                                   L"-exit",
                                    CurrentArg
                                    ) == 0) {
       ShellInfoObject.ShellInitSettings.BitUnion.Bits.Exit         = TRUE;
@@ -1042,9 +1042,29 @@ ProcessCommandLine(
         continue;
       }
 
-      ShellInfoObject.ShellInitSettings.FileName = AllocateCopyPool(StrSize(CurrentArg), CurrentArg);
+      ShellInfoObject.ShellInitSettings.FileName = NULL;
+      Size = 0;
+      //
+      // If first argument contains a space, then add double quotes before the argument
+      //
+      if (StrStr (CurrentArg, L" ") != NULL) {
+        StrnCatGrow(&ShellInfoObject.ShellInitSettings.FileName, &Size, L"\"", 0);
+        if (ShellInfoObject.ShellInitSettings.FileName == NULL) {
+          return (EFI_OUT_OF_RESOURCES);
+        }
+      }
+      StrnCatGrow(&ShellInfoObject.ShellInitSettings.FileName, &Size, CurrentArg, 0);
       if (ShellInfoObject.ShellInitSettings.FileName == NULL) {
         return (EFI_OUT_OF_RESOURCES);
+      }
+      //
+      // If first argument contains a space, then add double quotes after the argument
+      //
+      if (StrStr (CurrentArg, L" ") != NULL) {
+        StrnCatGrow(&ShellInfoObject.ShellInitSettings.FileName, &Size, L"\"", 0);
+        if (ShellInfoObject.ShellInitSettings.FileName == NULL) {
+          return (EFI_OUT_OF_RESOURCES);
+        }
       }
       //
       // We found `file-name`.
@@ -1055,13 +1075,28 @@ ProcessCommandLine(
       // Add `file-name-options`
       for (Size = 0 ; LoopVar < gEfiShellParametersProtocol->Argc ; LoopVar++) {
         ASSERT((ShellInfoObject.ShellInitSettings.FileOptions == NULL && Size == 0) || (ShellInfoObject.ShellInitSettings.FileOptions != NULL));
-        StrnCatGrow(&ShellInfoObject.ShellInitSettings.FileOptions,
-                    &Size,
-                    L" ",
-                    0);
-        if (ShellInfoObject.ShellInitSettings.FileOptions == NULL) {
-          SHELL_FREE_NON_NULL(ShellInfoObject.ShellInitSettings.FileName);
-          return (EFI_OUT_OF_RESOURCES);
+        //
+        // Add a space between arguments
+        //
+        if (ShellInfoObject.ShellInitSettings.FileOptions != NULL) {
+          StrnCatGrow(&ShellInfoObject.ShellInitSettings.FileOptions, &Size, L" ", 0);
+          if (ShellInfoObject.ShellInitSettings.FileOptions == NULL) {
+            SHELL_FREE_NON_NULL(ShellInfoObject.ShellInitSettings.FileName);
+            return (EFI_OUT_OF_RESOURCES);
+          }
+        }
+        //
+        // If an argumnent contains a space, then add double quotes before the argument
+        //
+        if (StrStr (gEfiShellParametersProtocol->Argv[LoopVar], L" ") != NULL) {
+          StrnCatGrow(&ShellInfoObject.ShellInitSettings.FileOptions,
+                      &Size,
+                      L"\"",
+                      0);
+          if (ShellInfoObject.ShellInitSettings.FileOptions == NULL) {
+            SHELL_FREE_NON_NULL(ShellInfoObject.ShellInitSettings.FileName);
+            return (EFI_OUT_OF_RESOURCES);
+          }
         }
         StrnCatGrow(&ShellInfoObject.ShellInitSettings.FileOptions,
                     &Size,
@@ -1070,6 +1105,19 @@ ProcessCommandLine(
         if (ShellInfoObject.ShellInitSettings.FileOptions == NULL) {
           SHELL_FREE_NON_NULL(ShellInfoObject.ShellInitSettings.FileName);
           return (EFI_OUT_OF_RESOURCES);
+        }
+        //
+        // If an argumnent contains a space, then add double quotes after the argument
+        //
+        if (StrStr (gEfiShellParametersProtocol->Argv[LoopVar], L" ") != NULL) {
+          StrnCatGrow(&ShellInfoObject.ShellInitSettings.FileOptions,
+                      &Size,
+                      L"\"",
+                      0);
+          if (ShellInfoObject.ShellInitSettings.FileOptions == NULL) {
+            SHELL_FREE_NON_NULL(ShellInfoObject.ShellInitSettings.FileName);
+            return (EFI_OUT_OF_RESOURCES);
+          }
         }
       }
     }
@@ -1081,6 +1129,64 @@ ProcessCommandLine(
   }
 
   return EFI_SUCCESS;
+}
+
+/**
+  Function try to find location of the Startup.nsh file.
+  
+  The buffer is callee allocated and should be freed by the caller.
+
+  @param    ImageDevicePath       The path to the image for shell.  first place to look for the startup script
+  @param    FileDevicePath        The path to the file for shell.  second place to look for the startup script.
+
+  @retval   NULL                  No Startup.nsh file was found.
+  @return   !=NULL                Pointer to NULL-terminated path.
+**/
+CHAR16 *
+LocateStartupScript (
+  IN EFI_DEVICE_PATH_PROTOCOL *ImageDevicePath,
+  IN EFI_DEVICE_PATH_PROTOCOL *FileDevicePath
+  )
+{
+  CHAR16          *StartupScriptPath;
+  CHAR16          *TempSpot;
+  CONST CHAR16    *MapName;
+  UINTN           Size;
+
+  StartupScriptPath = NULL;
+  Size              = 0;
+
+  //
+  // Try to find 'Startup.nsh' in the directory where the shell itself was launched.
+  //
+  MapName = ShellInfoObject.NewEfiShellProtocol->GetMapFromDevicePath (&ImageDevicePath);
+  if (MapName != NULL) {   
+    StartupScriptPath = StrnCatGrow (&StartupScriptPath, &Size, MapName, 0);
+    if (StartupScriptPath == NULL) {
+      //
+      // Do not locate the startup script in sys path when out of resource.
+      //
+      return NULL;
+    }
+    TempSpot = StrStr (StartupScriptPath, L";");
+    if (TempSpot != NULL) {
+      *TempSpot = CHAR_NULL;
+    }
+
+    StartupScriptPath = StrnCatGrow (&StartupScriptPath, &Size, ((FILEPATH_DEVICE_PATH *)FileDevicePath)->PathName, 0);
+    PathRemoveLastItem (StartupScriptPath);
+    StartupScriptPath = StrnCatGrow (&StartupScriptPath, &Size, mStartupScript, 0);
+  }
+
+  //
+  // Try to find 'Startup.nsh' in the execution path defined by the envrionment variable PATH.
+  //
+  if ((StartupScriptPath == NULL) || EFI_ERROR (ShellIsFile (StartupScriptPath))) {
+    SHELL_FREE_NON_NULL (StartupScriptPath);
+    StartupScriptPath = ShellFindFilePath (mStartupScript);
+  }
+
+  return StartupScriptPath;
 }
 
 /**
@@ -1103,17 +1209,11 @@ DoStartupScript(
   EFI_STATUS                    CalleeStatus;
   UINTN                         Delay;
   EFI_INPUT_KEY                 Key;
-  SHELL_FILE_HANDLE             FileHandle;
-  EFI_DEVICE_PATH_PROTOCOL      *NewPath;
-  EFI_DEVICE_PATH_PROTOCOL      *NamePath;
   CHAR16                        *FileStringPath;
-  CHAR16                        *TempSpot;
   UINTN                         NewSize;
-  CONST CHAR16                  *MapName;
 
   Key.UnicodeChar = CHAR_NULL;
   Key.ScanCode    = 0;
-  FileHandle      = NULL;
 
   if (!ShellInfoObject.ShellInitSettings.BitUnion.Bits.Startup && ShellInfoObject.ShellInitSettings.FileName != NULL) {
     //
@@ -1175,59 +1275,16 @@ DoStartupScript(
     return (EFI_SUCCESS);
   }
 
-  //
-  // Try the first location (must be file system)
-  //
-  MapName = ShellInfoObject.NewEfiShellProtocol->GetMapFromDevicePath(&ImagePath);
-  if (MapName != NULL) {
-    FileStringPath = NULL;
-    NewSize = 0;
-    FileStringPath = StrnCatGrow(&FileStringPath, &NewSize, MapName, 0);
-    if (FileStringPath == NULL) {
-      Status = EFI_OUT_OF_RESOURCES;
-    } else {
-      TempSpot = StrStr(FileStringPath, L";");
-      if (TempSpot != NULL) {
-        *TempSpot = CHAR_NULL;
-      }
-      FileStringPath = StrnCatGrow(&FileStringPath, &NewSize, ((FILEPATH_DEVICE_PATH*)FilePath)->PathName, 0);
-      PathRemoveLastItem(FileStringPath);
-      FileStringPath = StrnCatGrow(&FileStringPath, &NewSize, mStartupScript, 0);
-      Status = ShellInfoObject.NewEfiShellProtocol->OpenFileByName(FileStringPath, &FileHandle, EFI_FILE_MODE_READ);
-      FreePool(FileStringPath);
-    }
-  }
-  if (EFI_ERROR(Status)) {
-    NamePath = FileDevicePath (NULL, mStartupScript);
-    NewPath = AppendDevicePathNode (ImagePath, NamePath);
-    FreePool(NamePath);
-
-    //
-    // Try the location
-    //
-    Status = InternalOpenFileDevicePath(NewPath, &FileHandle, EFI_FILE_MODE_READ, 0);
-    FreePool(NewPath);
-  }
-  //
-  // If we got a file, run it
-  //
-  if (!EFI_ERROR(Status) && FileHandle != NULL) {
-    Status = RunScriptFile (mStartupScript, FileHandle, L"", ShellInfoObject.NewShellParametersProtocol);
-    ShellInfoObject.NewEfiShellProtocol->CloseFile(FileHandle);
+  FileStringPath = LocateStartupScript (ImagePath, FilePath);
+  if (FileStringPath != NULL) {
+    Status = RunScriptFile (FileStringPath, NULL, L"", ShellInfoObject.NewShellParametersProtocol);
+    FreePool (FileStringPath);
   } else {
-    FileStringPath = ShellFindFilePath(mStartupScript);
-    if (FileStringPath == NULL) {
-      //
-      // we return success since we don't need to have a startup script
-      //
-      Status = EFI_SUCCESS;
-      ASSERT(FileHandle == NULL);
-    } else {
-      Status = RunScriptFile(FileStringPath, NULL, L"", ShellInfoObject.NewShellParametersProtocol);
-      FreePool(FileStringPath);
-    }
+    //
+    // we return success since startup script is not mandatory.
+    //
+    Status = EFI_SUCCESS;
   }
-
 
   return (Status);
 }
@@ -1657,8 +1714,8 @@ ShellConvertVariables (
 EFI_STATUS
 RunSplitCommand(
   IN CONST CHAR16             *CmdLine,
-  IN       SHELL_FILE_HANDLE  *StdIn,
-  IN       SHELL_FILE_HANDLE  *StdOut
+  IN       SHELL_FILE_HANDLE  StdIn,
+  IN       SHELL_FILE_HANDLE  StdOut
   )
 {
   EFI_STATUS        Status;
@@ -1667,7 +1724,7 @@ RunSplitCommand(
   UINTN             Size1;
   UINTN             Size2;
   SPLIT_LIST        *Split;
-  SHELL_FILE_HANDLE *TempFileHandle;
+  SHELL_FILE_HANDLE TempFileHandle;
   BOOLEAN           Unicode;
 
   ASSERT(StdOut == NULL);
@@ -1733,7 +1790,7 @@ RunSplitCommand(
     Split->SplitStdOut  = Split->SplitStdIn;
   }
   Split->SplitStdIn   = TempFileHandle;
-  ShellInfoObject.NewEfiShellProtocol->SetFilePosition(ConvertShellHandleToEfiFileProtocol(Split->SplitStdIn), 0);
+  ShellInfoObject.NewEfiShellProtocol->SetFilePosition (Split->SplitStdIn, 0);
 
   if (!EFI_ERROR(Status)) {
     Status = RunCommand(NextCommandLine);
@@ -1749,11 +1806,10 @@ RunSplitCommand(
   // Note that the original StdIn is now the StdOut...
   //
   if (Split->SplitStdOut != NULL) {
-    ShellInfoObject.NewEfiShellProtocol->CloseFile(ConvertShellHandleToEfiFileProtocol(Split->SplitStdOut));
+    ShellInfoObject.NewEfiShellProtocol->CloseFile (Split->SplitStdOut);
   }
   if (Split->SplitStdIn != NULL) {
-    ShellInfoObject.NewEfiShellProtocol->CloseFile(ConvertShellHandleToEfiFileProtocol(Split->SplitStdIn));
-    FreePool (Split->SplitStdIn);
+    ShellInfoObject.NewEfiShellProtocol->CloseFile (Split->SplitStdIn);
   }
 
   FreePool(Split);
@@ -2558,6 +2614,7 @@ RunShellCommand(
   CHAR16                    *FirstParameter;
   CHAR16                    *TempWalker;
   SHELL_OPERATION_TYPES     Type;
+  CONST CHAR16              *CurDir;
 
   ASSERT(CmdLine != NULL);
   if (StrLen(CmdLine) == 0) {
@@ -2649,7 +2706,22 @@ RunShellCommand(
     ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_SHELL_NOT_FOUND), ShellInfoObject.HiiHandle, FirstParameter);
     SetLastError(SHELL_NOT_FOUND);
   }
- 
+  //
+  // Check whether the current file system still exists. If not exist, we need update "cwd" and gShellCurMapping.
+  //
+  CurDir = EfiShellGetCurDir (NULL);
+  if (CurDir != NULL) {
+    if (EFI_ERROR(ShellFileExists (CurDir))) {
+      //
+      // EfiShellSetCurDir() cannot set current directory to NULL.
+      // EfiShellSetEnv() is not allowed to set the "cwd" variable.
+      // Only InternalEfiShellSetEnv () is allowed setting the "cwd" variable.
+      //
+      InternalEfiShellSetEnv (L"cwd", NULL, TRUE);
+      gShellCurMapping = NULL;
+    }
+  }
+
   SHELL_FREE_NON_NULL(CleanOriginal);
   SHELL_FREE_NON_NULL(FirstParameter);
 

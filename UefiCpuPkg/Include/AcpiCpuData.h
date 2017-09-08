@@ -1,7 +1,7 @@
 /** @file
 Definitions for CPU S3 data.
 
-Copyright (c) 2013 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2013 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -29,11 +29,13 @@ typedef enum {
 // Element of register table entry
 //
 typedef struct {
-  REGISTER_TYPE  RegisterType;
-  UINT32         Index;
-  UINT8          ValidBitStart;
-  UINT8          ValidBitLength;
-  UINT64         Value;
+  REGISTER_TYPE  RegisterType;          // offset 0 - 3
+  UINT32         Index;                 // offset 4 - 7
+  UINT8          ValidBitStart;         // offset 8
+  UINT8          ValidBitLength;        // offset 9
+  UINT16         Reserved;              // offset 10 - 11
+  UINT32         HighIndex;             // offset 12-15, only valid for MemoryMapped
+  UINT64         Value;                 // offset 16-23
 } CPU_REGISTER_TABLE_ENTRY;
 
 //
@@ -55,10 +57,10 @@ typedef struct {
   //
   UINT32                    InitialApicId;
   //
-  // Buffer of CPU_REGISTER_TABLE_ENTRY structures.  This buffer must be
+  // Physical address of CPU_REGISTER_TABLE_ENTRY structures.  This buffer must be
   // allocated below 4GB from memory of type EfiACPIMemoryNVS.
   //
-  CPU_REGISTER_TABLE_ENTRY  *RegisterTableEntry;
+  EFI_PHYSICAL_ADDRESS      RegisterTableEntry;
 } CPU_REGISTER_TABLE;
 
 //

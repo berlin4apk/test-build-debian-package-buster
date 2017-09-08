@@ -1,7 +1,7 @@
 /** @file
   This module implements Tcg2 Protocol.
   
-Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2015 - 2017, Intel Corporation. All rights reserved.<BR>
 (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials 
 are licensed and made available under the terms and conditions of the BSD License 
@@ -31,6 +31,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Protocol/VariableWrite.h>
 #include <Protocol/Tcg2Protocol.h>
 #include <Protocol/TrEEProtocol.h>
+#include <Protocol/ResetNotification.h>
 
 #include <Library/DebugLib.h>
 #include <Library/BaseMemoryLib.h>
@@ -164,6 +165,82 @@ InternalDumpData (
   for (Index = 0; Index < Size; Index++) {
     DEBUG ((EFI_D_INFO, "%02x", (UINTN)Data[Index]));
   }
+}
+
+/**
+
+  This function initialize TCG_PCR_EVENT2_HDR for EV_NO_ACTION Event Type other than EFI Specification ID event
+  The behavior is defined by TCG PC Client PFP Spec. Section 9.3.4 EV_NO_ACTION Event Types
+
+  @param[in, out]   NoActionEvent  Event Header of EV_NO_ACTION Event
+  @param[in]        EventSize      Event Size of the EV_NO_ACTION Event
+
+**/
+VOID
+InitNoActionEvent (
+  IN OUT TCG_PCR_EVENT2_HDR  *NoActionEvent,
+  IN UINT32                  EventSize
+ )
+{
+  UINT32          DigestListCount;
+  TPMI_ALG_HASH   HashAlgId;
+  UINT8           *DigestBuffer;
+
+  DigestBuffer    = (UINT8 *)NoActionEvent->Digests.digests;
+  DigestListCount = 0;
+
+  NoActionEvent->PCRIndex  = 0;
+  NoActionEvent->EventType = EV_NO_ACTION;
+
+  //
+  // Set Hash count & hashAlg accordingly, while Digest.digests[n].digest to all 0
+  //
+  ZeroMem (&NoActionEvent->Digests, sizeof(NoActionEvent->Digests));
+
+  if ((mTcgDxeData.BsCap.ActivePcrBanks & EFI_TCG2_BOOT_HASH_ALG_SHA1) != 0) {
+     HashAlgId = TPM_ALG_SHA1;
+     CopyMem (DigestBuffer, &HashAlgId, sizeof(TPMI_ALG_HASH));
+     DigestBuffer += sizeof(TPMI_ALG_HASH) + GetHashSizeFromAlgo (HashAlgId);
+     DigestListCount++;
+  }
+
+  if ((mTcgDxeData.BsCap.ActivePcrBanks & EFI_TCG2_BOOT_HASH_ALG_SHA256) != 0) {
+     HashAlgId = TPM_ALG_SHA256;
+     CopyMem (DigestBuffer, &HashAlgId, sizeof(TPMI_ALG_HASH));
+     DigestBuffer += sizeof(TPMI_ALG_HASH) + GetHashSizeFromAlgo (HashAlgId);
+     DigestListCount++;
+  }
+
+  if ((mTcgDxeData.BsCap.ActivePcrBanks & EFI_TCG2_BOOT_HASH_ALG_SHA384) != 0) {
+    HashAlgId = TPM_ALG_SHA384;
+    CopyMem (DigestBuffer, &HashAlgId, sizeof(TPMI_ALG_HASH));
+    DigestBuffer += sizeof(TPMI_ALG_HASH) + GetHashSizeFromAlgo (HashAlgId);
+    DigestListCount++;
+  }
+
+  if ((mTcgDxeData.BsCap.ActivePcrBanks & EFI_TCG2_BOOT_HASH_ALG_SHA512) != 0) {
+    HashAlgId = TPM_ALG_SHA512;
+    CopyMem (DigestBuffer, &HashAlgId, sizeof(TPMI_ALG_HASH));
+    DigestBuffer += sizeof(TPMI_ALG_HASH) + GetHashSizeFromAlgo (HashAlgId);
+    DigestListCount++;
+  }
+
+  if ((mTcgDxeData.BsCap.ActivePcrBanks & EFI_TCG2_BOOT_HASH_ALG_SM3_256) != 0) {
+    HashAlgId = TPM_ALG_SM3_256;
+    CopyMem (DigestBuffer, &HashAlgId, sizeof(TPMI_ALG_HASH));
+    DigestBuffer += sizeof(TPMI_ALG_HASH) + GetHashSizeFromAlgo (HashAlgId);
+    DigestListCount++;
+  }
+
+  //
+  // Set Digests Count
+  //
+  WriteUnaligned32 ((UINT32 *)&NoActionEvent->Digests.count, DigestListCount);
+
+  //
+  // Set Event Size
+  //
+  WriteUnaligned32((UINT32 *)DigestBuffer, EventSize);
 }
 
 /**
@@ -856,7 +933,7 @@ TcgDxeLogEvent (
       //
       (mTcgDxeData.FinalEventsTable[Index])->NumberOfEvents ++;
       DEBUG ((EFI_D_INFO, "FinalEventsTable->NumberOfEvents - 0x%x\n", (mTcgDxeData.FinalEventsTable[Index])->NumberOfEvents));
-      DEBUG ((EFI_D_INFO, "  Size - 0x%x\n", (UINTN)EventLogAreaStruct->LastEvent - (UINTN)mTcgDxeData.FinalEventsTable[Index]));
+      DEBUG ((EFI_D_INFO, "  Size - 0x%x\n", (UINTN)EventLogAreaStruct->EventLogSize));
     }
   }
 
@@ -1380,11 +1457,13 @@ SetupEventLog (
   UINT32                          HashAlgorithmMaskCopied;
   TCG_EfiSpecIDEventStruct        *TcgEfiSpecIdEventStruct;
   UINT8                           TempBuf[sizeof(TCG_EfiSpecIDEventStruct) + sizeof(UINT32) + (HASH_COUNT * sizeof(TCG_EfiSpecIdEventAlgorithmSize)) + sizeof(UINT8)];
-  TCG_PCR_EVENT_HDR               FirstPcrEvent;
+  TCG_PCR_EVENT_HDR               SpecIdEvent;
+  TCG_PCR_EVENT2_HDR              NoActionEvent;
   TCG_EfiSpecIdEventAlgorithmSize *DigestSize;
   TCG_EfiSpecIdEventAlgorithmSize *TempDigestSize;
   UINT8                           *VendorInfoSize;
   UINT32                          NumberOfAlgorithms;
+  TCG_EfiStartupLocalityEvent     StartupLocalityEvent;
 
   DEBUG ((EFI_D_INFO, "SetupEventLog\n"));
 
@@ -1394,9 +1473,8 @@ SetupEventLog (
   for (Index = 0; Index < sizeof(mTcg2EventInfo)/sizeof(mTcg2EventInfo[0]); Index++) {
     if ((mTcgDxeData.BsCap.SupportedEventLogs & mTcg2EventInfo[Index].LogFormat) != 0) {
       mTcgDxeData.EventLogAreaStruct[Index].EventLogFormat = mTcg2EventInfo[Index].LogFormat;
-      Lasa = (EFI_PHYSICAL_ADDRESS) (SIZE_4GB - 1);
       Status = gBS->AllocatePages (
-                      AllocateMaxAddress,
+                      AllocateAnyPages,
                       EfiBootServicesData,
                       EFI_SIZE_TO_PAGES (PcdGet32 (PcdTcgLogAreaMinLen)),
                       &Lasa
@@ -1468,24 +1546,54 @@ SetupEventLog (
         VendorInfoSize = (UINT8 *)TempDigestSize;
         *VendorInfoSize = 0;
 
-        //
-        // FirstPcrEvent
-        //
-        FirstPcrEvent.PCRIndex = 0;
-        FirstPcrEvent.EventType = EV_NO_ACTION;
-        ZeroMem (&FirstPcrEvent.Digest, sizeof(FirstPcrEvent.Digest));
-        FirstPcrEvent.EventSize = (UINT32)GetTcgEfiSpecIdEventStructSize (TcgEfiSpecIdEventStruct);
+        SpecIdEvent.PCRIndex = 0;
+        SpecIdEvent.EventType = EV_NO_ACTION;
+        ZeroMem (&SpecIdEvent.Digest, sizeof(SpecIdEvent.Digest));
+        SpecIdEvent.EventSize = (UINT32)GetTcgEfiSpecIdEventStructSize (TcgEfiSpecIdEventStruct);
 
         //
-        // Record
+        // Log TcgEfiSpecIdEventStruct as the first Event. Event format is TCG_PCR_EVENT.
+        //   TCG EFI Protocol Spec. Section 5.3 Event Log Header
+        //   TCG PC Client PFP spec. Section 9.2 Measurement Event Entries and Log
         //
         Status = TcgDxeLogEvent (
                    mTcg2EventInfo[Index].LogFormat,
-                   &FirstPcrEvent,
-                   sizeof(FirstPcrEvent),
+                   &SpecIdEvent,
+                   sizeof(SpecIdEvent),
                    (UINT8 *)TcgEfiSpecIdEventStruct,
-                   FirstPcrEvent.EventSize
+                   SpecIdEvent.EventSize
                    );
+
+        //
+        // EfiStartupLocalityEvent. Event format is TCG_PCR_EVENT2
+        //
+        GuidHob.Guid = GetFirstGuidHob (&gTpm2StartupLocalityHobGuid);
+        if (GuidHob.Guid != NULL) {
+          //
+          // Get Locality Indicator from StartupLocality HOB
+          //
+          StartupLocalityEvent.StartupLocality = *(UINT8 *)(GET_GUID_HOB_DATA (GuidHob.Guid));
+          CopyMem (StartupLocalityEvent.Signature, TCG_EfiStartupLocalityEvent_SIGNATURE, sizeof(StartupLocalityEvent.Signature));
+          DEBUG ((DEBUG_INFO, "SetupEventLog: Set Locality from HOB into StartupLocalityEvent 0x%02x\n", StartupLocalityEvent.StartupLocality));
+
+          //
+          // Initialize StartupLocalityEvent
+          //
+          InitNoActionEvent(&NoActionEvent, sizeof(StartupLocalityEvent));
+
+          //
+          // Log EfiStartupLocalityEvent as the second Event
+          //   TCG PC Client PFP spec. Section 9.3.4.3 Startup Locality Event
+          //
+          Status = TcgDxeLogEvent (
+                     mTcg2EventInfo[Index].LogFormat,
+                     &NoActionEvent,
+                     sizeof(NoActionEvent.PCRIndex) + sizeof(NoActionEvent.EventType) + GetDigestListBinSize (&NoActionEvent.Digests) + sizeof(NoActionEvent.EventSize),
+                     (UINT8 *)&StartupLocalityEvent,
+                     sizeof(StartupLocalityEvent)
+                     );
+
+        }
       }
     }
   }
@@ -1496,9 +1604,8 @@ SetupEventLog (
   for (Index = 0; Index < sizeof(mTcg2EventInfo)/sizeof(mTcg2EventInfo[0]); Index++) {
     if ((mTcgDxeData.BsCap.SupportedEventLogs & mTcg2EventInfo[Index].LogFormat) != 0) {
       if (mTcg2EventInfo[Index].LogFormat == EFI_TCG2_EVENT_LOG_FORMAT_TCG_2) {
-        Lasa = (EFI_PHYSICAL_ADDRESS) (SIZE_4GB - 1);
         Status = gBS->AllocatePages (
-                        AllocateMaxAddress,
+                        AllocateAnyPages,
                         EfiACPIMemoryNVS,
                         EFI_SIZE_TO_PAGES (PcdGet32 (PcdTcg2FinalLogAreaLen)),
                         &Lasa
@@ -1619,8 +1726,9 @@ SetupEventLog (
 }
 
 /**
-  Measure and log an action string, and extend the measurement result into PCR[5].
+  Measure and log an action string, and extend the measurement result into PCR[PCRIndex].
 
+  @param[in] PCRIndex         PCRIndex to extend
   @param[in] String           A specific string that indicates an Action event.  
   
   @retval EFI_SUCCESS         Operation completed successfully.
@@ -1629,12 +1737,13 @@ SetupEventLog (
 **/
 EFI_STATUS
 TcgMeasureAction (
-  IN      CHAR8                     *String
+  IN      TPM_PCRINDEX       PCRIndex,
+  IN      CHAR8              *String
   )
 {
   TCG_PCR_EVENT_HDR                 TcgEvent;
 
-  TcgEvent.PCRIndex  = 5;
+  TcgEvent.PCRIndex  = PCRIndex;
   TcgEvent.EventType = EV_EFI_ACTION;
   TcgEvent.EventSize = (UINT32)AsciiStrLen (String);
   return TcgDxeHashLogExtendEvent (
@@ -1758,7 +1867,7 @@ MeasureVariable (
   EFI_STATUS                        Status;
   TCG_PCR_EVENT_HDR                 TcgEvent;
   UINTN                             VarNameLength;
-  EFI_VARIABLE_DATA_TREE            *VarLog;
+  UEFI_VARIABLE_DATA                *VarLog;
 
   DEBUG ((EFI_D_INFO, "Tcg2Dxe: MeasureVariable (Pcr - %x, EventType - %x, ", (UINTN)PCRIndex, (UINTN)EventType));
   DEBUG ((EFI_D_INFO, "VariableName - %s, VendorGuid - %g)\n", VarName, VendorGuid));
@@ -1770,7 +1879,7 @@ MeasureVariable (
   TcgEvent.EventSize = (UINT32)(sizeof (*VarLog) + VarNameLength * sizeof (*VarName) + VarSize
                         - sizeof (VarLog->UnicodeName) - sizeof (VarLog->VariableData));
 
-  VarLog = (EFI_VARIABLE_DATA_TREE *)AllocatePool (TcgEvent.EventSize);
+  VarLog = (UEFI_VARIABLE_DATA *)AllocatePool (TcgEvent.EventSize);
   if (VarLog == NULL) {
     return EFI_OUT_OF_RESOURCES;
   }
@@ -1793,7 +1902,7 @@ MeasureVariable (
 
   if (EventType == EV_EFI_VARIABLE_DRIVER_CONFIG) {
     //
-    // Digest is the event data (EFI_VARIABLE_DATA)
+    // Digest is the event data (UEFI_VARIABLE_DATA)
     //
     Status = TcgDxeHashLogExtendEvent (
                0,
@@ -1873,7 +1982,8 @@ ReadAndMeasureVariable (
 }
 
 /**
-  Read then Measure and log an EFI boot variable, and extend the measurement result into PCR[5].
+  Read then Measure and log an EFI boot variable, and extend the measurement result into PCR[1].
+according to TCG PC Client PFP spec 0021 Section 2.4.4.2
 
   @param[in]   VarName          A Null-terminated string that is the name of the vendor's variable.
   @param[in]   VendorGuid       A unique identifier for the vendor.
@@ -1894,7 +2004,7 @@ ReadAndMeasureBootVariable (
   )
 {
   return ReadAndMeasureVariable (
-           5,
+           1,
            EV_EFI_VARIABLE_BOOT,
            VarName,
            VendorGuid,
@@ -2027,6 +2137,24 @@ MeasureAllSecureVariables (
     }
   }
 
+  //
+  // Measure DBT if present and not empty
+  //
+  Status = GetVariable2 (EFI_IMAGE_SECURITY_DATABASE2, &gEfiImageSecurityDatabaseGuid, &Data, &DataSize);
+  if (!EFI_ERROR(Status)) {
+    Status = MeasureVariable (
+               7,
+               EV_EFI_VARIABLE_DRIVER_CONFIG,
+               EFI_IMAGE_SECURITY_DATABASE2,
+               &gEfiImageSecurityDatabaseGuid,
+               Data,
+               DataSize
+               );
+    FreePool(Data);
+  } else {
+    DEBUG((DEBUG_INFO, "Skip measuring variable %s since it's deleted\n", EFI_IMAGE_SECURITY_DATABASE2));
+  }
+
   return EFI_SUCCESS;
 }
 
@@ -2151,6 +2279,7 @@ OnReadyToBoot (
     // 1. This is the first boot attempt.
     //
     Status = TcgMeasureAction (
+               4,
                EFI_CALLING_EFI_APPLICATION
                );
     if (EFI_ERROR (Status)) {
@@ -2184,10 +2313,23 @@ OnReadyToBoot (
     // 6. Not first attempt, meaning a return from last attempt
     //
     Status = TcgMeasureAction (
+               4,
                EFI_RETURNING_FROM_EFI_APPLICATOIN
                );
     if (EFI_ERROR (Status)) {
       DEBUG ((EFI_D_ERROR, "%a not Measured. Error!\n", EFI_RETURNING_FROM_EFI_APPLICATOIN));
+    }
+
+    //
+    // 7. Next boot attempt, measure "Calling EFI Application from Boot Option" again
+    // TCG PC Client PFP spec Section 2.4.4.5 Step 4
+    //
+    Status = TcgMeasureAction (
+               4,
+               EFI_CALLING_EFI_APPLICATION
+               );
+    if (EFI_ERROR (Status)) {
+      DEBUG ((EFI_D_ERROR, "%a not Measured. Error!\n", EFI_CALLING_EFI_APPLICATION));
     }
   }
 
@@ -2221,6 +2363,7 @@ OnExitBootServices (
   // Measure invocation of ExitBootServices,
   //
   Status = TcgMeasureAction (
+             5,
              EFI_EXIT_BOOT_SERVICES_INVOCATION
              );
   if (EFI_ERROR (Status)) {
@@ -2231,6 +2374,7 @@ OnExitBootServices (
   // Measure success of ExitBootServices
   //
   Status = TcgMeasureAction (
+             5,
              EFI_EXIT_BOOT_SERVICES_SUCCEEDED
              );
   if (EFI_ERROR (Status)) {
@@ -2260,12 +2404,75 @@ OnExitBootServicesFailed (
   // Measure Failure of ExitBootServices,
   //
   Status = TcgMeasureAction (
+             5,
              EFI_EXIT_BOOT_SERVICES_FAILED
              );
   if (EFI_ERROR (Status)) {
     DEBUG ((EFI_D_ERROR, "%a not Measured. Error!\n", EFI_EXIT_BOOT_SERVICES_FAILED));
   }
 
+}
+
+/**
+  This routine is called to properly shutdown the TPM before system reset.
+  It follow chapter "12.2.3 Startup State" in Trusted Platform Module Library
+  Part 1: Architecture, Revision 01.16.
+
+  @param[in]  ResetType         The type of reset to perform.
+  @param[in]  ResetStatus       The status code for the reset.
+  @param[in]  DataSize          The size, in bytes, of ResetData.
+  @param[in]  ResetData         For a ResetType of EfiResetCold, EfiResetWarm, or
+                                EfiResetShutdown the data buffer starts with a Null-terminated
+                                string, optionally followed by additional binary data.
+                                The string is a description that the caller may use to further
+                                indicate the reason for the system reset. ResetData is only
+                                valid if ResetStatus is something other than EFI_SUCCESS
+                                unless the ResetType is EfiResetPlatformSpecific
+                                where a minimum amount of ResetData is always required.
+                                For a ResetType of EfiResetPlatformSpecific the data buffer
+                                also starts with a Null-terminated string that is followed
+                                by an EFI_GUID that describes the specific type of reset to perform.
+**/
+VOID
+EFIAPI
+ShutdownTpmOnReset (
+  IN EFI_RESET_TYPE           ResetType,
+  IN EFI_STATUS               ResetStatus,
+  IN UINTN                    DataSize,
+  IN VOID                     *ResetData OPTIONAL
+  )
+{
+  EFI_STATUS                  Status;
+  Status = Tpm2Shutdown (TPM_SU_CLEAR);
+  DEBUG ((DEBUG_VERBOSE, "Tpm2Shutdown (SU_CLEAR) - %r\n", Status));
+}
+
+/**
+  Hook the system reset to properly shutdown TPM.
+  It follow chapter "12.2.3 Startup State" in Trusted Platform Module Library
+  Part 1: Architecture, Revision 01.16.
+
+  @param[in]  Event     Event whose notification function is being invoked
+  @param[in]  Context   Pointer to the notification function's context
+**/
+VOID
+EFIAPI
+OnResetNotificationInstall (
+  IN EFI_EVENT                      Event,
+  IN VOID                           *Context
+  )
+{
+  EFI_STATUS                        Status;
+  EFI_RESET_NOTIFICATION_PROTOCOL   *ResetNotify;
+
+  Status = gBS->LocateProtocol (&gEfiResetNotificationProtocolGuid, NULL, (VOID **) &ResetNotify);
+  if (!EFI_ERROR (Status)) {
+    Status = ResetNotify->RegisterResetNotify (ResetNotify, ShutdownTpmOnReset);
+    ASSERT_EFI_ERROR (Status);
+    DEBUG ((DEBUG_VERBOSE, "TCG2: Hook system reset to properly shutdown TPM.\n"));
+
+    gBS->CloseEvent (Event);
+  }
 }
 
 /**
@@ -2322,7 +2529,7 @@ DriverEntry (
 
   if (CompareGuid (PcdGetPtr(PcdTpmInstanceGuid), &gEfiTpmDeviceInstanceNoneGuid) ||
       CompareGuid (PcdGetPtr(PcdTpmInstanceGuid), &gEfiTpmDeviceInstanceTpm12Guid)){
-    DEBUG ((EFI_D_ERROR, "No TPM2 instance required!\n"));
+    DEBUG ((DEBUG_INFO, "No TPM2 instance required!\n"));
     return EFI_UNSUPPORTED;
   }
 
@@ -2465,6 +2672,11 @@ DriverEntry (
     // may update SecureBoot value based on last setting.
     //
     EfiCreateProtocolNotifyEvent (&gEfiVariableWriteArchProtocolGuid, TPL_CALLBACK, MeasureSecureBootPolicy, NULL, &Registration);
+
+    //
+    // Hook the system reset to properly shutdown TPM.
+    //
+    EfiCreateProtocolNotifyEvent (&gEfiResetNotificationProtocolGuid, TPL_CALLBACK, OnResetNotificationInstall, NULL, &Registration);
   }
 
   //

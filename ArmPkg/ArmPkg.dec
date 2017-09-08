@@ -2,7 +2,7 @@
 # ARM processor package.
 #
 # Copyright (c) 2009 - 2010, Apple Inc. All rights reserved.<BR>
-# Copyright (c) 2011 - 2015, ARM Limited. All rights reserved.
+# Copyright (c) 2011 - 2017, ARM Limited. All rights reserved.
 #
 #    This program and the accompanying materials
 #    are licensed and made available under the terms and conditions of the BSD License
@@ -36,7 +36,6 @@
   ArmLib|Include/Library/ArmLib.h
   ArmMmuLib|Include/Library/ArmMmuLib.h
   SemihostLib|Include/Library/Semihosting.h
-  UncachedMemoryAllocationLib|Include/Library/UncachedMemoryAllocationLib.h
   DefaultExceptionHandlerLib|Include/Library/DefaultExceptionHandlerLib.h
   ArmDisassemblerLib|Include/Library/ArmDisassemblerLib.h
   ArmGicArchLib|Include/Library/ArmGicArchLib.h
@@ -51,9 +50,6 @@
 [Ppis]
   ## Include/Ppi/ArmMpCoreInfo.h
   gArmMpCoreInfoPpiGuid = { 0x6847cc74, 0xe9ec, 0x4f8f, {0xa2, 0x9d, 0xab, 0x44, 0xe7, 0x54, 0xa8, 0xfc} }
-
-[Protocols.common]
-  gVirtualUncachedPagesProtocolGuid = { 0xAD651C7D, 0x3C22, 0x4DBF, { 0x92, 0xe8, 0x38, 0xa7, 0xcd, 0xae, 0x87, 0xb2 } }
 
 [PcdsFeatureFlag.common]
   gArmTokenSpaceGuid.PcdCpuDxeProduceDebugSupport|FALSE|BOOLEAN|0x00000001
@@ -87,10 +83,6 @@
   # Using a FeaturePcd make a '(BOOLEAN) casting for its value which is not understood by the preprocessor.
   gArmTokenSpaceGuid.PcdVFPEnabled|0|UINT32|0x00000024
 
-  gArmTokenSpaceGuid.PcdArmUncachedMemoryMask|0x0000000080000000|UINT64|0x00000002
-  # This PCD will free the unallocated buffers if their size reach this threshold.
-  # We set the default value to 512MB.
-  gArmTokenSpaceGuid.PcdArmFreeUncachedMemorySizeThreshold|0x20000000|UINT64|0x00000003
   gArmTokenSpaceGuid.PcdCpuVectorBaseAddress|0xffff0000|UINT64|0x00000004
   gArmTokenSpaceGuid.PcdCpuResetAddress|0x00000000|UINT32|0x00000005
 
@@ -252,8 +244,8 @@
   # ARM Generic Watchdog
   #
 
-  gArmTokenSpaceGuid.PcdGenericWatchdogControlBase|0x2A440000|UINT32|0x00000007
-  gArmTokenSpaceGuid.PcdGenericWatchdogRefreshBase|0x2A450000|UINT32|0x00000008
+  gArmTokenSpaceGuid.PcdGenericWatchdogControlBase|0x2A440000|UINT64|0x00000007
+  gArmTokenSpaceGuid.PcdGenericWatchdogRefreshBase|0x2A450000|UINT64|0x00000008
   gArmTokenSpaceGuid.PcdGenericWatchdogEl2IntrNum|93|UINT32|0x00000009
 
   #

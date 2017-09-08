@@ -1,7 +1,7 @@
 /** @file
   Pei Core Load Image Support
 
-Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -112,22 +112,23 @@ GetImageReadFunction (
   IN      PE_COFF_LOADER_IMAGE_CONTEXT  *ImageContext
   )
 {
-  PEI_CORE_INSTANCE  *Private;
-  VOID*  MemoryBuffer;
+#if defined (MDE_CPU_IA32) || defined (MDE_CPU_X64)
+  PEI_CORE_INSTANCE     *Private;
+  EFI_PHYSICAL_ADDRESS  MemoryBuffer;
 
   Private = PEI_CORE_INSTANCE_FROM_PS_THIS (GetPeiServicesTablePointer ());
-  
+  MemoryBuffer = 0;
+
   if (Private->PeiMemoryInstalled  && (((Private->HobList.HandoffInformationTable->BootMode != BOOT_ON_S3_RESUME) && PcdGetBool (PcdShadowPeimOnBoot)) || 
-      ((Private->HobList.HandoffInformationTable->BootMode == BOOT_ON_S3_RESUME) && PcdGetBool (PcdShadowPeimOnS3Boot))) &&
-      (EFI_IMAGE_MACHINE_TYPE_SUPPORTED(EFI_IMAGE_MACHINE_X64) || EFI_IMAGE_MACHINE_TYPE_SUPPORTED(EFI_IMAGE_MACHINE_IA32))) {
+      ((Private->HobList.HandoffInformationTable->BootMode == BOOT_ON_S3_RESUME) && PcdGetBool (PcdShadowPeimOnS3Boot)))) {
     // 
     // Shadow algorithm makes lots of non ANSI C assumptions and only works for IA32 and X64 
     //  compilers that have been tested
     //
     if (Private->ShadowedImageRead == NULL) {
-      MemoryBuffer = AllocatePages (0x400 / EFI_PAGE_SIZE + 1);
-      ASSERT (MemoryBuffer != NULL);
-      CopyMem (MemoryBuffer, (CONST VOID *) (UINTN) PeiImageReadForShadow, 0x400);
+      PeiServicesAllocatePages (EfiBootServicesCode, 0x400 / EFI_PAGE_SIZE + 1, &MemoryBuffer);
+      ASSERT (MemoryBuffer != 0);
+      CopyMem ((VOID *)(UINTN)MemoryBuffer, (CONST VOID *) (UINTN) PeiImageReadForShadow, 0x400);
       Private->ShadowedImageRead = (PE_COFF_LOADER_READ_FILE) (UINTN) MemoryBuffer;
     }
 
@@ -135,7 +136,9 @@ GetImageReadFunction (
   } else {
     ImageContext->ImageRead = PeiImageRead;
   }
-
+#else
+  ImageContext->ImageRead = PeiImageRead;
+#endif
   return EFI_SUCCESS;
 }
 /**
@@ -250,12 +253,10 @@ GetPeCoffImageFixLoadingAssignedAddress(
      SectionHeaderOffset = sizeof (EFI_TE_IMAGE_HEADER);
      NumberOfSections = ImgHdr->Te.NumberOfSections;
    } else {
-     SectionHeaderOffset = (UINTN)(
-                                 ImageContext->PeCoffHeaderOffset +
-                                 sizeof (UINT32) +
-                                 sizeof (EFI_IMAGE_FILE_HEADER) +
-                                 ImgHdr->Pe32.FileHeader.SizeOfOptionalHeader
-                                 );
+     SectionHeaderOffset = ImageContext->PeCoffHeaderOffset +
+                           sizeof (UINT32) +
+                           sizeof (EFI_IMAGE_FILE_HEADER) +
+                           ImgHdr->Pe32.FileHeader.SizeOfOptionalHeader;
       NumberOfSections = ImgHdr->Pe32.FileHeader.NumberOfSections;
    }
    //
@@ -453,12 +454,16 @@ LoadAndRelocatePeCoffImage (
         //
         // The PEIM is not assiged valid address, try to allocate page to load it.
         //
-        ImageContext.ImageAddress = (EFI_PHYSICAL_ADDRESS)(UINTN) AllocatePages (EFI_SIZE_TO_PAGES ((UINT32) AlignImageSize));
+        Status = PeiServicesAllocatePages (EfiBootServicesCode,
+                                           EFI_SIZE_TO_PAGES ((UINT32) AlignImageSize),
+                                           &ImageContext.ImageAddress);
       }
     } else {
-      ImageContext.ImageAddress = (EFI_PHYSICAL_ADDRESS)(UINTN) AllocatePages (EFI_SIZE_TO_PAGES ((UINT32) AlignImageSize));
+      Status = PeiServicesAllocatePages (EfiBootServicesCode,
+                                         EFI_SIZE_TO_PAGES ((UINT32) AlignImageSize),
+                                         &ImageContext.ImageAddress);
     }
-    if (ImageContext.ImageAddress != 0) {
+    if (!EFI_ERROR (Status)) {
       //
       // Adjust the Image Address to make sure it is section alignment.
       //

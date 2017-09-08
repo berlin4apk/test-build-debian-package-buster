@@ -16,7 +16,7 @@
 
  SmmPerformanceHandlerEx(), SmmPerformanceHandler() will receive untrusted input and do basic validation.
 
-Copyright (c) 2011 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2011 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -68,6 +68,8 @@ PERFORMANCE_EX_PROTOCOL mPerformanceExInterface = {
   EndGaugeEx,
   GetGaugeEx
 };
+
+PERFORMANCE_PROPERTY mPerformanceProperty;
 
 /**
   Searches in the gauge array with keyword Handle, Token, Module and Identfier.
@@ -687,6 +689,7 @@ InitializeSmmCorePerformanceLib (
 {
   EFI_STATUS                Status;
   EFI_HANDLE                Handle;
+  PERFORMANCE_PROPERTY      *PerformanceProperty;
 
   //
   // Initialize spin lock
@@ -725,6 +728,21 @@ InitializeSmmCorePerformanceLib (
   ASSERT_EFI_ERROR (Status);
   Status = gSmst->SmiHandlerRegister (SmmPerformanceHandlerEx, &gSmmPerformanceExProtocolGuid, &Handle);
   ASSERT_EFI_ERROR (Status);
+
+  Status = EfiGetSystemConfigurationTable (&gPerformanceProtocolGuid, (VOID **) &PerformanceProperty);
+  if (EFI_ERROR (Status)) {
+    //
+    // Install configuration table for performance property.
+    //
+    mPerformanceProperty.Revision  = PERFORMANCE_PROPERTY_REVISION;
+    mPerformanceProperty.Reserved  = 0;
+    mPerformanceProperty.Frequency = GetPerformanceCounterProperties (
+                                       &mPerformanceProperty.TimerStartValue,
+                                       &mPerformanceProperty.TimerEndValue
+                                       );
+    Status = gBS->InstallConfigurationTable (&gPerformanceProtocolGuid, &mPerformanceProperty);
+    ASSERT_EFI_ERROR (Status);
+  }
 }
 
 /**

@@ -2,7 +2,7 @@
   Main file for DmpStore shell Debug1 function.
    
   (C) Copyright 2013-2015 Hewlett-Packard Development Company, L.P.<BR>
-  Copyright (c) 2005 - 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2005 - 2017, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -84,8 +84,8 @@ GetAttrType (
 /**
   Convert binary to hex format string.
 
-  @param[in]  BufferSize        The size in bytes of the binary data.
   @param[in]  Buffer            The binary data.
+  @param[in]  BufferSize        The size in bytes of the binary data.
   @param[in, out] HexString     Hex format string.
   @param[in]      HexStringSize The size in bytes of the string.
 
@@ -364,7 +364,7 @@ AppendSingleVariableToFile (
   //
   // Crc32
   //
-  gBS->CalculateCrc32 (Buffer, (UINTN) (Ptr - Buffer), (UINT32 *) Ptr);
+  gBS->CalculateCrc32 (Buffer, (UINTN) Ptr - (UINTN) Buffer, (UINT32 *) Ptr);
 
   Status = ShellWriteFile (FileHandle, &BufferSize, Buffer);
   FreePool (Buffer);
@@ -423,6 +423,7 @@ CascadeProcessVariables (
   UINTN                     NameSize;
   CHAR16                    *AttrString;
   CHAR16                    *HexString;
+  EFI_STATUS                SetStatus;
 
   if (ShellGetExecutionBreakFlag()) {
     return (SHELL_ABORTED);
@@ -435,6 +436,7 @@ CascadeProcessVariables (
     StrnCatGrow(&FoundVarName, &NameSize, PrevName, 0);
   } else {
     FoundVarName = AllocateZeroPool(sizeof(CHAR16));
+    NameSize = sizeof(CHAR16);
   }
 
   Status = gRT->GetNextVariableName (&NameSize, FoundVarName, &FoundVarGuid);
@@ -548,7 +550,7 @@ CascadeProcessVariables (
       //
       // We only need name to delete it...
       //
-      EFI_STATUS SetStatus = gRT->SetVariable (FoundVarName, &FoundVarGuid, Atts, 0, NULL);
+      SetStatus = gRT->SetVariable (FoundVarName, &FoundVarGuid, Atts, 0, NULL);
       if (StandardFormatOutput) {
         if (SetStatus == EFI_SUCCESS) {
           ShellPrintHiiEx (
@@ -675,6 +677,7 @@ ShellCommandRunDmpStore (
   )
 {
   EFI_STATUS        Status;
+  RETURN_STATUS     RStatus;
   LIST_ENTRY        *Package;
   CHAR16            *ProblemParam;
   SHELL_STATUS      ShellStatus;
@@ -727,8 +730,8 @@ ShellCommandRunDmpStore (
       if (!ShellCommandLineGetFlag(Package, L"-all")) {
         GuidStr = ShellCommandLineGetValue(Package, L"-guid");
         if (GuidStr != NULL) {
-          Status = ConvertStringToGuid(GuidStr, &GuidData);
-          if (EFI_ERROR(Status)) {
+          RStatus = StrToGuid (GuidStr, &GuidData);
+          if (RETURN_ERROR (RStatus) || (GuidStr[GUID_STRING_LENGTH] != L'\0')) {
             ShellPrintHiiEx(-1, -1, NULL, STRING_TOKEN (STR_GEN_PARAM_INV), gShellDebug1HiiHandle, L"dmpstore", GuidStr);  
             ShellStatus = SHELL_INVALID_PARAMETER;
           }

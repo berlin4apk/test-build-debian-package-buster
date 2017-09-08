@@ -20,26 +20,6 @@
 #include <Library/CapsuleLib.h>
 
 /**
-  Check if this FMP capsule is processed.
-
-  @param[in] CapsuleHeader  The capsule image header
-  @param[in] PayloadIndex   FMP payload index
-  @param[in] ImageHeader    FMP image header
-
-  @retval TRUE  This FMP capsule is processed.
-  @retval FALSE This FMP capsule is not processed.
-**/
-BOOLEAN
-IsFmpCapsuleProcessed (
-  IN EFI_CAPSULE_HEADER                            *CapsuleHeader,
-  IN UINTN                                         PayloadIndex,
-  IN EFI_FIRMWARE_MANAGEMENT_CAPSULE_IMAGE_HEADER  *ImageHeader
-  )
-{
-  return FALSE;
-}
-
-/**
   Record capsule status variable and to local cache.
 
   @param[in] CapsuleHeader  The capsule image header
@@ -64,6 +44,7 @@ RecordCapsuleStatusVariable (
   @param[in] CapsuleStatus  The capsule process stauts
   @param[in] PayloadIndex   FMP payload index
   @param[in] ImageHeader    FMP image header
+  @param[in] FmpDevicePath  DevicePath associated with the FMP producer
 
   @retval EFI_SUCCESS          The capsule status variable is recorded.
   @retval EFI_OUT_OF_RESOURCES No resource to record the capsule status variable.
@@ -73,7 +54,8 @@ RecordFmpCapsuleStatusVariable (
   IN EFI_CAPSULE_HEADER                            *CapsuleHeader,
   IN EFI_STATUS                                    CapsuleStatus,
   IN UINTN                                         PayloadIndex,
-  IN EFI_FIRMWARE_MANAGEMENT_CAPSULE_IMAGE_HEADER  *ImageHeader
+  IN EFI_FIRMWARE_MANAGEMENT_CAPSULE_IMAGE_HEADER  *ImageHeader,
+  IN EFI_DEVICE_PATH_PROTOCOL                      *FmpDevicePath OPTIONAL
   )
 {
   return EFI_UNSUPPORTED;

@@ -783,9 +783,6 @@ EmmcSwitchToHighSpeed (
 
   HsTiming = 1;
   Status = EmmcSwitchClockFreq (PciIo, PassThru, Slot, Rca, HsTiming, ClockFreq);
-  if (EFI_ERROR (Status)) {
-    return Status;
-  }
 
   return Status;
 }
@@ -1112,6 +1109,7 @@ EmmcIdentification (
   EFI_SD_MMC_PASS_THRU_PROTOCOL  *PassThru;
   UINT32                         Ocr;
   UINT16                         Rca;
+  UINTN                          Retry;
 
   PciIo    = Private->PciIo;
   PassThru = &Private->PassThru;
@@ -1122,7 +1120,8 @@ EmmcIdentification (
     return Status;
   }
 
-  Ocr = 0;
+  Ocr   = 0;
+  Retry = 0;
   do {
     Status = EmmcGetOcr (PassThru, Slot, &Ocr);
     if (EFI_ERROR (Status)) {
@@ -1130,6 +1129,12 @@ EmmcIdentification (
       return Status;
     }
     Ocr |= BIT30;
+
+    if (Retry++ == 100) {
+      DEBUG ((DEBUG_VERBOSE, "EmmcIdentification: Executing Cmd1 fails too many times\n"));
+      return EFI_DEVICE_ERROR;
+    }
+    gBS->Stall(10 * 1000);
   } while ((Ocr & BIT31) == 0);
 
   Status = EmmcGetAllCid (PassThru, Slot);

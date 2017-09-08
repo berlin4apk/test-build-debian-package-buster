@@ -17,6 +17,7 @@
 **/
 
 #include <IndustryStandard/Pci22.h>
+#include <Library/BootLogoLib.h>
 #include <Library/DevicePathLib.h>
 #include <Library/PcdLib.h>
 #include <Library/UefiBootManagerLib.h>
@@ -32,7 +33,6 @@
 #include "PlatformBm.h"
 
 #define DP_NODE_LEN(Type) { (UINT8)sizeof (Type), (UINT8)(sizeof (Type) >> 8) }
-
 
 #pragma pack (1)
 typedef struct {
@@ -327,7 +327,7 @@ AddOutput (
 STATIC
 VOID
 PlatformRegisterFvBootOption (
-  EFI_GUID                         *FileGuid,
+  CONST EFI_GUID                   *FileGuid,
   CHAR16                           *Description,
   UINT32                           Attributes
   )
@@ -514,13 +514,15 @@ PlatformBootManagerAfterConsole (
   VOID
   )
 {
-  Print (L"Press ESCAPE for boot options ");
+  EFI_STATUS      Status;
 
   //
   // Show the splash screen.
   //
-  EnableQuietBoot (PcdGetPtr (PcdLogoFile));
-
+  Status = BootLogoEnableLogo ();
+  if (EFI_ERROR (Status)) {
+    Print (L"Press ESCAPE for boot options ");
+  }
   //
   // Connect the rest of the devices.
   //
@@ -535,7 +537,7 @@ PlatformBootManagerAfterConsole (
   // Register UEFI Shell
   //
   PlatformRegisterFvBootOption (
-    PcdGetPtr (PcdShellFile), L"UEFI Shell", LOAD_OPTION_ACTIVE
+    &gUefiShellFileGuid, L"UEFI Shell", LOAD_OPTION_ACTIVE
     );
 }
 
@@ -551,5 +553,25 @@ PlatformBootManagerWaitCallback (
   UINT16          TimeoutRemain
   )
 {
-  Print (L".");
+  EFI_GRAPHICS_OUTPUT_BLT_PIXEL_UNION Black;
+  EFI_GRAPHICS_OUTPUT_BLT_PIXEL_UNION White;
+  UINT16                              Timeout;
+  EFI_STATUS                          Status;
+
+  Timeout = PcdGet16 (PcdPlatformBootTimeOut);
+
+  Black.Raw = 0x00000000;
+  White.Raw = 0x00FFFFFF;
+
+  Status = BootLogoUpdateProgress (
+             White.Pixel,
+             Black.Pixel,
+             L"Press ESCAPE for boot options",
+             White.Pixel,
+             (Timeout - TimeoutRemain) * 100 / Timeout,
+             0
+             );
+  if (EFI_ERROR (Status)) {
+    Print (L".");
+  }
 }

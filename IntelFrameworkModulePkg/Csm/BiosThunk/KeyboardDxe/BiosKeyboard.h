@@ -1,6 +1,6 @@
 /** @file
 
-Copyright (c) 2006 - 2012, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
 
 This program and the accompanying materials
 are licensed and made available under the terms and conditions
@@ -223,11 +223,13 @@ typedef struct {
   // Buffer storing EFI_KEY_DATA
   //
   SIMPLE_QUEUE                                Queue;
+  SIMPLE_QUEUE                                QueueForNotify;
 
   //
   // Notification Function List
   //
   LIST_ENTRY                                  NotifyList;
+  EFI_EVENT                                   KeyNotifyProcessEvent;
   EFI_EVENT                                   TimerEvent;
   
 } BIOS_KEYBOARD_DEV;
@@ -555,6 +557,19 @@ BiosKeyboardTimerHandler (
   );
 
 /**
+  Process key notify.
+
+  @param  Event                 Indicates the event that invoke this function.
+  @param  Context               Indicates the calling context.
+**/
+VOID
+EFIAPI
+KeyNotifyProcessHandler (
+  IN  EFI_EVENT                 Event,
+  IN  VOID                      *Context
+  );
+
+/**
   Reset the input device and optionaly run diagnostics
  
   @param  This                  Protocol instance pointer.
@@ -620,17 +635,21 @@ BiosKeyboardSetState (
 
   @param  This                    Protocol instance pointer.
   @param  KeyData                 A pointer to a buffer that is filled in with the keystroke 
-                                  information data for the key that was pressed.
+                                  information data for the key that was pressed. If KeyData.Key,
+                                  KeyData.KeyState.KeyToggleState and KeyData.KeyState.KeyShiftState
+                                  are 0, then any incomplete keystroke will trigger a notification of
+                                  the KeyNotificationFunction.
   @param  KeyNotificationFunction Points to the function to be called when the key 
-                                  sequence is typed specified by KeyData.                        
-  @param  NotifyHandle            Points to the unique handle assigned to the registered notification.                          
+                                  sequence is typed specified by KeyData. This notification function
+                                  should be called at <=TPL_CALLBACK.
+  @param  NotifyHandle            Points to the unique handle assigned to the registered notification.
 
   
   @retval EFI_SUCCESS             The notification function was registered successfully.
   @retval EFI_OUT_OF_RESOURCES    Unable to allocate resources for necesssary data structures.
   @retval EFI_INVALID_PARAMETER   KeyData or NotifyHandle is NULL.
-                                                  
-**/   
+
+**/
 EFI_STATUS
 EFIAPI
 BiosKeyboardRegisterKeyNotify (

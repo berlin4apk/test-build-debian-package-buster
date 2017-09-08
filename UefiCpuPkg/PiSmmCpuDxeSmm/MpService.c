@@ -1,7 +1,9 @@
 /** @file
 SMM MP service implementation
 
-Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2009 - 2017, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2017, AMD Incorporated. All rights reserved.<BR>
+
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -25,6 +27,7 @@ SMM_CPU_SEMAPHORES                          mSmmCpuSemaphores;
 UINTN                                       mSemaphoreSize;
 SPIN_LOCK                                   *mPFLock = NULL;
 SMM_CPU_SYNC_MODE                           mCpuSmmSyncMode;
+BOOLEAN                                     mMachineCheckSupported = FALSE;
 
 /**
   Performs an atomic compare exchange operation to get semaphore.
@@ -194,6 +197,56 @@ AllCpusInSmmWithExceptions (
   return TRUE;
 }
 
+/**
+  Has OS enabled Lmce in the MSR_IA32_MCG_EXT_CTL
+  
+  @retval TRUE     Os enable lmce.
+  @retval FALSE    Os not enable lmce.
+
+**/
+BOOLEAN
+IsLmceOsEnabled (
+  VOID
+  )
+{
+  MSR_IA32_MCG_CAP_REGISTER          McgCap;
+  MSR_IA32_FEATURE_CONTROL_REGISTER  FeatureCtrl;
+  MSR_IA32_MCG_EXT_CTL_REGISTER      McgExtCtrl;
+
+  McgCap.Uint64 = AsmReadMsr64 (MSR_IA32_MCG_CAP);
+  if (McgCap.Bits.MCG_LMCE_P == 0) {
+    return FALSE;
+  }
+
+  FeatureCtrl.Uint64 = AsmReadMsr64 (MSR_IA32_FEATURE_CONTROL);
+  if (FeatureCtrl.Bits.LmceOn == 0) {
+    return FALSE;
+  }
+
+  McgExtCtrl.Uint64 = AsmReadMsr64 (MSR_IA32_MCG_EXT_CTL);
+  return (BOOLEAN) (McgExtCtrl.Bits.LMCE_EN == 1);
+}
+
+/**
+  Return if Local machine check exception signaled. 
+
+  Indicates (when set) that a local machine check exception was generated. This indicates that the current machine-check event was 
+  delivered to only the logical processor.
+
+  @retval TRUE    LMCE was signaled.
+  @retval FALSE   LMCE was not signaled.
+
+**/
+BOOLEAN
+IsLmceSignaled (
+  VOID
+  )
+{
+  MSR_IA32_MCG_STATUS_REGISTER McgStatus;
+
+  McgStatus.Uint64 = AsmReadMsr64 (MSR_IA32_MCG_STATUS);
+  return (BOOLEAN) (McgStatus.Bits.LMCE_S == 1);
+}
 
 /**
   Given timeout constraint, wait for all APs to arrive, and insure when this function returns, no AP will execute normal mode code before
@@ -207,8 +260,17 @@ SmmWaitForApArrival (
 {
   UINT64                            Timer;
   UINTN                             Index;
+  BOOLEAN                           LmceEn;
+  BOOLEAN                           LmceSignal;
 
   ASSERT (*mSmmMpSyncData->Counter <= mNumberOfCpus);
+
+  LmceEn     = FALSE;
+  LmceSignal = FALSE;
+  if (mMachineCheckSupported) {
+    LmceEn     = IsLmceOsEnabled ();
+    LmceSignal = IsLmceSignaled();
+  }
 
   //
   // Platform implementor should choose a timeout value appropriately:
@@ -225,7 +287,7 @@ SmmWaitForApArrival (
   // Sync with APs 1st timeout
   //
   for (Timer = StartSyncTimer ();
-       !IsSyncTimerTimeout (Timer) &&
+       !IsSyncTimerTimeout (Timer) && !(LmceEn && LmceSignal) &&
        !AllCpusInSmmWithExceptions (ARRIVAL_EXCEPTION_BLOCKED | ARRIVAL_EXCEPTION_SMI_DISABLED );
        ) {
     CpuPause ();
@@ -405,7 +467,7 @@ BSPHandler (
   //
   // The BUSY lock is initialized to Acquired state
   //
-  AcquireSpinLockOrFail (mSmmMpSyncData->CpuData[CpuIndex].Busy);
+  AcquireSpinLock (mSmmMpSyncData->CpuData[CpuIndex].Busy);
 
   //
   // Perform the pre tasks
@@ -781,7 +843,8 @@ Gen4GPageTable (
   // Set Page Directory Pointers
   //
   for (Index = 0; Index < 4; Index++) {
-    Pte[Index] = (UINTN)PageTable + EFI_PAGE_SIZE * (Index + 1) + (Is32BitPageTable ? IA32_PAE_PDPTE_ATTRIBUTE_BITS : PAGE_ATTRIBUTE_BITS);
+    Pte[Index] = ((UINTN)PageTable + EFI_PAGE_SIZE * (Index + 1)) | mAddressEncMask |
+                   (Is32BitPageTable ? IA32_PAE_PDPTE_ATTRIBUTE_BITS : PAGE_ATTRIBUTE_BITS);
   }
   Pte += EFI_PAGE_SIZE / sizeof (*Pte);
 
@@ -789,7 +852,7 @@ Gen4GPageTable (
   // Fill in Page Directory Entries
   //
   for (Index = 0; Index < EFI_PAGE_SIZE * 4 / sizeof (*Pte); Index++) {
-    Pte[Index] = (Index << 21) | IA32_PG_PS | PAGE_ATTRIBUTE_BITS;
+    Pte[Index] = (Index << 21) | mAddressEncMask | IA32_PG_PS | PAGE_ATTRIBUTE_BITS;
   }
 
   if (FeaturePcdGet (PcdCpuSmmStackGuard)) {
@@ -797,8 +860,8 @@ Gen4GPageTable (
     GuardPage = mSmmStackArrayBase + EFI_PAGE_SIZE;
     Pdpte = (UINT64*)PageTable;
     for (PageIndex = Low2MBoundary; PageIndex <= High2MBoundary; PageIndex += SIZE_2MB) {
-      Pte = (UINT64*)(UINTN)(Pdpte[BitFieldRead32 ((UINT32)PageIndex, 30, 31)] & ~(EFI_PAGE_SIZE - 1));
-      Pte[BitFieldRead32 ((UINT32)PageIndex, 21, 29)] = (UINT64)Pages | PAGE_ATTRIBUTE_BITS;
+      Pte = (UINT64*)(UINTN)(Pdpte[BitFieldRead32 ((UINT32)PageIndex, 30, 31)] & ~mAddressEncMask & ~(EFI_PAGE_SIZE - 1));
+      Pte[BitFieldRead32 ((UINT32)PageIndex, 21, 29)] = (UINT64)Pages | mAddressEncMask | PAGE_ATTRIBUTE_BITS;
       //
       // Fill in Page Table Entries
       //
@@ -809,13 +872,13 @@ Gen4GPageTable (
           //
           // Mark the guard page as non-present
           //
-          Pte[Index] = PageAddress;
+          Pte[Index] = PageAddress | mAddressEncMask;
           GuardPage += mSmmStackSize;
           if (GuardPage > mSmmStackArrayEnd) {
             GuardPage = 0;
           }
         } else {
-          Pte[Index] = PageAddress | PAGE_ATTRIBUTE_BITS;
+          Pte[Index] = PageAddress | mAddressEncMask | PAGE_ATTRIBUTE_BITS;
         }
         PageAddress+= EFI_PAGE_SIZE;
       }
@@ -827,79 +890,11 @@ Gen4GPageTable (
 }
 
 /**
-  Set memory cache ability.
-
-  @param    PageTable              PageTable Address
-  @param    Address                Memory Address to change cache ability
-  @param    Cacheability           Cache ability to set
-
-**/
-VOID
-SetCacheability (
-  IN      UINT64                    *PageTable,
-  IN      UINTN                     Address,
-  IN      UINT8                     Cacheability
-  )
-{
-  UINTN   PTIndex;
-  VOID    *NewPageTableAddress;
-  UINT64  *NewPageTable;
-  UINTN   Index;
-
-  ASSERT ((Address & EFI_PAGE_MASK) == 0);
-
-  if (sizeof (UINTN) == sizeof (UINT64)) {
-    PTIndex = (UINTN)RShiftU64 (Address, 39) & 0x1ff;
-    ASSERT (PageTable[PTIndex] & IA32_PG_P);
-    PageTable = (UINT64*)(UINTN)(PageTable[PTIndex] & gPhyMask);
-  }
-
-  PTIndex = (UINTN)RShiftU64 (Address, 30) & 0x1ff;
-  ASSERT (PageTable[PTIndex] & IA32_PG_P);
-  PageTable = (UINT64*)(UINTN)(PageTable[PTIndex] & gPhyMask);
-
-  //
-  // A perfect implementation should check the original cacheability with the
-  // one being set, and break a 2M page entry into pieces only when they
-  // disagreed.
-  //
-  PTIndex = (UINTN)RShiftU64 (Address, 21) & 0x1ff;
-  if ((PageTable[PTIndex] & IA32_PG_PS) != 0) {
-    //
-    // Allocate a page from SMRAM
-    //
-    NewPageTableAddress = AllocatePageTableMemory (1);
-    ASSERT (NewPageTableAddress != NULL);
-
-    NewPageTable = (UINT64 *)NewPageTableAddress;
-
-    for (Index = 0; Index < 0x200; Index++) {
-      NewPageTable[Index] = PageTable[PTIndex];
-      if ((NewPageTable[Index] & IA32_PG_PAT_2M) != 0) {
-        NewPageTable[Index] &= ~((UINT64)IA32_PG_PAT_2M);
-        NewPageTable[Index] |= (UINT64)IA32_PG_PAT_4K;
-      }
-      NewPageTable[Index] |= (UINT64)(Index << EFI_PAGE_SHIFT);
-    }
-
-    PageTable[PTIndex] = ((UINTN)NewPageTableAddress & gPhyMask) | PAGE_ATTRIBUTE_BITS;
-  }
-
-  ASSERT (PageTable[PTIndex] & IA32_PG_P);
-  PageTable = (UINT64*)(UINTN)(PageTable[PTIndex] & gPhyMask);
-
-  PTIndex = (UINTN)RShiftU64 (Address, 12) & 0x1ff;
-  ASSERT (PageTable[PTIndex] & IA32_PG_P);
-  PageTable[PTIndex] &= ~((UINT64)((IA32_PG_PAT_4K | IA32_PG_CD | IA32_PG_WT)));
-  PageTable[PTIndex] |= (UINT64)Cacheability;
-}
-
-/**
   Schedule a procedure to run on the specified CPU.
 
   @param[in]       Procedure                The address of the procedure to run
   @param[in]       CpuIndex                 Target CPU Index
-  @param[in, OUT]  ProcArguments            The parameter to pass to the procedure
+  @param[in, out]  ProcArguments            The parameter to pass to the procedure
   @param[in]       BlockingMode             Startup AP in blocking mode or not
 
   @retval EFI_INVALID_PARAMETER    CpuNumber not valid
@@ -923,6 +918,9 @@ InternalSmmStartupThisAp (
   }
   if (CpuIndex == gSmmCpuPrivate->SmmCoreEntryContext.CurrentlyExecutingCpu) {
     DEBUG((DEBUG_ERROR, "CpuIndex(%d) == gSmmCpuPrivate->SmmCoreEntryContext.CurrentlyExecutingCpu\n", CpuIndex));
+    return EFI_INVALID_PARAMETER;
+  }
+  if (gSmmCpuPrivate->ProcessorInfo[CpuIndex].ProcessorId == INVALID_APIC_ID) {
     return EFI_INVALID_PARAMETER;
   }
   if (!(*(mSmmMpSyncData->CpuData[CpuIndex].Present))) {
@@ -1373,6 +1371,13 @@ InitializeMpServiceData (
   UINTN                     Index;
   UINT8                     *GdtTssTables;
   UINTN                     GdtTableStepSize;
+  CPUID_VERSION_INFO_EDX    RegEdx;
+
+  //
+  // Determine if this CPU supports machine check
+  //
+  AsmCpuid (CPUID_VERSION_INFO, NULL, NULL, NULL, &RegEdx.Uint32);
+  mMachineCheckSupported = (BOOLEAN)(RegEdx.Bits.MCA == 1);
 
   //
   // Allocate memory for all locks and semaphores

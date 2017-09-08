@@ -2,8 +2,8 @@
   Build a table, each item is (Key, Info) pair.
   And give a interface of query a string out of a table.
 
-  Copyright (c) 2005 - 2015, Intel Corporation. All rights reserved.<BR>
-  (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
+  Copyright (c) 2005 - 2017, Intel Corporation. All rights reserved.<BR>
+  (C) Copyright 2016-2017 Hewlett Packard Enterprise Development LP<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -14,7 +14,7 @@
 
 **/
 
-#include "../UefiShellDebug1CommandsLib.h"
+#include "UefiShellDebug1CommandsLib.h"
 #include "QueryTable.h"
 #include "PrintInfo.h"
 
@@ -166,7 +166,7 @@ TABLE_ITEM  SystemEnclosureTypeTable[] = {
   },
   {
     0x09,
-    L"  LapTop"
+    L"  Laptop"
   },
   {
     0x0A,
@@ -247,6 +247,34 @@ TABLE_ITEM  SystemEnclosureTypeTable[] = {
   {
     0x1D,
     L"  Blade Enclosure"
+  },
+  {
+    0x1E,
+    L"  Tablet"
+  },
+  {
+    0x1F,
+    L"  Convertible"
+  },
+  {
+    0x20,
+    L"  Detachable"
+  },
+  {
+    0x21,
+    L"  IoT Gateway"
+  },
+  {
+    0x22,
+    L"  Embedded PC"
+  },
+  {
+    0x23,
+    L"  Mini PC"
+  },
+  {
+    0x24,
+    L"  Stick PC"
   },
 };
 
@@ -503,6 +531,54 @@ TABLE_ITEM  ProcessorUpgradeTable[] = {
   {
     0x2C,
     L"Socket LGA1356-3"
+  },
+  {
+    0x2D,
+    L"Socket LGA1150"
+  },
+  {
+    0x2E,
+    L"Socket BGA1168"
+  },
+  {
+    0x2F,
+    L"Socket BGA1234"
+  },
+  {
+    0x30,
+    L"Socket BGA1364"
+  },
+  {
+    0x31,
+    L"Socket AM4"
+  },
+  {
+    0x32,
+    L"Socket LGA1151"
+  },
+  {
+    0x33,
+    L"Socket BGA1356"
+  },
+  {
+    0x34,
+    L"Socket BGA1440"
+  },
+  {
+    0x35,
+    L"Socket BGA1515"
+  },
+  {
+    0x36,
+    L"Socket LGA3647-1"
+  },
+  {
+    0x37,
+    L"Socket SP3"
+  },
+  {
+    0x38,
+    L"Socket SP3r2"
   }
 };
 
@@ -1261,6 +1337,74 @@ TABLE_ITEM  SystemSlotTypeTable[] = {
   {
     0x12,
     L"PCI-X"
+  },
+  {
+    0x13,
+    L"AGP 8X"
+  },
+  {
+    0x14,
+    L"M.2 Socket 1-DP (Mechanical Key A)"
+  },
+  {
+    0x15,
+    L"M.2 Socket 1-SD (Mechanical Key E)"
+  },
+  {
+    0x16,
+    L"M.2 Socket 2 (Mechanical Key B)"
+  },
+  {
+    0x17,
+    L"M.2 Socket 3 (Mechanical Key M)"
+  },
+  {
+    0x18,
+    L"MXM Type I"
+  },
+  {
+    0x19,
+    L"MXM Type II"
+  },
+  {
+    0x1A,
+    L"MXM Type III (standard connector)"
+  },
+  {
+    0x1B,
+    L"MXM Type III (HE connector)"
+  },
+  {
+    0x1C,
+    L"MXM Type IV"
+  },
+  {
+    0x1D,
+    L"MXM 3.0 Type A"
+  },
+  {
+    0x1E,
+    L"MXM 3.0 Type B"
+  },
+  {
+    0x1F,
+    L"PCI Express Gen 2 SFF-8639"
+  },
+  {
+    0x20,
+    L"PCI Express Gen 3 SFF-8639"
+  },
+  {
+    0x21,
+    L"PCI Express Mini 52-pin (CEM spec. 2.0) with bottom-side keep-outs"
+  },
+  {
+    0x22,
+    L"PCI Express Mini 52-pin (CEM spec. 2.0) without bottom-side keep-outs"
+  },
+  {
+    0x23,
+    L"PCI Express Mini 76-pin (CEM spec. 2.0) Corresponds to Display-Mini card"
   },
   {
     0xA0,
@@ -3016,6 +3160,22 @@ TABLE_ITEM  IPMIDIBMCInterfaceTypeTable[] = {
   },
 };
 
+TABLE_ITEM  MCHostInterfaceTypeTable[] = {
+  {
+    0x3F00,
+    L" MCTP Host Interface "
+  },
+  {
+    0x40,
+    L" Network Host Interface "
+  },
+  {
+    0xF0,
+    L" OEM defined "
+  },
+};
+
+
 TABLE_ITEM  StructureTypeInfoTable[] = {
   {
     0,
@@ -3190,6 +3350,10 @@ TABLE_ITEM  StructureTypeInfoTable[] = {
     L" Management Controller Host Interface"
   },
   {
+    43,
+    L" TPM Device"
+  },
+  {
     0x7E,
     L" Inactive"
   },
@@ -3285,19 +3449,24 @@ PrintBitsInfo (
 
   UINTN   Index;
   UINT32  Value;
-  BOOLEAN NoInfo;
+  BOOLEAN FirstInfo;
 
-  NoInfo  = TRUE;
+  FirstInfo = TRUE;
   Value   = Bits;
   //
   // query the table and print information
   //
   for (Index = 0; Index < Number; Index++) {
     if (BIT (Value, Table[Index].Key) != 0) {
+      if (!FirstInfo) {
+        //
+        // If it is not first info, print the separator first.
+        //
+        Print (L" | ");
+      }
       Print (Table[Index].Info);
-      Print (L" | ");
 
-      NoInfo = FALSE;
+      FirstInfo = FALSE;
       //
       // clear the bit, for reserved bits test
       //
@@ -3305,7 +3474,10 @@ PrintBitsInfo (
     }
   }
 
-  if (NoInfo) {
+  //
+  // There is no any info if FirstInfo is still TRUE.
+  //
+  if (FirstInfo) {
     ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_QUERYTABLE_NO_INFO), gShellDebug1HiiHandle);
   }
 
@@ -4378,6 +4550,23 @@ DisplayIPMIDIBMCInterfaceType (
   ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_QUERYTABLE_BMC_INTERFACE_TYPE), gShellDebug1HiiHandle);
   PRINT_INFO_OPTION (Key, Option);
   PRINT_TABLE_ITEM (IPMIDIBMCInterfaceTypeTable, Key);
+}
+
+/**
+  Display Management Controller Host Interface (Type 42) information.
+
+  @param[in] Key      The key of the structure.
+  @param[in] Option   The optional information.
+**/
+VOID
+DisplayMCHostInterfaceType (
+  IN UINT8 Key,
+  IN UINT8 Option
+  )
+{
+  ShellPrintHiiEx(-1,-1,NULL,STRING_TOKEN (STR_SMBIOSVIEW_QUERYTABLE_MC_HOST_INTERFACE_TYPE), gShellDebug1HiiHandle);
+  PRINT_INFO_OPTION (Key, Option);
+  PRINT_TABLE_ITEM (MCHostInterfaceTypeTable, Key);
 }
 
 /**

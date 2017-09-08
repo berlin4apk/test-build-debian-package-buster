@@ -19,6 +19,7 @@
 #include <Uefi.h>
 
 #include <Library/ArmLib.h>
+#include <Library/ArmMmuLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
 #include <Library/PcdLib.h>
@@ -35,17 +36,9 @@
 #include <Protocol/Cpu.h>
 #include <Protocol/DebugSupport.h>
 #include <Protocol/DebugSupportPeriodicCallback.h>
-#include <Protocol/VirtualUncachedPages.h>
 #include <Protocol/LoadedImage.h>
 
-
-#define EFI_MEMORY_CACHETYPE_MASK     (EFI_MEMORY_UC  | \
-                                       EFI_MEMORY_WC  | \
-                                       EFI_MEMORY_WT  | \
-                                       EFI_MEMORY_WB  | \
-                                       EFI_MEMORY_UCE   \
-                                       )
-
+extern BOOLEAN mIsFlushingGCD;
 
 /**
   This function registers and enables the handler specified by InterruptHandler for a processor
@@ -120,11 +113,6 @@ SyncCacheConfig (
   IN  EFI_CPU_ARCH_PROTOCOL *CpuProtocol
   );
 
-EFI_STATUS
-ConvertSectionToPages (
-  IN EFI_PHYSICAL_ADDRESS  BaseAddress
-  );
-
 /**
  * Publish ARM Processor Data table in UEFI SYSTEM Table.
  * @param  HobStart               Pointer to the beginning of the HOB List from PEI.
@@ -138,14 +126,6 @@ VOID
 EFIAPI
 PublishArmProcessorTable(
   VOID
-  );
-
-EFI_STATUS
-SetMemoryAttributes (
-  IN EFI_PHYSICAL_ADDRESS      BaseAddress,
-  IN UINT64                    Length,
-  IN UINT64                    Attributes,
-  IN EFI_PHYSICAL_ADDRESS      VirtualMask
   );
 
 // The ARM Attributes might be defined on 64-bit (case of the long format description table)
@@ -176,7 +156,5 @@ SetGcdMemorySpaceAttributes (
   IN UINT64                              Length,
   IN UINT64                              Attributes
   );
-
-extern VIRTUAL_UNCACHED_PAGES_PROTOCOL  gVirtualUncachedPages;
 
 #endif // __CPU_DXE_ARM_EXCEPTION_H__

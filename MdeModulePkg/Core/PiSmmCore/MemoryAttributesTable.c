@@ -138,7 +138,7 @@ SmmMemoryAttributesTableConsistencyCheck (
     if (Address != 0) {
       ASSERT (Address == MemoryMap->PhysicalStart);
     }
-    Address = MemoryMap->PhysicalStart + EFI_PAGES_TO_SIZE(MemoryMap->NumberOfPages);
+    Address = MemoryMap->PhysicalStart + EfiPagesToSize(MemoryMap->NumberOfPages);
     MemoryMap = NEXT_MEMORY_DESCRIPTOR(MemoryMap, DescriptorSize);
   }
 }
@@ -146,10 +146,10 @@ SmmMemoryAttributesTableConsistencyCheck (
 /**
   Sort memory map entries based upon PhysicalStart, from low to high.
 
-  @param[in]  MemoryMap              A pointer to the buffer in which firmware places
-                                 the current memory map.
-  @param[in]  MemoryMapSize          Size, in bytes, of the MemoryMap buffer.
-  @param[in]  DescriptorSize         Size, in bytes, of an individual EFI_MEMORY_DESCRIPTOR.
+  @param[in,out]  MemoryMap         A pointer to the buffer in which firmware places
+                                    the current memory map.
+  @param[in]      MemoryMapSize     Size, in bytes, of the MemoryMap buffer.
+  @param[in]      DescriptorSize    Size, in bytes, of an individual EFI_MEMORY_DESCRIPTOR.
 **/
 STATIC
 VOID
@@ -268,15 +268,19 @@ EnforceMemoryMapAttribute (
   MemoryMapEntry = MemoryMap;
   MemoryMapEnd   = (EFI_MEMORY_DESCRIPTOR *) ((UINT8 *) MemoryMap + MemoryMapSize);
   while ((UINTN)MemoryMapEntry < (UINTN)MemoryMapEnd) {
-    switch (MemoryMapEntry->Type) {
-    case EfiRuntimeServicesCode:
-      MemoryMapEntry->Attribute |= EFI_MEMORY_RO;
-      break;
-    case EfiRuntimeServicesData:
-      MemoryMapEntry->Attribute |= EFI_MEMORY_XP;
-      break;
+    if (MemoryMapEntry->Attribute != 0) {
+      // It is PE image, the attribute is already set.
+    } else {
+      switch (MemoryMapEntry->Type) {
+      case EfiRuntimeServicesCode:
+        MemoryMapEntry->Attribute = EFI_MEMORY_RO;
+        break;
+      case EfiRuntimeServicesData:
+      default:
+        MemoryMapEntry->Attribute |= EFI_MEMORY_XP;
+        break;
+      }
     }
-
     MemoryMapEntry = NEXT_MEMORY_DESCRIPTOR (MemoryMapEntry, DescriptorSize);
   }
 
@@ -357,6 +361,21 @@ SetNewRecord (
   CopyMem (&TempRecord, OldRecord, sizeof(EFI_MEMORY_DESCRIPTOR));
   PhysicalEnd = TempRecord.PhysicalStart + EfiPagesToSize(TempRecord.NumberOfPages);
   NewRecordCount = 0;
+
+  //
+  // Always create a new entry for non-PE image record
+  //
+  if (ImageRecord->ImageBase > TempRecord.PhysicalStart) {
+    NewRecord->Type = TempRecord.Type;
+    NewRecord->PhysicalStart = TempRecord.PhysicalStart;
+    NewRecord->VirtualStart  = 0;
+    NewRecord->NumberOfPages = EfiSizeToPages(ImageRecord->ImageBase - TempRecord.PhysicalStart);
+    NewRecord->Attribute     = TempRecord.Attribute;
+    NewRecord = NEXT_MEMORY_DESCRIPTOR (NewRecord, DescriptorSize);
+    NewRecordCount ++;
+    TempRecord.PhysicalStart = ImageRecord->ImageBase;
+    TempRecord.NumberOfPages = EfiSizeToPages(PhysicalEnd - TempRecord.PhysicalStart);
+  }
 
   ImageRecordCodeSectionList = &ImageRecord->CodeSegmentList;
 
@@ -452,13 +471,9 @@ GetMaxSplitRecordCount (
     if (ImageRecord == NULL) {
       break;
     }
-    SplitRecordCount += (2 * ImageRecord->CodeSegmentCount + 1);
+    SplitRecordCount += (2 * ImageRecord->CodeSegmentCount + 2);
     PhysicalStart = ImageRecord->ImageBase + ImageRecord->ImageSize;
   } while ((ImageRecord != NULL) && (PhysicalStart < PhysicalEnd));
-
-  if (SplitRecordCount != 0) {
-    SplitRecordCount--;
-  }
 
   return SplitRecordCount;
 }
@@ -516,28 +531,16 @@ SplitRecord (
       //
       // No more image covered by this range, stop
       //
-      if ((PhysicalEnd > PhysicalStart) && (ImageRecord != NULL)) {
+      if (PhysicalEnd > PhysicalStart) {
         //
-        // If this is still address in this record, need record.
+        // Always create a new entry for non-PE image record
         //
-        NewRecord = PREVIOUS_MEMORY_DESCRIPTOR (NewRecord, DescriptorSize);
-        if (NewRecord->Type == EfiRuntimeServicesData) {
-          //
-          // Last record is DATA, just merge it.
-          //
-          NewRecord->NumberOfPages = EfiSizeToPages(PhysicalEnd - NewRecord->PhysicalStart);
-        } else {
-          //
-          // Last record is CODE, create a new DATA entry.
-          //
-          NewRecord = NEXT_MEMORY_DESCRIPTOR (NewRecord, DescriptorSize);
-          NewRecord->Type = EfiRuntimeServicesData;
-          NewRecord->PhysicalStart = TempRecord.PhysicalStart;
-          NewRecord->VirtualStart  = 0;
-          NewRecord->NumberOfPages = TempRecord.NumberOfPages;
-          NewRecord->Attribute     = TempRecord.Attribute | EFI_MEMORY_XP;
-          TotalNewRecordCount ++;
-        }
+        NewRecord->Type = TempRecord.Type;
+        NewRecord->PhysicalStart = TempRecord.PhysicalStart;
+        NewRecord->VirtualStart  = 0;
+        NewRecord->NumberOfPages = TempRecord.NumberOfPages;
+        NewRecord->Attribute     = TempRecord.Attribute;
+        TotalNewRecordCount ++;
       }
       break;
     }
@@ -580,6 +583,8 @@ SplitRecord (
    ==>
    +---------------+
    | Record X      |
+   +---------------+
+   | Record RtCode |
    +---------------+ ----
    | Record RtData |     |
    +---------------+     |
@@ -587,12 +592,16 @@ SplitRecord (
    +---------------+     |
    | Record RtData |     |
    +---------------+ ----
+   | Record RtCode |
+   +---------------+ ----
    | Record RtData |     |
    +---------------+     |
    | Record RtCode |     |-> PE/COFF2
    +---------------+     |
    | Record RtData |     |
    +---------------+ ----
+   | Record RtCode |
+   +---------------+
    | Record Y      |
    +---------------+
 
@@ -622,7 +631,7 @@ SplitTable (
   UINTN       TotalSplitRecordCount;
   UINTN       AdditionalRecordCount;
 
-  AdditionalRecordCount = (2 * mImagePropertiesPrivateData.CodeSegmentCountMax + 1) * mImagePropertiesPrivateData.ImageRecordCount;
+  AdditionalRecordCount = (2 * mImagePropertiesPrivateData.CodeSegmentCountMax + 2) * mImagePropertiesPrivateData.ImageRecordCount;
 
   TotalSplitRecordCount = 0;
   //
@@ -648,11 +657,13 @@ SplitTable (
     //
     // Adjust IndexNew according to real split.
     //
-    CopyMem (
-      ((UINT8 *)MemoryMap + (IndexNew + MaxSplitRecordCount - RealSplitRecordCount) * DescriptorSize),
-      ((UINT8 *)MemoryMap + IndexNew * DescriptorSize),
-      RealSplitRecordCount * DescriptorSize
-      );
+    if (MaxSplitRecordCount != RealSplitRecordCount) {
+      CopyMem (
+        ((UINT8 *)MemoryMap + (IndexNew + MaxSplitRecordCount - RealSplitRecordCount) * DescriptorSize),
+        ((UINT8 *)MemoryMap + IndexNew * DescriptorSize),
+        (RealSplitRecordCount + 1) * DescriptorSize
+        );
+    }
     IndexNew = IndexNew + MaxSplitRecordCount - RealSplitRecordCount;
     TotalSplitRecordCount += RealSplitRecordCount;
     IndexNew --;
@@ -744,7 +755,7 @@ SmmCoreGetMemoryMapMemoryAttributesTable (
     return EFI_INVALID_PARAMETER;
   }
 
-  AdditionalRecordCount = (2 * mImagePropertiesPrivateData.CodeSegmentCountMax + 1) * mImagePropertiesPrivateData.ImageRecordCount;
+  AdditionalRecordCount = (2 * mImagePropertiesPrivateData.CodeSegmentCountMax + 2) * mImagePropertiesPrivateData.ImageRecordCount;
 
   OldMemoryMapSize = *MemoryMapSize;
   Status = SmmCoreGetMemoryMap (MemoryMapSize, MemoryMap, MapKey, DescriptorSize, DescriptorVersion);
@@ -774,7 +785,7 @@ SmmCoreGetMemoryMapMemoryAttributesTable (
 //
 
 /**
-  Set MemoryProtectionAttribute accroding to PE/COFF image section alignment.
+  Set MemoryProtectionAttribute according to PE/COFF image section alignment.
 
   @param[in]  SectionAlignment    PE/COFF section alignment
 **/
@@ -784,7 +795,7 @@ SetMemoryAttributesTableSectionAlignment (
   IN UINT32  SectionAlignment
   )
 {
-  if (((SectionAlignment & (EFI_ACPI_RUNTIME_PAGE_ALLOCATION_ALIGNMENT - 1)) != 0) &&
+  if (((SectionAlignment & (RUNTIME_PAGE_ALLOCATION_GRANULARITY - 1)) != 0) &&
       ((mMemoryProtectionAttribute & EFI_MEMORY_ATTRIBUTES_RUNTIME_MEMORY_PROTECTION_NON_EXECUTABLE_PE_DATA) != 0)) {
     DEBUG ((DEBUG_VERBOSE, "SMM SetMemoryAttributesTableSectionAlignment - Clear\n"));
     mMemoryProtectionAttribute &= ~((UINT64)EFI_MEMORY_ATTRIBUTES_RUNTIME_MEMORY_PROTECTION_NON_EXECUTABLE_PE_DATA);
@@ -1066,7 +1077,7 @@ SmmInsertImageRecord (
   // Step 1: record whole region
   //
   ImageRecord->ImageBase = DriverEntry->ImageBuffer;
-  ImageRecord->ImageSize = EFI_PAGES_TO_SIZE(DriverEntry->NumberOfPage);
+  ImageRecord->ImageSize = EfiPagesToSize(DriverEntry->NumberOfPage);
 
   ImageAddress = (VOID *)(UINTN)DriverEntry->ImageBuffer;
 
@@ -1114,12 +1125,12 @@ SmmInsertImageRecord (
   }
 
   SetMemoryAttributesTableSectionAlignment (SectionAlignment);
-  if ((SectionAlignment & (EFI_ACPI_RUNTIME_PAGE_ALLOCATION_ALIGNMENT - 1)) != 0) {
-    DEBUG ((DEBUG_ERROR, "SMM !!!!!!!!  InsertImageRecord - Section Alignment(0x%x) is not %dK  !!!!!!!!\n",
-      SectionAlignment, EFI_ACPI_RUNTIME_PAGE_ALLOCATION_ALIGNMENT >> 10));
+  if ((SectionAlignment & (RUNTIME_PAGE_ALLOCATION_GRANULARITY - 1)) != 0) {
+    DEBUG ((DEBUG_WARN, "SMM !!!!!!!!  InsertImageRecord - Section Alignment(0x%x) is not %dK  !!!!!!!!\n",
+      SectionAlignment, RUNTIME_PAGE_ALLOCATION_GRANULARITY >> 10));
     PdbPointer = PeCoffLoaderGetPdbPointer ((VOID*) (UINTN) ImageAddress);
     if (PdbPointer != NULL) {
-      DEBUG ((DEBUG_ERROR, "SMM !!!!!!!!  Image - %a  !!!!!!!!\n", PdbPointer));
+      DEBUG ((DEBUG_WARN, "SMM !!!!!!!!  Image - %a  !!!!!!!!\n", PdbPointer));
     }
     goto Finish;
   }
@@ -1214,7 +1225,7 @@ Finish:
 }
 
 /**
-  Find image record accroding to image base and size.
+  Find image record according to image base and size.
 
   @param[in]  ImageBase    Base of PE image
   @param[in]  ImageSize    Size of PE image
@@ -1270,7 +1281,7 @@ SmmRemoveImageRecord (
   DEBUG ((DEBUG_VERBOSE, "SMM RemoveImageRecord - 0x%x\n", DriverEntry));
   DEBUG ((DEBUG_VERBOSE, "SMM RemoveImageRecord - 0x%016lx - 0x%016lx\n", DriverEntry->ImageBuffer, DriverEntry->NumberOfPage));
 
-  ImageRecord = FindImageRecord (DriverEntry->ImageBuffer, EFI_PAGES_TO_SIZE(DriverEntry->NumberOfPage));
+  ImageRecord = FindImageRecord (DriverEntry->ImageBuffer, EfiPagesToSize(DriverEntry->NumberOfPage));
   if (ImageRecord == NULL) {
     DEBUG ((DEBUG_ERROR, "SMM !!!!!!!! ImageRecord not found !!!!!!!!\n"));
     return ;

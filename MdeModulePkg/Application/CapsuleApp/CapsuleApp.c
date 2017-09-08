@@ -1,7 +1,7 @@
 /** @file
   A shell application that triggers capsule update process.
 
-  Copyright (c) 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2016 - 2017, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -21,11 +21,7 @@
 #include <Library/UefiRuntimeServicesTableLib.h>
 #include <Library/UefiLib.h>
 #include <Library/PrintLib.h>
-#include <Protocol/LoadedImage.h>
-#include <Protocol/SimpleFileSystem.h>
 #include <Protocol/GraphicsOutput.h>
-#include <Guid/FileInfo.h>
-#include <Guid/Gpt.h>
 #include <Guid/GlobalVariable.h>
 #include <Guid/CapsuleReport.h>
 #include <Guid/SystemResourceTable.h>
@@ -117,7 +113,8 @@ DumpEsrtData (
   @param[out] Buffer          The file buffer
 
   @retval EFI_SUCCESS    Read file successfully
-  @retval EFI_NOT_FOUND  File not found
+  @retval EFI_NOT_FOUND  Shell protocol or file not found
+  @retval others         Read file failed
 **/
 EFI_STATUS
 ReadFileToBuffer (
@@ -134,30 +131,14 @@ ReadFileToBuffer (
   @param[in] Buffer          The file buffer
 
   @retval EFI_SUCCESS    Write file successfully
+  @retval EFI_NOT_FOUND  Shell protocol not found
+  @retval others         Write file failed
 **/
 EFI_STATUS
 WriteFileFromBuffer (
   IN  CHAR16                               *FileName,
   IN  UINTN                                BufferSize,
   IN  VOID                                 *Buffer
-  );
-
-/**
-  Converts a string to GUID value.
-  Guid Format is xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
-  @param[in]  Str              The registry format GUID string that contains the GUID value.
-  @param[out] Guid             A pointer to the converted GUID value.
-
-  @retval EFI_SUCCESS     The GUID string was successfully converted to the GUID value.
-  @retval EFI_UNSUPPORTED The input string is not in registry format.
-  @return others          Some error occurred when converting part of GUID value.
-
-**/
-EFI_STATUS
-InternalStrToGuid (
-  IN  CHAR16   *Str,
-  OUT EFI_GUID *Guid
   );
 
 /**
@@ -516,7 +497,7 @@ BuildGatherList (
       goto ERREXIT;
     } else {
       Print (L"CapsuleApp: creating capsule descriptors at 0x%X\n", (UINTN) BlockDescriptors1);
-      Print (L"CapsuleApp: capsule data starts          at 0x%X with size 0x%X\n", (UINTN) CapsuleBuffer, FileSize);
+      Print (L"CapsuleApp: capsule data starts          at 0x%X with size 0x%X\n", (UINTN) CapsuleBuffer[Index], FileSize[Index]);
     }
 
     //
@@ -688,7 +669,7 @@ PrintUsage (
   )
 {
   Print(L"CapsuleApp:  usage\n");
-  Print(L"  CapsuleApp <Capsule...>\n");
+  Print(L"  CapsuleApp <Capsule...> [-NR]\n");
   Print(L"  CapsuleApp -S\n");
   Print(L"  CapsuleApp -C\n");
   Print(L"  CapsuleApp -P\n");
@@ -698,6 +679,8 @@ PrintUsage (
   Print(L"  CapsuleApp -D <Capsule>\n");
   Print(L"  CapsuleApp -P GET <ImageTypeId> <Index> -O <FileName>\n");
   Print(L"Parameter:\n");
+  Print(L"  -NR: No reset will be triggered for the capsule\n");
+  Print(L"       with CAPSULE_FLAGS_PERSIST_ACROSS_RESET and without CAPSULE_FLAGS_INITIATE_RESET.\n");
   Print(L"  -S:  Dump capsule report variable (EFI_CAPSULE_REPORT_GUID),\n");
   Print(L"       which is defined in UEFI specification.\n");
   Print(L"  -C:  Clear capsule report variable (EFI_CAPSULE_RPORT_GUID),\n");
@@ -731,6 +714,7 @@ UefiMain (
   )
 {
   EFI_STATUS                    Status;
+  RETURN_STATUS                 RStatus;
   UINTN                         FileSize[MAX_CAPSULE_NUM];
   VOID                          *CapsuleBuffer[MAX_CAPSULE_NUM];
   EFI_CAPSULE_BLOCK_DESCRIPTOR  *BlockDescriptors;
@@ -738,6 +722,7 @@ UefiMain (
   UINT64                         MaxCapsuleSize;
   EFI_RESET_TYPE                 ResetType;
   BOOLEAN                        NeedReset;
+  BOOLEAN                        NoReset;
   CHAR16                         *CapsuleName;
   UINTN                          CapsuleNum;
   UINTN                          Index;
@@ -782,10 +767,10 @@ UefiMain (
         //
         // FMP->GetImage()
         //
-        Status = InternalStrToGuid(Argv[3], &ImageTypeId);
-        if (EFI_ERROR(Status)) {
+        RStatus = StrToGuid (Argv[3], &ImageTypeId);
+        if (RETURN_ERROR (RStatus) || (Argv[3][GUID_STRING_LENGTH] != L'\0')) {
           Print (L"Invalid ImageTypeId - %s\n", Argv[3]);
-          return Status;
+          return EFI_INVALID_PARAMETER;
         }
         ImageIndex = StrDecimalToUintn(Argv[4]);
         if (StrCmp(Argv[5], L"-O") == 0) {
@@ -800,7 +785,13 @@ UefiMain (
     return EFI_SUCCESS;
   }
   CapsuleFirstIndex = 1;
-  CapsuleLastIndex = Argc - 1;
+  NoReset = FALSE;
+  if ((Argc > 1) && (StrCmp(Argv[Argc - 1], L"-NR") == 0)) {
+    NoReset = TRUE;
+    CapsuleLastIndex = Argc - 2;
+  } else {
+    CapsuleLastIndex = Argc - 1;
+  }
   CapsuleNum = CapsuleLastIndex - CapsuleFirstIndex + 1;
 
   if (CapsuleFirstIndex > CapsuleLastIndex) {
@@ -872,10 +863,19 @@ UefiMain (
       goto Done;
     }
     //
-    // For capsule who has reset flag, after calling UpdateCapsule service,triger a
-    // system reset to process capsule persist across a system reset.
+    // For capsule with CAPSULE_FLAGS_PERSIST_ACROSS_RESET + CAPSULE_FLAGS_INITIATE_RESET,
+    // a system reset should have been triggered by gRT->UpdateCapsule() calling above.
     //
-    gRT->ResetSystem (ResetType, EFI_SUCCESS, 0, NULL);
+    // For capsule with CAPSULE_FLAGS_PERSIST_ACROSS_RESET and without CAPSULE_FLAGS_INITIATE_RESET,
+    // check if -NR (no-reset) has been specified or not.
+    //
+    if (!NoReset) {
+      //
+      // For capsule who has reset flag and no -NR (no-reset) has been specified, after calling UpdateCapsule service,
+      // trigger a system reset to process capsule persist across a system reset.
+      //
+      gRT->ResetSystem (ResetType, EFI_SUCCESS, 0, NULL);
+    }
   } else {
     //
     // For capsule who has no reset flag, only call UpdateCapsule Service without a

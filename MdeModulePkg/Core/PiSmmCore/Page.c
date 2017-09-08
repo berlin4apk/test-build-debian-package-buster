@@ -110,7 +110,7 @@ AllocateMemoryMapEntry (
     Status = SmmInternalAllocatePagesEx (
                AllocateAnyPages,
                EfiRuntimeServicesData,
-               EFI_SIZE_TO_PAGES(DEFAULT_PAGE_ALLOCATION),
+               EFI_SIZE_TO_PAGES (RUNTIME_PAGE_ALLOCATION_GRANULARITY),
                &Mem,
                TRUE
                );
@@ -121,7 +121,7 @@ AllocateMemoryMapEntry (
       //
       // Enque the free memmory map entries into the list
       //
-      for (Index = 0; Index< DEFAULT_PAGE_ALLOCATION / sizeof(MEMORY_MAP); Index++) {
+      for (Index = 0; Index< RUNTIME_PAGE_ALLOCATION_GRANULARITY / sizeof(MEMORY_MAP); Index++) {
         FreeDescriptorEntries[Index].Signature = MEMORY_MAP_SIGNATURE;
         InsertTailList (&mFreeMemoryMapEntryList, &FreeDescriptorEntries[Index].Link);
       }
@@ -861,7 +861,7 @@ InternalMergeNodes (
   @param[in]  AddRegion              If this memory is new added region.
 
   @retval EFI_NOT_FOUND          Could not find the entry that covers the range.
-  @retval EFI_INVALID_PARAMETER  Address not aligned.
+  @retval EFI_INVALID_PARAMETER  Address not aligned, Address is zero or NumberOfPages is zero.
   @return EFI_SUCCESS            Pages successfully freed.
 
 **/
@@ -875,7 +875,7 @@ SmmInternalFreePagesEx (
   LIST_ENTRY      *Node;
   FREE_PAGE_LIST  *Pages;
 
-  if ((Memory & EFI_PAGE_MASK) != 0) {
+  if (((Memory & EFI_PAGE_MASK) != 0) || (Memory == 0) || (NumberOfPages == 0)) {
     return EFI_INVALID_PARAMETER;
   }
 
@@ -933,7 +933,7 @@ SmmInternalFreePagesEx (
   @param[in]  NumberOfPages          The number of pages to free.
 
   @retval EFI_NOT_FOUND          Could not find the entry that covers the range.
-  @retval EFI_INVALID_PARAMETER  Address not aligned.
+  @retval EFI_INVALID_PARAMETER  Address not aligned, Address is zero or NumberOfPages is zero.
   @return EFI_SUCCESS            Pages successfully freed.
 
 **/
@@ -954,7 +954,7 @@ SmmInternalFreePages (
   @param  NumberOfPages          The number of pages to free.
 
   @retval EFI_NOT_FOUND          Could not find the entry that covers the range.
-  @retval EFI_INVALID_PARAMETER  Address not aligned.
+  @retval EFI_INVALID_PARAMETER  Address not aligned, Address is zero or NumberOfPages is zero.
   @return EFI_SUCCESS            Pages successfully freed.
 
 **/

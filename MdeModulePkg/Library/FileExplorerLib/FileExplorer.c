@@ -1,7 +1,7 @@
 /** @file
 File explorer related functions.
 
-Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials are licensed and made available under
 the terms and conditions of the BSD License that accompanies this distribution.
 The full text of the license may be found at
@@ -72,6 +72,25 @@ VOID                *mLibStartOpCodeHandle = NULL;
 VOID                *mLibEndOpCodeHandle = NULL;
 EFI_IFR_GUID_LABEL  *mLibStartLabel = NULL;
 EFI_IFR_GUID_LABEL  *mLibEndLabel = NULL;
+UINT16              mQuestionIdUpdate;
+CHAR16  mNewFileName[MAX_FILE_NAME_LEN];
+CHAR16  mNewFolderName[MAX_FOLDER_NAME_LEN];
+UINTN  mNewFileQuestionId    = NEW_FILE_QUESTION_ID_BASE;
+UINTN  mNewFolderQuestionId  = NEW_FOLDER_QUESTION_ID_BASE;
+
+/**
+  Create a new file or folder in current directory.
+
+  @param FileName              Point to the fileNmae or folder.
+  @param CreateFile            CreateFile== TRUE  means create a new file.
+                               CreateFile== FALSE means create a new Folder.
+
+**/
+EFI_STATUS
+LibCreateNewFile (
+  IN CHAR16     *FileName,
+  IN BOOLEAN    CreateFile
+  );
 
 /**
   This function allows a caller to extract the current configuration for one
@@ -174,9 +193,13 @@ LibCallback (
 {
   EFI_STATUS    Status;
   BOOLEAN       NeedExit;
+  CHAR16        *NewFileName;
+  CHAR16        *NewFolderName;
 
   NeedExit = TRUE;
-  
+  NewFileName   = NULL;
+  NewFolderName = NULL;
+
   if (Action != EFI_BROWSER_ACTION_CHANGING && Action != EFI_BROWSER_ACTION_CHANGED) {
     //
     // Do nothing for other UEFI Action. Only do call back when data is changed.
@@ -188,7 +211,55 @@ LibCallback (
     if ((Value == NULL) || (ActionRequest == NULL)) {
       return EFI_INVALID_PARAMETER;
     }
-    
+
+    if (QuestionId == KEY_VALUE_CREATE_FILE_AND_EXIT) {
+      *ActionRequest = EFI_BROWSER_ACTION_REQUEST_EXIT;
+      if (!IsZeroBuffer (mNewFileName, sizeof (mNewFileName))) {
+        Status = LibCreateNewFile (mNewFileName,TRUE);
+        ZeroMem (mNewFileName,sizeof (mNewFileName));
+      }
+    }
+
+    if (QuestionId == KEY_VALUE_NO_CREATE_FILE_AND_EXIT) {
+      ZeroMem (mNewFileName,sizeof (mNewFileName));
+      *ActionRequest = EFI_BROWSER_ACTION_REQUEST_EXIT;
+    }
+
+    if (QuestionId == KEY_VALUE_CREATE_FOLDER_AND_EXIT) {
+      *ActionRequest = EFI_BROWSER_ACTION_REQUEST_EXIT;
+      if (!IsZeroBuffer (mNewFolderName, sizeof (mNewFolderName))) {
+        Status = LibCreateNewFile (mNewFolderName, FALSE);
+        ZeroMem (mNewFolderName,sizeof (mNewFolderName));
+      }
+    }
+
+    if (QuestionId == KEY_VALUE_NO_CREATE_FOLDER_AND_EXIT) {
+      ZeroMem (mNewFolderName,sizeof (mNewFolderName));
+      *ActionRequest = EFI_BROWSER_ACTION_REQUEST_EXIT;
+    }
+
+    if (QuestionId == NEW_FILE_NAME_ID) {
+      NewFileName = HiiGetString (gFileExplorerPrivate.FeHiiHandle, Value->string, NULL);
+      if (NewFileName != NULL) {
+        StrCpyS (mNewFileName, MAX_FILE_NAME_LEN, NewFileName);
+        FreePool (NewFileName);
+        NewFileName = NULL;
+      } else {
+        return EFI_INVALID_PARAMETER;
+      }
+    }
+
+    if (QuestionId == NEW_FOLDER_NAME_ID) {
+      NewFolderName = HiiGetString (gFileExplorerPrivate.FeHiiHandle, Value->string, NULL);
+      if (NewFolderName != NULL) {
+        StrCpyS (mNewFolderName, MAX_FOLDER_NAME_LEN, NewFolderName);
+        FreePool (NewFolderName);
+        NewFolderName = NULL;
+      } else {
+        return EFI_INVALID_PARAMETER;
+      }
+    }
+
     if (QuestionId >= FILE_OPTION_OFFSET) {
       LibGetDevicePath(QuestionId);
 
@@ -207,8 +278,8 @@ LibCallback (
     if (Value == NULL) {
       return EFI_INVALID_PARAMETER;
     }
-    
     if (QuestionId >= FILE_OPTION_OFFSET) {
+      LibGetDevicePath(QuestionId);
       Status = LibUpdateFileExplorer (QuestionId);
       if (EFI_ERROR (Status)) {
         return Status;
@@ -657,7 +728,7 @@ LibAppendFileName (
       // that overlap.
       //
       StrCpyS (TmpStr, MaxLen, Ptr + 3);
-      StrCpyS (LastSlash, MaxLen - (UINTN) (LastSlash - Str), TmpStr);
+      StrCpyS (LastSlash, MaxLen - ((UINTN) LastSlash - (UINTN) Str) / sizeof (CHAR16), TmpStr);
       Ptr = LastSlash;
     } else if (*Ptr == '\\' && *(Ptr + 1) == '.' && *(Ptr + 2) == '\\') {
       //
@@ -669,7 +740,7 @@ LibAppendFileName (
       // that overlap.
       //
       StrCpyS (TmpStr, MaxLen, Ptr + 2);
-      StrCpyS (Ptr, MaxLen - (UINTN) (Ptr - Str), TmpStr);
+      StrCpyS (Ptr, MaxLen - ((UINTN) Ptr - (UINTN) Str) / sizeof (CHAR16), TmpStr);
       Ptr = LastSlash;
     } else if (*Ptr == '\\') {
       LastSlash = Ptr;
@@ -699,9 +770,7 @@ LibFindFileSystem (
   )
 {
   UINTN                        NoSimpleFsHandles;
-  UINTN                        NoLoadFileHandles;
   EFI_HANDLE                   *SimpleFsHandle;
-  EFI_HANDLE                   *LoadFileHandle;
   UINT16                       *VolumeLabel;
   UINTN                        Index;
   EFI_STATUS                   Status;
@@ -711,7 +780,6 @@ LibFindFileSystem (
   EFI_FILE_SYSTEM_VOLUME_LABEL *Info;
 
   NoSimpleFsHandles = 0;
-  NoLoadFileHandles = 0;
   OptionNumber      = 0;
 
   //
@@ -794,57 +862,6 @@ LibFindFileSystem (
 
   if (NoSimpleFsHandles != 0) {
     FreePool (SimpleFsHandle);
-  }
-
-  //
-  // Searching for handles that support Load File protocol
-  //
-  Status = gBS->LocateHandleBuffer (
-                  ByProtocol,
-                  &gEfiLoadFileProtocolGuid,
-                  NULL,
-                  &NoLoadFileHandles,
-                  &LoadFileHandle
-                  );
-
-  if (!EFI_ERROR (Status)) {
-    for (Index = 0; Index < NoLoadFileHandles; Index++) {
-      MenuEntry = LibCreateMenuEntry ();
-      if (NULL == MenuEntry) {
-        FreePool (LoadFileHandle);
-        return EFI_OUT_OF_RESOURCES;
-      }
-
-      FileContext = (FILE_CONTEXT *) MenuEntry->VariableContext;
-      FileContext->DeviceHandle = LoadFileHandle[Index];
-      FileContext->IsRoot = TRUE;
-
-      FileContext->DevicePath = DevicePathFromHandle (FileContext->DeviceHandle);
-      FileContext->FileName = LibDevicePathToStr (FileContext->DevicePath);
-
-      MenuEntry->HelpString = LibDevicePathToStr (FileContext->DevicePath);
-      MenuEntry->DisplayString = AllocateZeroPool (MAX_CHAR);
-      ASSERT (MenuEntry->DisplayString != NULL);
-      UnicodeSPrint (
-        MenuEntry->DisplayString,
-        MAX_CHAR,
-        L"Load File [%s]",
-        MenuEntry->HelpString
-        );
-      MenuEntry->DisplayStringToken = HiiSetString (
-                                           gFileExplorerPrivate.FeHiiHandle,
-                                           0,
-                                           MenuEntry->DisplayString,
-                                           NULL
-                                           );
-
-      OptionNumber++;
-      InsertTailList (&gFileExplorerPrivate.FsOptionMenu->Head, &MenuEntry->Link);
-    }
-  }
-
-  if (NoLoadFileHandles != 0) {
-    FreePool (LoadFileHandle);
   }
 
   gFileExplorerPrivate.FsOptionMenu->MenuNumber = OptionNumber;
@@ -1039,6 +1056,72 @@ Done:
 }
 
 /**
+  Create a new file or folder in current directory.
+
+  @param FileName              Point to the fileNmae or folder name.
+  @param CreateFile            CreateFile== TRUE  means create a new file.
+                               CreateFile== FALSE means create a new Folder.
+
+**/
+EFI_STATUS
+LibCreateNewFile (
+  IN CHAR16     *FileName,
+  IN BOOLEAN    CreateFile
+  )
+{
+  EFI_FILE_HANDLE      FileHandle;
+  EFI_FILE_HANDLE      NewHandle;
+  EFI_HANDLE           DeviceHandle;
+  EFI_STATUS           Status;
+  CHAR16               *ParentName;
+  CHAR16               *FullFileName;
+
+  NewHandle = NULL;
+  FullFileName = NULL;
+
+  LibGetFileHandleFromDevicePath(gFileExplorerPrivate.RetDevicePath, &FileHandle, &ParentName, &DeviceHandle);
+  FullFileName = LibAppendFileName (ParentName, FileName);
+  if (FullFileName == NULL) {
+    return EFI_OUT_OF_RESOURCES;
+  }
+  if (CreateFile) {
+    Status = FileHandle->Open(
+                          FileHandle,
+                          &NewHandle,
+                          FullFileName,
+                          EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE| EFI_FILE_MODE_CREATE,
+                          0
+                          );
+    if (EFI_ERROR (Status)) {
+      FileHandle->Close (FileHandle);
+      return Status;
+    }
+  } else {
+    Status = FileHandle->Open(
+                          FileHandle,
+                          &NewHandle,
+                          FullFileName,
+                          EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE| EFI_FILE_MODE_CREATE,
+                          EFI_FILE_DIRECTORY
+                          );
+    if (EFI_ERROR (Status)) {
+      FileHandle->Close (FileHandle);
+      return Status;
+    }
+  }
+
+  FileHandle->Close (FileHandle);
+
+  //
+  // Return the DevicePath of the new created file or folder.
+  //
+  gFileExplorerPrivate.RetDevicePath = FileDevicePath (DeviceHandle, FullFileName);
+
+  return EFI_SUCCESS;
+
+}
+
+/**
   Find files under current directory.
   
   All files and sub-directories in current directory
@@ -1230,16 +1313,46 @@ LibUpdateFileExplorePage (
   MENU_ENTRY      *NewMenuEntry;
   FILE_CONTEXT    *NewFileContext;
   MENU_OPTION     *MenuOption;
+  BOOLEAN         CreateNewFile;
 
   NewMenuEntry    = NULL;
   NewFileContext  = NULL;
+  CreateNewFile   = FALSE;
 
   LibRefreshUpdateData ();
   MenuOption = gFileExplorerPrivate.FsOptionMenu;
 
+  mQuestionIdUpdate += QUESTION_ID_UPDATE_STEP;
+
   for (Index = 0; Index < MenuOption->MenuNumber; Index++) {
     NewMenuEntry    = LibGetMenuEntry (MenuOption, Index);
     NewFileContext  = (FILE_CONTEXT *) NewMenuEntry->VariableContext;
+
+    if (!NewFileContext->IsRoot && !CreateNewFile) {
+      HiiCreateGotoOpCode (
+        mLibStartOpCodeHandle,
+        FORM_ADD_NEW_FILE_ID,
+        STRING_TOKEN (STR_NEW_FILE),
+        STRING_TOKEN (STR_NEW_FILE_HELP),
+        EFI_IFR_FLAG_CALLBACK,
+        (UINT16) (mNewFileQuestionId++)
+        );
+      HiiCreateGotoOpCode (
+        mLibStartOpCodeHandle,
+        FORM_ADD_NEW_FOLDER_ID,
+        STRING_TOKEN (STR_NEW_FOLDER),
+        STRING_TOKEN (STR_NEW_FOLDER_HELP),
+        EFI_IFR_FLAG_CALLBACK,
+        (UINT16) (mNewFolderQuestionId++)
+        );
+      HiiCreateTextOpCode(
+        mLibStartOpCodeHandle,
+        STRING_TOKEN (STR_NULL_STRING),
+        STRING_TOKEN (STR_NULL_STRING),
+        0
+        );
+      CreateNewFile = TRUE;
+    }
 
     if (!NewFileContext->IsDir) {
       //
@@ -1247,7 +1360,7 @@ LibUpdateFileExplorePage (
       //
       HiiCreateActionOpCode (
         mLibStartOpCodeHandle,
-        (UINT16) (FILE_OPTION_OFFSET + Index),
+        (UINT16) (FILE_OPTION_OFFSET + Index + mQuestionIdUpdate),
         NewMenuEntry->DisplayStringToken,
         STRING_TOKEN (STR_NULL_STRING),
         EFI_IFR_FLAG_CALLBACK,
@@ -1263,7 +1376,7 @@ LibUpdateFileExplorePage (
         NewMenuEntry->DisplayStringToken,
         STRING_TOKEN (STR_NULL_STRING),
         EFI_IFR_FLAG_CALLBACK,
-        (UINT16) (FILE_OPTION_OFFSET + Index)
+        (UINT16) (FILE_OPTION_OFFSET + Index + mQuestionIdUpdate)
         );
     }
   }
@@ -1298,7 +1411,7 @@ LibUpdateFileExplorer (
   EFI_FILE_HANDLE FileHandle;
 
   Status = EFI_SUCCESS;
-  FileOptionMask = (UINT16) (FILE_OPTION_MASK & KeyValue);
+  FileOptionMask = (UINT16) (FILE_OPTION_MASK & KeyValue) - mQuestionIdUpdate;
   NewMenuEntry   = LibGetMenuEntry (gFileExplorerPrivate.FsOptionMenu, FileOptionMask);
   NewFileContext = (FILE_CONTEXT *) NewMenuEntry->VariableContext;
 
@@ -1333,7 +1446,7 @@ LibGetDevicePath (
   MENU_ENTRY      *NewMenuEntry;
   FILE_CONTEXT    *NewFileContext;
 
-  FileOptionMask    = (UINT16) (FILE_OPTION_MASK & KeyValue);
+  FileOptionMask    = (UINT16) (FILE_OPTION_MASK & KeyValue) - mQuestionIdUpdate;
 
   NewMenuEntry = LibGetMenuEntry (gFileExplorerPrivate.FsOptionMenu, FileOptionMask);
 
@@ -1382,6 +1495,7 @@ ChooseFile (
     return EFI_INVALID_PARAMETER;
   }
 
+  mQuestionIdUpdate = 0;
   FileName = NULL;
 
   gFileExplorerPrivate.RetDevicePath = NULL;

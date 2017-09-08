@@ -31,6 +31,7 @@
   QemuFwCfgAcpi.c
   EntryPoint.c
   PciDecoding.c
+  BootScript.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -43,6 +44,7 @@
   MemoryAllocationLib
   OrderedCollectionLib
   QemuFwCfgLib
+  QemuFwCfgS3Lib
   UefiBootServicesTableLib
   UefiDriverEntryPoint
 

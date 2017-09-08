@@ -1,7 +1,7 @@
 /** @file
 Entry and initialization module for the browser.
 
-Copyright (c) 2007 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -53,7 +53,8 @@ LIST_ENTRY      gBrowserStorageList = INITIALIZE_LIST_HEAD_VARIABLE (gBrowserSto
 LIST_ENTRY      gBrowserSaveFailFormSetList = INITIALIZE_LIST_HEAD_VARIABLE (gBrowserSaveFailFormSetList);
 
 BOOLEAN               mSystemSubmit = FALSE;
-BOOLEAN               gResetRequired;
+BOOLEAN               gResetRequiredFormLevel;
+BOOLEAN               gResetRequiredSystemLevel = FALSE;
 BOOLEAN               gExitRequired;
 BOOLEAN               gFlagReconnect;
 BOOLEAN               gCallbackReconnect;
@@ -499,7 +500,7 @@ SendForm (
   SaveBrowserContext ();
 
   gFlagReconnect = FALSE;
-  gResetRequired = FALSE;
+  gResetRequiredFormLevel = FALSE;
   gExitRequired  = FALSE;
   gCallbackReconnect = FALSE;
   Status         = EFI_SUCCESS;
@@ -579,7 +580,7 @@ SendForm (
 
   if (ActionRequest != NULL) {
     *ActionRequest = EFI_BROWSER_ACTION_REQUEST_NONE;
-    if (gResetRequired) {
+    if (gResetRequiredFormLevel) {
       *ActionRequest = EFI_BROWSER_ACTION_REQUEST_RESET;
     }
   }
@@ -1972,7 +1973,14 @@ SetQuestionValue (
         TemName = (CHAR16 *) Src;
         TemString = Value;
         for (; *TemName != L'\0'; TemName++) {
-          TemString += UnicodeValueToString (TemString, PREFIX_ZERO | RADIX_HEX, *TemName, 4);
+          UnicodeValueToStringS (
+            TemString,
+            BufferLen - ((UINTN)TemString - (UINTN)Value),
+            PREFIX_ZERO | RADIX_HEX,
+            *TemName,
+            4
+            );
+          TemString += StrnLenS (TemString, (BufferLen - ((UINTN)TemString - (UINTN)Value)) / sizeof (CHAR16));
         }
       } else {
         BufferLen = StorageWidth * 2 + 1;
@@ -1984,7 +1992,14 @@ SetQuestionValue (
         TemBuffer = Src + StorageWidth - 1;
         TemString = Value;
         for (Index = 0; Index < StorageWidth; Index ++, TemBuffer --) {
-          TemString += UnicodeValueToString (TemString, PREFIX_ZERO | RADIX_HEX, *TemBuffer, 2);
+          UnicodeValueToStringS (
+            TemString,
+            BufferLen * sizeof (CHAR16) - ((UINTN)TemString - (UINTN)Value),
+            PREFIX_ZERO | RADIX_HEX,
+            *TemBuffer,
+            2
+            );
+          TemString += StrnLenS (TemString, BufferLen - ((UINTN)TemString - (UINTN)Value) / sizeof (CHAR16));
         }
       }
 
@@ -2034,7 +2049,14 @@ SetQuestionValue (
       TemName = (CHAR16 *) Src;
       TemString = Value;
       for (; *TemName != L'\0'; TemName++) {
-        TemString += UnicodeValueToString (TemString, PREFIX_ZERO | RADIX_HEX, *TemName, 4);
+        UnicodeValueToStringS (
+          TemString,
+          MaxLen * sizeof (CHAR16) - ((UINTN)TemString - (UINTN)ConfigResp),
+          PREFIX_ZERO | RADIX_HEX,
+          *TemName,
+          4
+          );
+        TemString += StrnLenS (TemString, MaxLen - ((UINTN)TemString - (UINTN)ConfigResp) / sizeof (CHAR16));
       }
     } else {
       //
@@ -2043,7 +2065,14 @@ SetQuestionValue (
       TemBuffer = Src + StorageWidth - 1;
       TemString = Value;
       for (Index = 0; Index < StorageWidth; Index ++, TemBuffer --) {
-        TemString += UnicodeValueToString (TemString, PREFIX_ZERO | RADIX_HEX, *TemBuffer, 2);
+        UnicodeValueToStringS (
+          TemString,
+          MaxLen * sizeof (CHAR16) - ((UINTN)TemString - (UINTN)ConfigResp),
+          PREFIX_ZERO | RADIX_HEX,
+          *TemBuffer,
+          2
+          );
+        TemString += StrnLenS (TemString, MaxLen - ((UINTN)TemString - (UINTN)ConfigResp) / sizeof (CHAR16));
       }
     }
 
@@ -2650,7 +2679,8 @@ UpdateFlagForForm (
     //
     if (SetFlag && OldValue && !Question->ValueChanged) {
       if ((Question->QuestionFlags & EFI_IFR_FLAG_RESET_REQUIRED) != 0) {
-        gResetRequired = TRUE;
+        gResetRequiredFormLevel = TRUE;
+        gResetRequiredSystemLevel = TRUE;
       }
 
       if ((Question->QuestionFlags & EFI_IFR_FLAG_RECONNECT_REQUIRED) != 0) {
@@ -3535,6 +3565,7 @@ SubmitForSystem (
 {
   EFI_STATUS              Status;
   LIST_ENTRY              *Link;
+  LIST_ENTRY              *FormLink;
   LIST_ENTRY              *StorageLink;
   FORMSET_STORAGE         *FormSetStorage;
   FORM_BROWSER_FORM       *Form;
@@ -3625,10 +3656,10 @@ SubmitForSystem (
         }
       }
 
-      Link = GetFirstNode (&LocalFormSet->FormListHead);
-      while (!IsNull (&LocalFormSet->FormListHead, Link)) {
-        Form = FORM_BROWSER_FORM_FROM_LINK (Link);
-        Link = GetNextNode (&LocalFormSet->FormListHead, Link);
+      FormLink = GetFirstNode (&LocalFormSet->FormListHead);
+      while (!IsNull (&LocalFormSet->FormListHead, FormLink)) {
+        Form = FORM_BROWSER_FORM_FROM_LINK (FormLink);
+        FormLink = GetNextNode (&LocalFormSet->FormListHead, FormLink);
         //
         // Call callback with Changed type to inform the driver.
         //
@@ -5888,7 +5919,7 @@ SaveBrowserContext (
   // Save FormBrowser context
   //
   Context->Selection            = gCurrentSelection;
-  Context->ResetRequired        = gResetRequired;
+  Context->ResetRequired        = gResetRequiredFormLevel;
   Context->FlagReconnect        = gFlagReconnect;
   Context->CallbackReconnect    = gCallbackReconnect;
   Context->ExitRequired         = gExitRequired;
@@ -5961,7 +5992,7 @@ RestoreBrowserContext (
   // Restore FormBrowser context
   //
   gCurrentSelection     = Context->Selection;
-  gResetRequired        = Context->ResetRequired;
+  gResetRequiredFormLevel = Context->ResetRequired;
   gFlagReconnect        = Context->FlagReconnect;
   gCallbackReconnect    = Context->CallbackReconnect;
   gExitRequired         = Context->ExitRequired;
@@ -6436,7 +6467,8 @@ ExecuteAction (
   // Executet the reset action.
   //
   if ((Action & BROWSER_ACTION_RESET) != 0) {
-    gResetRequired = TRUE;
+    gResetRequiredFormLevel = TRUE;
+    gResetRequiredSystemLevel = TRUE;
   }
 
   //
@@ -6536,6 +6568,6 @@ IsResetRequired (
   VOID
   )
 {
-  return gResetRequired;
+  return gResetRequiredSystemLevel;
 }
 

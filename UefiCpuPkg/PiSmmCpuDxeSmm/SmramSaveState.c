@@ -1,7 +1,7 @@
 /** @file
 Provides services to access SMRAM Save State Map
 
-Copyright (c) 2010 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2010 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -687,6 +687,14 @@ InstallSmiHandler (
 {
   PROCESSOR_SMM_DESCRIPTOR  *Psd;
 
+  //
+  // Initialize PROCESSOR_SMM_DESCRIPTOR
+  //
+  Psd = (PROCESSOR_SMM_DESCRIPTOR *)(VOID *)((UINTN)SmBase + SMM_PSD_OFFSET);
+  CopyMem (Psd, &gcPsd, sizeof (gcPsd));
+  Psd->SmmGdtPtr = (UINT64)GdtBase;
+  Psd->SmmGdtSize = (UINT32)GdtSize;
+
   if (SmmCpuFeaturesGetSmiHandlerSize () != 0) {
     //
     // Install SMI handler provided by library
@@ -706,14 +714,6 @@ InstallSmiHandler (
   }
 
   //
-  // Initialize PROCESSOR_SMM_DESCRIPTOR
-  //
-  Psd = (PROCESSOR_SMM_DESCRIPTOR *)(VOID *)(UINTN)(SmBase + SMM_PSD_OFFSET);
-  CopyMem (Psd, &gcPsd, sizeof (gcPsd));
-  Psd->SmmGdtPtr = (UINT64)GdtBase;
-  Psd->SmmGdtSize = (UINT32)GdtSize;
-
-  //
   // Initialize values in template before copy
   //
   gSmiStack             = (UINT32)((UINTN)SmiStack + StackSize - sizeof (UINTN));
@@ -731,7 +731,7 @@ InstallSmiHandler (
   // Copy template to CPU specific SMI handler location
   //
   CopyMem (
-    (VOID*)(UINTN)(SmBase + SMM_HANDLER_OFFSET),
+    (VOID*)((UINTN)SmBase + SMM_HANDLER_OFFSET),
     (VOID*)gcSmiHandlerTemplate,
     gcSmiHandlerSize
     );

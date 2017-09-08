@@ -1,7 +1,7 @@
 /** @file
   Common header file for MP Initialize Library.
 
-  Copyright (c) 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2016 - 2017, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -177,6 +177,7 @@ typedef struct {
   UINTN                 InitFlag;
   CPU_INFO_IN_HOB       *CpuInfo;
   CPU_MP_DATA           *CpuMpData;
+  UINTN                 InitializeFloatingPointUnitsAddress;
 } MP_CPU_EXCHANGE_INFO;
 
 #pragma pack()
@@ -200,7 +201,6 @@ struct _CPU_MP_DATA {
   UINTN                          WakeupBuffer;
   UINTN                          BackupBuffer;
   UINTN                          BackupBufferSize;
-  BOOLEAN                        SaveRestoreFlag;
 
   volatile UINT32                StartCount;
   volatile UINT32                FinishedCount;
@@ -227,6 +227,12 @@ struct _CPU_MP_DATA {
   UINT16                         PmCodeSegment;
   CPU_AP_DATA                    *CpuData;
   volatile MP_CPU_EXCHANGE_INFO  *MpCpuExchangeInfo;
+
+  UINT32                         CurrentTimerCount;
+  UINTN                          DivideValue;
+  UINT8                          Vector;
+  BOOLEAN                        PeriodicMode;
+  BOOLEAN                        TimerInterruptState;
 };
 
 extern EFI_GUID mCpuInitMpLibHobGuid;
@@ -303,24 +309,18 @@ SaveCpuMpData (
   IN CPU_MP_DATA   *CpuMpData
   );
 
-/**
-  Allocate reset vector buffer.
-
-  @param[in, out]  CpuMpData  The pointer to CPU MP Data structure.
-**/
-VOID
-AllocateResetVector (
-  IN OUT CPU_MP_DATA          *CpuMpData
-  );
 
 /**
-  Free AP reset vector buffer.
+  Get available system memory below 1MB by specified size.
 
-  @param[in]  CpuMpData  The pointer to CPU MP Data structure.
+  @param[in] WakeupBufferSize   Wakeup buffer size required
+
+  @retval other   Return wakeup buffer address below 1MB.
+  @retval -1      Cannot find free memory below 1MB.
 **/
-VOID
-FreeResetVector (
-  IN CPU_MP_DATA              *CpuMpData
+UINTN
+GetWakeupBuffer (
+  IN UINTN                WakeupBufferSize
   );
 
 /**
@@ -365,7 +365,7 @@ InitMpGlobalData (
                                       simultaneously.
   @param[in]  WaitEvent               The event created by the caller with CreateEvent()
                                       service.
-  @param[in]  TimeoutInMicrosecsond   Indicates the time limit in microseconds for
+  @param[in]  TimeoutInMicroseconds   Indicates the time limit in microseconds for
                                       APs to return from Procedure, either for
                                       blocking or non-blocking mode.
   @param[in]  ProcedureArgument       The parameter passed into Procedure for
@@ -402,7 +402,7 @@ StartupAllAPsWorker (
   @param[in]  ProcessorNumber         The handle number of the AP.
   @param[in]  WaitEvent               The event created by the caller with CreateEvent()
                                       service.
-  @param[in]  TimeoutInMicrosecsond   Indicates the time limit in microseconds for
+  @param[in]  TimeoutInMicroseconds   Indicates the time limit in microseconds for
                                       APs to return from Procedure, either for
                                       blocking or non-blocking mode.
   @param[in]  ProcedureArgument       The parameter passed into Procedure for
@@ -536,43 +536,12 @@ IsMwaitSupport (
   );
 
 /**
-  Notify function on End Of PEI PPI.
+  Enable Debug Agent to support source debugging on AP function.
 
-  On S3 boot, this function will restore wakeup buffer data.
-  On normal boot, this function will flag wakeup buffer to be un-used type.
-
-  @param[in]  PeiServices        The pointer to the PEI Services Table.
-  @param[in]  NotifyDescriptor   Address of the notification descriptor data structure.
-  @param[in]  Ppi                Address of the PPI that was installed.
-
-  @retval EFI_SUCCESS        When everything is OK.
-**/
-EFI_STATUS
-EFIAPI
-CpuMpEndOfPeiCallback (
-  IN EFI_PEI_SERVICES             **PeiServices,
-  IN EFI_PEI_NOTIFY_DESCRIPTOR    *NotifyDescriptor,
-  IN VOID                         *Ppi
-  );
-
-/**
-  Get available system memory below 1MB by specified size.
-
-  @param[in]  CpuMpData  The pointer to CPU MP Data structure.
 **/
 VOID
-BackupAndPrepareWakeupBuffer(
-  IN CPU_MP_DATA              *CpuMpData
-  );
-
-/**
-  Restore wakeup buffer data.
-
-  @param[in]  CpuMpData  The pointer to CPU MP Data structure.
-**/
-VOID
-RestoreWakeupBuffer(
-  IN CPU_MP_DATA              *CpuMpData
+EnableDebugAgent (
+  VOID
   );
 
 #endif

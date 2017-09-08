@@ -2,7 +2,7 @@
 This is an example of how a driver might export data to the HII protocol to be
 later utilized by the Setup Protocol
 
-Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -108,22 +108,6 @@ SetArrayData (
   default:
     break;
   }
-}
-
-/**
-  Add empty function for event process function.
-
-  @param Event    The Event need to be process
-  @param Context  The context of the event.
-
-**/
-VOID
-EFIAPI
-DriverSampleInternalEmptyFunction (
-  IN  EFI_EVENT Event,
-  IN  VOID      *Context
-  )
-{
 }
 
 /**
@@ -741,12 +725,14 @@ ExtractConfig (
 
       BackupChar = Value[ValueStrLen];
       *Value++   = L'=';
-      Value += UnicodeValueToString (
-                 Value, 
-                 PREFIX_ZERO | RADIX_HEX, 
-                 PrivateData->Configuration.NameValueVar0, 
-                 sizeof (PrivateData->Configuration.NameValueVar0) * 2
-                 );
+      UnicodeValueToStringS (
+        Value,
+        BufferSize - ((UINTN)Value - (UINTN)*Results),
+        PREFIX_ZERO | RADIX_HEX,
+        PrivateData->Configuration.NameValueVar0,
+        sizeof (PrivateData->Configuration.NameValueVar0) * 2
+        );
+      Value += StrnLenS (Value, (BufferSize - ((UINTN)Value - (UINTN)*Results)) / sizeof (CHAR16));
       *Value = BackupChar;
     }
 
@@ -760,12 +746,14 @@ ExtractConfig (
 
       BackupChar = Value[ValueStrLen];
       *Value++   = L'=';
-      Value += UnicodeValueToString (
-                Value, 
-                PREFIX_ZERO | RADIX_HEX, 
-                PrivateData->Configuration.NameValueVar1, 
-                sizeof (PrivateData->Configuration.NameValueVar1) * 2
-                );
+      UnicodeValueToStringS (
+        Value,
+        BufferSize - ((UINTN)Value - (UINTN)*Results),
+        PREFIX_ZERO | RADIX_HEX,
+        PrivateData->Configuration.NameValueVar1,
+        sizeof (PrivateData->Configuration.NameValueVar1) * 2
+        );
+      Value += StrnLenS (Value, (BufferSize - ((UINTN)Value - (UINTN)*Results)) / sizeof (CHAR16));
       *Value = BackupChar;
     }
 
@@ -783,7 +771,14 @@ ExtractConfig (
       //
       StrPointer = (CHAR16 *) PrivateData->Configuration.NameValueVar2;
       for (; *StrPointer != L'\0'; StrPointer++) {
-        Value += UnicodeValueToString (Value, PREFIX_ZERO | RADIX_HEX, *StrPointer, 4);
+        UnicodeValueToStringS (
+          Value,
+          BufferSize - ((UINTN)Value - (UINTN)*Results),
+          PREFIX_ZERO | RADIX_HEX,
+          *StrPointer,
+          4
+          );
+        Value += StrnLenS (Value, (BufferSize - ((UINTN)Value - (UINTN)*Results)) / sizeof (CHAR16));
       }
     }
     
@@ -1105,6 +1100,9 @@ DriverCallback (
   CHAR16                          *TmpStr;
   UINTN                           Index;
   UINT64                          BufferValue;
+  EFI_HII_POPUP_SELECTION         UserSelection;
+
+  UserSelection = 0xFF;
 
   if (((Value == NULL) && (Action != EFI_BROWSER_ACTION_FORM_OPEN) && (Action != EFI_BROWSER_ACTION_FORM_CLOSE))||
     (ActionRequest == NULL)) {
@@ -1624,6 +1622,22 @@ DriverCallback (
         }
         break;
 
+      case 0x1330:
+        Status = mPrivateData->HiiPopup->CreatePopup (
+          mPrivateData->HiiPopup,
+          EfiHiiPopupStyleInfo,
+          EfiHiiPopupTypeYesNo,
+          mPrivateData->HiiHandle[0],
+          STRING_TOKEN (STR_POPUP_STRING),
+          &UserSelection
+          );
+        if (!EFI_ERROR (Status)) {
+          if (UserSelection == EfiHiiPopupSelectionYes) {
+            *ActionRequest = EFI_BROWSER_ACTION_REQUEST_EXIT;
+          }
+        }
+        break;
+
       default:
       break;
     }
@@ -1683,6 +1697,7 @@ DriverSampleInit (
   EFI_FORM_BROWSER2_PROTOCOL      *FormBrowser2;
   EFI_HII_CONFIG_ROUTING_PROTOCOL *HiiConfigRouting;
   EFI_CONFIG_KEYWORD_HANDLER_PROTOCOL *HiiKeywordHandler;
+  EFI_HII_POPUP_PROTOCOL              *PopupHandler;
   CHAR16                          *NewString;
   UINTN                           BufferSize;
   DRIVER_SAMPLE_CONFIGURATION     *Configuration;
@@ -1767,6 +1782,15 @@ DriverSampleInit (
     return Status;
   }
   mPrivateData->HiiKeywordHandler = HiiKeywordHandler;
+
+  //
+  // Locate HiiPopup protocol
+  //
+  Status = gBS->LocateProtocol (&gEfiHiiPopupProtocolGuid, NULL, (VOID **) &PopupHandler);
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+  mPrivateData->HiiPopup = PopupHandler;
 
   Status = gBS->InstallMultipleProtocolInterfaces (
                   &DriverHandle[0],
@@ -1972,7 +1996,7 @@ DriverSampleInit (
   Status = gBS->CreateEventEx (
         EVT_NOTIFY_SIGNAL, 
         TPL_NOTIFY,
-        DriverSampleInternalEmptyFunction,
+        EfiEventEmptyFunction,
         NULL,
         &gEfiIfrRefreshIdOpGuid,
         &mEvent

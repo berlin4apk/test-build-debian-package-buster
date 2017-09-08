@@ -1,7 +1,7 @@
 /** @file
 Header file for boot maintenance module.
 
-Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -28,6 +28,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Protocol/SimpleFileSystem.h>
 #include <Protocol/SerialIo.h>
 #include <Protocol/DevicePathToText.h>
+#include <Protocol/FormBrowserEx2.h>
 
 #include <Library/PrintLib.h>
 #include <Library/DebugLib.h>
@@ -633,8 +634,6 @@ Var_UpdateBootOption (
 
 /**
   Delete Boot Option that represent a Deleted state in BootOptionMenu.
-  After deleting this boot option, call Var_ChangeBootOrder to
-  make sure BootOrder is in valid state.
 
   @retval EFI_SUCCESS   If all boot load option EFI Variables corresponding to  
                         BM_LOAD_CONTEXT marked for deletion is deleted
@@ -643,21 +642,6 @@ Var_UpdateBootOption (
 **/
 EFI_STATUS
 Var_DelBootOption (
-  VOID
-  );
-
-/**
-  After any operation on Boot####, there will be a discrepancy in BootOrder.
-  Since some are missing but in BootOrder, while some are present but are
-  not reflected by BootOrder. Then a function rebuild BootOrder from
-  scratch by content from BootOptionMenu is needed.
-
-  @retval  EFI_SUCCESS  The boot order is updated successfully.
-  @return  other than EFI_SUCCESS if failed to change the "BootOrder" EFI Variable.
-
-**/
-EFI_STATUS
-Var_ChangeBootOrder (
   VOID
   );
 
@@ -687,9 +671,7 @@ Var_UpdateDriverOption (
   );
 
 /**
-  Delete Load Option that represent a Deleted state in BootOptionMenu.
-  After deleting this Driver option, call Var_ChangeDriverOrder to
-  make sure DriverOrder is in valid state.
+  Delete Load Option that represent a Deleted state in DriverOptionMenu.
 
   @retval EFI_SUCCESS Load Option is successfully updated.
   @return Other value than EFI_SUCCESS if failed to update "Driver Order" EFI
@@ -698,22 +680,6 @@ Var_UpdateDriverOption (
 **/
 EFI_STATUS
 Var_DelDriverOption (
-  VOID
-  );
-
-/**
-  After any operation on Driver####, there will be a discrepancy in
-  DriverOrder. Since some are missing but in DriverOrder, while some
-  are present but are not reflected by DriverOrder. Then a function
-  rebuild DriverOrder from scratch by content from DriverOptionMenu is
-  needed.
-
-  @retval  EFI_SUCCESS  The driver order is updated successfully.
-  @return  other than EFI_SUCCESS if failed to set the "DriverOrder" EFI Variable.
-
-**/
-EFI_STATUS
-Var_ChangeDriverOrder (
   VOID
   );
 
@@ -1047,6 +1013,18 @@ VOID
 DiscardChangeHandler (
   IN  BMM_CALLBACK_DATA               *Private,
   IN  BMM_FAKE_NV_DATA                *CurrentFakeNVMap
+  );
+
+
+/**
+  This function is to clean some useless data before submit changes.
+
+  @param Private            The BMM context data.
+
+**/
+VOID
+CleanUselessBeforeSubmit (
+  IN  BMM_CALLBACK_DATA               *Private
   );
 
 /**

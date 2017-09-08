@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2015 - 2017, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -1032,7 +1032,7 @@ SdPeimCreateTrb (
     goto Error;
   }
 
-  if (Trb->DataLen < Trb->BlockSize) {
+  if ((Trb->DataLen != 0) && (Trb->DataLen < Trb->BlockSize)) {
     Trb->BlockSize = (UINT16)Trb->DataLen;
   }
 
@@ -2754,7 +2754,7 @@ SdPeimIdentification (
   UINT32                         PresentState;
   UINT8                          HostCtrl2;
   SD_HC_SLOT_CAP                 Capability;
-
+  UINTN                          Retry;
   //
   // 1. Send Cmd0 to the device
   //
@@ -2842,12 +2842,20 @@ SdPeimIdentification (
   //    Note here we only support the cards complied with SD physical
   //    layer simplified spec version 2.0 and version 3.0 and above.
   //
+  Ocr   = 0;
+  Retry = 0;
   do {
     Status = SdPeimSendOpCond (Slot, 0, Ocr, S18r, Xpc, TRUE, &Ocr);
     if (EFI_ERROR (Status)) {
       DEBUG ((EFI_D_ERROR, "SdPeimIdentification: SdPeimSendOpCond fails with %r Ocr %x, S18r %x, Xpc %x\n", Status, Ocr, S18r, Xpc));
       return EFI_DEVICE_ERROR;
     }
+
+    if (Retry++ == 100) {
+      DEBUG ((EFI_D_ERROR, "SdPeimIdentification: SdPeimSendOpCond fails too many times\n"));
+      return EFI_DEVICE_ERROR;
+    }
+    MicroSecondDelay (10 * 1000);
   } while ((Ocr & BIT31) == 0);
 
   //

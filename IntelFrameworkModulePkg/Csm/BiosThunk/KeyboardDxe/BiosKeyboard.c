@@ -1,7 +1,7 @@
 /** @file
   ConsoleOut Routines that speak VGA.
 
-Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
 
 This program and the accompanying materials
 are licensed and made available under the terms and conditions
@@ -272,6 +272,8 @@ BiosKeyboardDriverBindingStart (
   
   BiosKeyboardPrivate->Queue.Front                = 0;
   BiosKeyboardPrivate->Queue.Rear                 = 0;
+  BiosKeyboardPrivate->QueueForNotify.Front       = 0;
+  BiosKeyboardPrivate->QueueForNotify.Rear        = 0;
   BiosKeyboardPrivate->SimpleTextInputEx.Reset               = BiosKeyboardResetEx;
   BiosKeyboardPrivate->SimpleTextInputEx.ReadKeyStrokeEx     = BiosKeyboardReadKeyStrokeEx;
   BiosKeyboardPrivate->SimpleTextInputEx.SetState            = BiosKeyboardSetState;
@@ -339,7 +341,20 @@ BiosKeyboardDriverBindingStart (
     StatusCode  = EFI_PERIPHERAL_KEYBOARD | EFI_P_EC_CONTROLLER_ERROR;
     goto Done;
   }
-  
+
+  Status = gBS->CreateEvent (
+                  EVT_NOTIFY_SIGNAL,
+                  TPL_CALLBACK,
+                  KeyNotifyProcessHandler,
+                  BiosKeyboardPrivate,
+                  &BiosKeyboardPrivate->KeyNotifyProcessEvent
+                  );
+  if (EFI_ERROR (Status)) {
+    Status      = EFI_OUT_OF_RESOURCES;
+    StatusCode  = EFI_PERIPHERAL_KEYBOARD | EFI_P_EC_CONTROLLER_ERROR;
+    goto Done;
+  }
+
   //
   // Report a Progress Code for an attempt to detect the precense of the keyboard device in the system
   //
@@ -403,7 +418,7 @@ BiosKeyboardDriverBindingStart (
     // Check bit 6 of Feature Byte 2.
     // If it is set, then Int 16 Func 09 is supported
     //
-    if (*(UINT8 *)(UINTN) ((Regs.X.ES << 4) + Regs.X.BX + 0x06) & 0x40) {
+    if (*(UINT8 *) (((UINTN) Regs.X.ES << 4) + Regs.X.BX + 0x06) & 0x40) {
       //
       // Get Keyboard Functionality
       //
@@ -462,6 +477,11 @@ Done:
       if ((BiosKeyboardPrivate->SimpleTextInputEx).WaitForKeyEx != NULL) {
         gBS->CloseEvent ((BiosKeyboardPrivate->SimpleTextInputEx).WaitForKeyEx);    
       }
+
+      if (BiosKeyboardPrivate->KeyNotifyProcessEvent != NULL) {
+        gBS->CloseEvent (BiosKeyboardPrivate->KeyNotifyProcessEvent);
+      }
+
       BiosKeyboardFreeNotifyList (&BiosKeyboardPrivate->NotifyList);
 
       if (BiosKeyboardPrivate->TimerEvent != NULL) {
@@ -566,6 +586,7 @@ BiosKeyboardDriverBindingStop (
   gBS->CloseEvent ((BiosKeyboardPrivate->SimpleTextIn).WaitForKey);
   gBS->CloseEvent (BiosKeyboardPrivate->TimerEvent);
   gBS->CloseEvent (BiosKeyboardPrivate->SimpleTextInputEx.WaitForKeyEx);
+  gBS->CloseEvent (BiosKeyboardPrivate->KeyNotifyProcessEvent);
   BiosKeyboardFreeNotifyList (&BiosKeyboardPrivate->NotifyList);
 
   FreePool (BiosKeyboardPrivate);
@@ -1941,7 +1962,7 @@ BiosKeyboardTimerHandler (
   }
 
   //
-  // Invoke notification functions if exist
+  // Signal KeyNotify process event if this key pressed matches any key registered.
   //
   for (Link = BiosKeyboardPrivate->NotifyList.ForwardLink; Link != &BiosKeyboardPrivate->NotifyList; Link = Link->ForwardLink) {
     CurrentNotify = CR (
@@ -1950,8 +1971,14 @@ BiosKeyboardTimerHandler (
                       NotifyEntry, 
                       BIOS_KEYBOARD_CONSOLE_IN_EX_NOTIFY_SIGNATURE
                       );
-    if (IsKeyRegistered (&CurrentNotify->KeyData, &KeyData)) { 
-      CurrentNotify->KeyNotificationFn (&KeyData);
+    if (IsKeyRegistered (&CurrentNotify->KeyData, &KeyData)) {
+      //
+      // The key notification function needs to run at TPL_CALLBACK
+      // while current TPL is TPL_NOTIFY. It will be invoked in
+      // KeyNotifyProcessHandler() which runs at TPL_CALLBACK.
+      //
+      Enqueue (&BiosKeyboardPrivate->QueueForNotify, &KeyData);
+      gBS->SignalEvent (BiosKeyboardPrivate->KeyNotifyProcessEvent);
     }
   }
 
@@ -1962,6 +1989,55 @@ BiosKeyboardTimerHandler (
   gBS->RestoreTPL (OldTpl);
 
   return ;  
+}
+
+/**
+  Process key notify.
+
+  @param  Event                 Indicates the event that invoke this function.
+  @param  Context               Indicates the calling context.
+**/
+VOID
+EFIAPI
+KeyNotifyProcessHandler (
+  IN  EFI_EVENT                 Event,
+  IN  VOID                      *Context
+  )
+{
+  EFI_STATUS                            Status;
+  BIOS_KEYBOARD_DEV                     *BiosKeyboardPrivate;
+  EFI_KEY_DATA                          KeyData;
+  LIST_ENTRY                            *Link;
+  LIST_ENTRY                            *NotifyList;
+  BIOS_KEYBOARD_CONSOLE_IN_EX_NOTIFY    *CurrentNotify;
+  EFI_TPL                               OldTpl;
+
+  BiosKeyboardPrivate = (BIOS_KEYBOARD_DEV *) Context;
+
+  //
+  // Invoke notification functions.
+  //
+  NotifyList = &BiosKeyboardPrivate->NotifyList;
+  while (TRUE) {
+    //
+    // Enter critical section
+    //  
+    OldTpl = gBS->RaiseTPL (TPL_NOTIFY);
+    Status = Dequeue (&BiosKeyboardPrivate->QueueForNotify, &KeyData);
+    //
+    // Leave critical section
+    //
+    gBS->RestoreTPL (OldTpl);
+    if (EFI_ERROR (Status)) {
+      break;
+    }
+    for (Link = GetFirstNode (NotifyList); !IsNull (NotifyList, Link); Link = GetNextNode (NotifyList, Link)) {
+      CurrentNotify = CR (Link, BIOS_KEYBOARD_CONSOLE_IN_EX_NOTIFY, NotifyEntry, BIOS_KEYBOARD_CONSOLE_IN_EX_NOTIFY_SIGNATURE);
+      if (IsKeyRegistered (&CurrentNotify->KeyData, &KeyData)) {
+        CurrentNotify->KeyNotificationFn (&KeyData);
+      }
+    }
+  }
 }
 
 /**
@@ -2237,17 +2313,20 @@ Exit:
 
   @param  This                    Protocol instance pointer.
   @param  KeyData                 A pointer to a buffer that is filled in with the keystroke 
-                                  information data for the key that was pressed.
+                                  information data for the key that was pressed. If KeyData.Key,
+                                  KeyData.KeyState.KeyToggleState and KeyData.KeyState.KeyShiftState
+                                  are 0, then any incomplete keystroke will trigger a notification of
+                                  the KeyNotificationFunction.
   @param  KeyNotificationFunction Points to the function to be called when the key 
-                                  sequence is typed specified by KeyData.                        
-  @param  NotifyHandle            Points to the unique handle assigned to the registered notification.                          
+                                  sequence is typed specified by KeyData. This notification function
+                                  should be called at <=TPL_CALLBACK.
+  @param  NotifyHandle            Points to the unique handle assigned to the registered notification.
 
-  
   @retval EFI_SUCCESS             The notification function was registered successfully.
   @retval EFI_OUT_OF_RESOURCES    Unable to allocate resources for necesssary data structures.
   @retval EFI_INVALID_PARAMETER   KeyData or NotifyHandle is NULL.
-                                                  
-**/   
+
+**/
 EFI_STATUS
 EFIAPI
 BiosKeyboardRegisterKeyNotify (

@@ -1,7 +1,7 @@
 /** @file
   Misc BDS library function
 
-Copyright (c) 2004 - 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -569,11 +569,11 @@ CharToUint (
   )
 {
   if ((Char >= L'0') && (Char <= L'9')) {
-    return (UINTN) (Char - L'0');
+    return (Char - L'0');
   }
 
   if ((Char >= L'A') && (Char <= L'F')) {
-    return (UINTN) (Char - L'A' + 0xA);
+    return (Char - L'A' + 0xA);
   }
 
   ASSERT (FALSE);
@@ -669,7 +669,7 @@ BdsLibVariableToOption (
   // Get load opion data.
   //
   LoadOptions     = TempPtr;
-  LoadOptionsSize = (UINT32) (VariableSize - (UINTN) (TempPtr - Variable));
+  LoadOptionsSize = (UINT32) (VariableSize - ((UINTN)TempPtr - (UINTN)Variable));
 
   //
   // The Console variables may have multiple device paths, so make
