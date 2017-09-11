@@ -1,6 +1,6 @@
 ## @ GenCfgOpt.py
 #
-# Copyright (c) 2014 - 2016, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2014 - 2017, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials are licensed and made available under
 # the terms and conditions of the BSD License that accompanies this distribution.
 # The full text of the license may be found at
@@ -524,11 +524,14 @@ EndList
                                         IncludeFilePath = Match.group(1)
                                         IncludeFilePath = self.ExpandMacros(IncludeFilePath)
                                         PackagesPath = os.getenv("PACKAGES_PATH")
-                                        for PackagePath in PackagesPath.split(os.pathsep):
-                                            IncludeFilePathAbs = os.path.join(os.path.normpath(PackagePath), os.path.normpath(IncludeFilePath))
-                                            if os.path.exists(IncludeFilePathAbs):
-                                                IncludeDsc  = open(IncludeFilePathAbs, "r")
-                                                break
+                                        if PackagesPath:
+                                          for PackagePath in PackagesPath.split(os.pathsep):
+                                              IncludeFilePathAbs = os.path.join(os.path.normpath(PackagePath), os.path.normpath(IncludeFilePath))
+                                              if os.path.exists(IncludeFilePathAbs):
+                                                  IncludeDsc  = open(IncludeFilePathAbs, "r")
+                                                  break
+                                        else:
+                                          IncludeDsc  = open(IncludeFilePath, "r")
                                         if IncludeDsc == None:
                                             print("ERROR: Cannot open file '%s'" % IncludeFilePath)
                                             raise SystemExit
@@ -1236,6 +1239,7 @@ EndList
         return 0
 
     def WriteBsfStruct  (self, BsfFd, Item):
+        LogExpr = CLogicalExpression()
         if Item['type'] == "None":
             Space = "gPlatformFspPkgTokenSpaceGuid"
         else:
@@ -1257,6 +1261,9 @@ EndList
                 for Option in OptList:
                     Option = Option.strip()
                     (OpVal, OpStr) = Option.split(':')
+                    test = LogExpr.getNumber (OpVal)
+                    if test is None:
+                        raise Exception("Selection Index '%s' is not a number" % OpVal)
                     TmpList.append((OpVal, OpStr))
         return  TmpList
 
@@ -1425,11 +1432,12 @@ def Main():
             else:
                 OutFile = sys.argv[4]
                 Start = 5
-            GenCfgOpt.ParseBuildMode(sys.argv[3])
-            if GenCfgOpt.ParseMacros(sys.argv[Start:]) != 0:
-                print "ERROR: Macro parsing failed !"
-                return 3
+            if argc > Start:
+                if GenCfgOpt.ParseMacros(sys.argv[Start:]) != 0:
+                    print "ERROR: Macro parsing failed !"
+                    return 3
 
+        GenCfgOpt.ParseBuildMode(sys.argv[3])
         FvDir = sys.argv[3]
         if not os.path.exists(FvDir):
             os.makedirs(FvDir)

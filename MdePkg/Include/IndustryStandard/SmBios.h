@@ -1,8 +1,8 @@
 /** @file
-  Industry Standard Definitions of SMBIOS Table Specification v3.0.0.
+  Industry Standard Definitions of SMBIOS Table Specification v3.1.0.
 
-Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
-(C) Copyright 2015 Hewlett Packard Enterprise Development LP<BR>
+Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
+(C) Copyright 2015-2017 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials are licensed and made available under 
 the terms and conditions of the BSD License that accompanies this distribution.  
 The full text of the license may be found at
@@ -97,6 +97,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #define SMBIOS_TYPE_ADDITIONAL_INFORMATION               40
 #define SMBIOS_TYPE_ONBOARD_DEVICES_EXTENDED_INFORMATION 41
 #define SMBIOS_TYPE_MANAGEMENT_CONTROLLER_HOST_INTERFACE 42
+#define SMBIOS_TYPE_TPM_DEVICE                           43
 
 ///
 /// Inactive type is added from SMBIOS 2.2. Reference SMBIOS 2.6, chapter 3.3.43.
@@ -267,6 +268,14 @@ typedef struct {
 } MISC_BIOS_CHARACTERISTICS_EXTENSION;
 
 ///
+/// Extended BIOS ROM size.
+///
+typedef struct {
+  UINT16 Size           :14;
+  UINT16 Unit           :2;
+} EXTENDED_BIOS_ROM_SIZE;
+
+///
 /// BIOS Information (Type 0).
 ///
 typedef struct {
@@ -282,6 +291,10 @@ typedef struct {
   UINT8                     SystemBiosMinorRelease;
   UINT8                     EmbeddedControllerFirmwareMajorRelease;
   UINT8                     EmbeddedControllerFirmwareMinorRelease;
+  //
+  // Add for smbios 3.1.0
+  //
+  EXTENDED_BIOS_ROM_SIZE    ExtendedBiosSize;
 } SMBIOS_TABLE_TYPE0;
 
 ///
@@ -406,7 +419,11 @@ typedef enum {
   MiscChassisBladeEnclosure           = 0x1D,
   MiscChassisTablet                   = 0x1E,
   MiscChassisConvertible              = 0x1F,
-  MiscChassisDetachable               = 0x20
+  MiscChassisDetachable               = 0x20,
+  MiscChassisIoTGateway               = 0x21,
+  MiscChassisEmbeddedPc               = 0x22,
+  MiscChassisMiniPc                   = 0x23,
+  MiscChassisStickPc                  = 0x24
 } MISC_CHASSIS_TYPE;
 
 ///
@@ -467,7 +484,18 @@ typedef struct {
   UINT8                       NumberofPowerCords;
   UINT8                       ContainedElementCount;
   UINT8                       ContainedElementRecordLength;
+  //
+  // Can have 0 to (ContainedElementCount * ContainedElementRecordLength) contained elements
+  //
   CONTAINED_ELEMENT           ContainedElements[1];
+  //
+  // Add for smbios 2.7
+  //
+  // Since ContainedElements has a variable number of entries, must not define SKUNumber in
+  // the structure.  Need to reference it by starting at offset 0x15 and adding
+  // (ContainedElementCount * ContainedElementRecordLength) bytes.
+  //
+  // SMBIOS_TABLE_STRING         SKUNumber;
 } SMBIOS_TABLE_TYPE3;
 
 ///
@@ -528,6 +556,9 @@ typedef enum {
   ProcessorFamilyIntelCoreSoloMobile    = 0x2A,
   ProcessorFamilyIntelAtom              = 0x2B,
   ProcessorFamilyIntelCoreM             = 0x2C,
+  ProcessorFamilyIntelCorem3            = 0x2D,
+  ProcessorFamilyIntelCorem5            = 0x2E,
+  ProcessorFamilyIntelCorem7            = 0x2F,
   ProcessorFamilyAlpha                  = 0x30,
   ProcessorFamilyAlpha21064             = 0x31,
   ProcessorFamilyAlpha21066             = 0x32,
@@ -578,6 +609,9 @@ typedef enum {
   ProcessorFamilyAmdAthlonX4QuadCore    = 0x66,
   ProcessorFamilyAmdOpteronX1000Series  = 0x67,
   ProcessorFamilyAmdOpteronX2000Series  = 0x68,
+  ProcessorFamilyAmdOpteronASeries      = 0x69,
+  ProcessorFamilyAmdOpteronX3000Series  = 0x6A,
+  ProcessorFamilyAmdZen                 = 0x6B,
   ProcessorFamilyHobbit                 = 0x70,
   ProcessorFamilyCrusoeTM5000           = 0x78,
   ProcessorFamilyCrusoeTM3000           = 0x79,
@@ -687,6 +721,8 @@ typedef enum {
 /// Processor Information2 - Processor Family2.
 ///
 typedef enum {
+  ProcessorFamilyARMv7                 = 0x0100,
+  ProcessorFamilyARMv8                 = 0x0101,
   ProcessorFamilySH3                   = 0x0104,
   ProcessorFamilySH4                   = 0x0105,
   ProcessorFamilyARM                   = 0x0118,
@@ -762,7 +798,15 @@ typedef enum {
   ProcessorUpgradeSocketLGA1150   = 0x2D,
   ProcessorUpgradeSocketBGA1168   = 0x2E,
   ProcessorUpgradeSocketBGA1234   = 0x2F,
-  ProcessorUpgradeSocketBGA1364   = 0x30
+  ProcessorUpgradeSocketBGA1364   = 0x30,
+  ProcessorUpgradeSocketAM4       = 0x31,
+  ProcessorUpgradeSocketLGA1151   = 0x32,
+  ProcessorUpgradeSocketBGA1356   = 0x33,
+  ProcessorUpgradeSocketBGA1440   = 0x34,
+  ProcessorUpgradeSocketBGA1515   = 0x35,
+  ProcessorUpgradeSocketLGA3647_1 = 0x36,
+  ProcessorUpgradeSocketSP3       = 0x37,
+  ProcessorUpgradeSocketSP3r2     = 0x38
 } PROCESSOR_UPGRADE;
 
 ///
@@ -1069,6 +1113,11 @@ typedef struct {
   UINT8                     ErrorCorrectionType;            ///< The enumeration value from CACHE_ERROR_TYPE_DATA.
   UINT8                     SystemCacheType;                ///< The enumeration value from CACHE_TYPE_DATA.
   UINT8                     Associativity;                  ///< The enumeration value from CACHE_ASSOCIATIVITY_DATA.
+  //
+  // Add for smbios 3.1.0
+  //
+  UINT32                    MaximumCacheSize2;
+  UINT32                    InstalledSize2;
 } SMBIOS_TABLE_TYPE7;
 
 ///
@@ -1213,6 +1262,9 @@ typedef enum {
   SlotTypeMxm30TypeB                   = 0x1E,
   SlotTypePciExpressGen2Sff_8639       = 0x1F,
   SlotTypePciExpressGen3Sff_8639       = 0x20,
+  SlotTypePciExpressMini52pinWithBSKO  = 0x21,      ///< PCI Express Mini 52-pin (CEM spec. 2.0) with bottom-side keep-outs.
+  SlotTypePciExpressMini52pinWithoutBSKO = 0x22,    ///< PCI Express Mini 52-pin (CEM spec. 2.0) without bottom-side keep-outs.
+  SlotTypePciExpressMini76pin          = 0x23,      ///< PCI Express Mini 76-pin (CEM spec. 2.0) Corresponds to Display-Mini card.
   SlotTypePC98C20                      = 0xA0,
   SlotTypePC98C24                      = 0xA1,
   SlotTypePC98E                        = 0xA2,
@@ -2336,6 +2388,25 @@ typedef struct {
 } SMBIOS_TABLE_TYPE41;
 
 ///
+/// Management Controller Host Interface - Interface Types.
+/// 00h - 3Fh: MCTP Host Interfaces
+///
+typedef enum{
+  MCHostInterfaceTypeNetworkHostInterface       = 0x40,
+  MCHostInterfaceTypeOemDefined                 = 0xF0
+} MC_HOST_INTERFACE_TYPE;
+
+///
+/// Management Controller Host Interface - Protocol Types.
+///
+typedef enum{
+  MCHostInterfaceProtocolTypeIPMI               = 0x02,
+  MCHostInterfaceProtocolTypeMCTP               = 0x03,
+  MCHostInterfaceProtocolTypeRedfishOverIP      = 0x04,
+  MCHostInterfaceProtocolTypeOemDefined         = 0xF0
+} MC_HOST_INTERFACE_PROTOCOL_TYPE;
+
+///
 /// Management Controller Host Interface (Type 42).
 ///
 /// The information in this structure defines the attributes of a Management
@@ -2354,9 +2425,24 @@ typedef struct {
 ///
 typedef struct {
   SMBIOS_STRUCTURE                  Hdr;
-  UINT8                             InterfaceType;
+  UINT8                             InterfaceType;          ///< The enumeration value from MC_HOST_INTERFACE_TYPE
   UINT8                             MCHostInterfaceData[1]; ///< This field has a minimum of four bytes
 } SMBIOS_TABLE_TYPE42;
+
+///
+/// TPM Device (Type 43).
+///
+typedef struct {
+  SMBIOS_STRUCTURE                  Hdr;
+  UINT8                             VendorID[4];
+  UINT8                             MajorSpecVersion;
+  UINT8                             MinorSpecVersion;
+  UINT32                            FirmwareVersion1;
+  UINT32                            FirmwareVersion2;
+  SMBIOS_TABLE_STRING               Description;
+  UINT64                            Characteristics;
+  UINT32                            OemDefined;
+} SMBIOS_TABLE_TYPE43;
 
 ///
 /// Inactive (Type 126)
@@ -2420,6 +2506,7 @@ typedef union {
   SMBIOS_TABLE_TYPE40   *Type40;
   SMBIOS_TABLE_TYPE41   *Type41;
   SMBIOS_TABLE_TYPE42   *Type42;
+  SMBIOS_TABLE_TYPE43   *Type43;
   SMBIOS_TABLE_TYPE126  *Type126;
   SMBIOS_TABLE_TYPE127  *Type127;
   UINT8                 *Raw;

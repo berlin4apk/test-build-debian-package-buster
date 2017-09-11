@@ -2,7 +2,7 @@
   Interface routine for Mtftp4.
   
 (C) Copyright 2014 Hewlett-Packard Development Company, L.P.<BR>
-Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -208,7 +208,7 @@ Mtftp4OverrideValid (
     Netmask = NTOHL (Netmask);
     Ip      = NTOHL (Ip);
 
-    if (!NetIp4IsUnicast (Gateway, Netmask) || !IP4_NET_EQUAL (Gateway, Ip, Netmask)) {
+    if ((Netmask != 0 && !NetIp4IsUnicast (Gateway, Netmask)) || !IP4_NET_EQUAL (Gateway, Ip, Netmask)) {
       return FALSE;
     }
   }
@@ -667,14 +667,18 @@ EfiMtftp4Configure (
     Gateway  = NTOHL (Gateway);
     ServerIp = NTOHL (ServerIp);
 
+    if (ServerIp == 0 || IP4_IS_LOCAL_BROADCAST (ServerIp)) {
+      return EFI_INVALID_PARAMETER;
+    }
+
     if (!ConfigData->UseDefaultSetting &&
-       ((!IP4_IS_VALID_NETMASK (Netmask) || !NetIp4IsUnicast (Ip, Netmask)))) {
+        ((!IP4_IS_VALID_NETMASK (Netmask) || (Netmask != 0 && !NetIp4IsUnicast (Ip, Netmask))))) {
 
       return EFI_INVALID_PARAMETER;
     }
 
-    if ((Gateway != 0) &&
-        (!IP4_NET_EQUAL (Gateway, Ip, Netmask) || !NetIp4IsUnicast (Gateway, Netmask))) {
+    if ((Gateway != 0) && 
+        (!IP4_NET_EQUAL (Gateway, Ip, Netmask) || (Netmask != 0 && !NetIp4IsUnicast (Gateway, Netmask)))) {
 
       return EFI_INVALID_PARAMETER;
     }

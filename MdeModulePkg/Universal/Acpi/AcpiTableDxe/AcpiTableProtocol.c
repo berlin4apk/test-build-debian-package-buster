@@ -290,24 +290,27 @@ UninstallAcpiTable (
 {
   EFI_ACPI_TABLE_INSTANCE   *AcpiTableInstance;
   EFI_STATUS                Status;
+  EFI_ACPI_TABLE_VERSION    Version;
 
   //
   // Get the instance of the ACPI table protocol
   //
   AcpiTableInstance = EFI_ACPI_TABLE_INSTANCE_FROM_THIS (This);
 
+  Version = PcdGet32 (PcdAcpiExposedTableVersions);
+
   //
   // Uninstall the ACPI table
   //
   Status = RemoveTableFromList (
              AcpiTableInstance,
-             EFI_ACPI_TABLE_VERSION_1_0B | ACPI_TABLE_VERSION_GTE_2_0,
+             Version,
              TableKey
              );
   if (!EFI_ERROR (Status)) {
     Status = PublishTables (
                AcpiTableInstance,
-               EFI_ACPI_TABLE_VERSION_1_0B | ACPI_TABLE_VERSION_GTE_2_0
+               Version
                );
   }
 
@@ -430,6 +433,7 @@ ReallocateAcpiTableBuffer (
   mEfiAcpiMaxNumTables = NewMaxTableNumber;
   return EFI_SUCCESS;
 }
+
 /**
   This function adds an ACPI table to the table list.  It will detect FACS and
   allocate the correct type of memory and properly align the table.
@@ -646,17 +650,29 @@ AddTableToList (
         AcpiTableInstance->Fadt3->FirmwareCtrl = 0;
       }
       if ((UINT64)(UINTN)AcpiTableInstance->Dsdt3 < BASE_4GB) {
-        AcpiTableInstance->Fadt3->Dsdt  = (UINT32) (UINTN) AcpiTableInstance->Dsdt3;
-        ZeroMem (&AcpiTableInstance->Fadt3->XDsdt, sizeof (UINT64));
+        AcpiTableInstance->Fadt3->Dsdt = (UINT32) (UINTN) AcpiTableInstance->Dsdt3;
+        //
+        // Comment block "the caller installs the tables in "DSDT, FADT" order"
+        // The below comments are also in "the caller installs the tables in "FADT, DSDT" order" comment block.
+        //
+        // The ACPI specification, up to and including revision 5.1 Errata A,
+        // allows the DSDT and X_DSDT fields to be both set in the FADT.
+        // (Obviously, this only makes sense if the DSDT address is representable in 4 bytes.)
+        // Starting with 5.1 Errata B, specifically for Mantis 1393 <https://mantis.uefi.org/mantis/view.php?id=1393>,
+        // the spec requires at most one of DSDT and X_DSDT fields to be set to a nonzero value,
+        // but strangely an exception is 6.0 that has no this requirement.
+        //
+        // Here we do not make the DSDT and X_DSDT fields mutual exclusion conditionally
+        // by checking FADT revision, but always set both DSDT and X_DSDT fields in the FADT
+        // to have better compatibility as some OS may have assumption to only consume X_DSDT
+        // field even the DSDT address is < 4G.
+        //
+        Buffer64 = AcpiTableInstance->Fadt3->Dsdt;
       } else {
-        Buffer64                          = (UINT64) (UINTN) AcpiTableInstance->Dsdt3;
-        CopyMem (
-          &AcpiTableInstance->Fadt3->XDsdt,
-          &Buffer64,
-          sizeof (UINT64)
-          );
         AcpiTableInstance->Fadt3->Dsdt = 0;
+        Buffer64 = (UINT64) (UINTN) AcpiTableInstance->Dsdt3;
       }
+      CopyMem (&AcpiTableInstance->Fadt3->XDsdt, &Buffer64, sizeof (UINT64));
 
       //
       // RSDP OEM information is updated to match the FADT OEM information
@@ -850,14 +866,29 @@ AddTableToList (
       //
       if (AcpiTableInstance->Fadt3 != NULL) {
         if ((UINT64)(UINTN)AcpiTableInstance->Dsdt3 < BASE_4GB) {
-          AcpiTableInstance->Fadt3->Dsdt  = (UINT32) (UINTN) AcpiTableInstance->Dsdt3;
+          AcpiTableInstance->Fadt3->Dsdt = (UINT32) (UINTN) AcpiTableInstance->Dsdt3;
+          //
+          // Comment block "the caller installs the tables in "FADT, DSDT" order"
+          // The below comments are also in "the caller installs the tables in "DSDT, FADT" order" comment block.
+          //
+          // The ACPI specification, up to and including revision 5.1 Errata A,
+          // allows the DSDT and X_DSDT fields to be both set in the FADT.
+          // (Obviously, this only makes sense if the DSDT address is representable in 4 bytes.)
+          // Starting with 5.1 Errata B, specifically for Mantis 1393 <https://mantis.uefi.org/mantis/view.php?id=1393>,
+          // the spec requires at most one of DSDT and X_DSDT fields to be set to a nonzero value,
+          // but strangely an exception is 6.0 that has no this requirement.
+          //
+          // Here we do not make the DSDT and X_DSDT fields mutual exclusion conditionally
+          // by checking FADT revision, but always set both DSDT and X_DSDT fields in the FADT
+          // to have better compatibility as some OS may have assumption to only consume X_DSDT
+          // field even the DSDT address is < 4G.
+          //
+          Buffer64 = AcpiTableInstance->Fadt3->Dsdt;
+        } else {
+          AcpiTableInstance->Fadt3->Dsdt = 0;
+          Buffer64 = (UINT64) (UINTN) AcpiTableInstance->Dsdt3;
         }
-        Buffer64                          = (UINT64) (UINTN) AcpiTableInstance->Dsdt3;
-        CopyMem (
-          &AcpiTableInstance->Fadt3->XDsdt,
-          &Buffer64,
-          sizeof (UINT64)
-          );
+        CopyMem (&AcpiTableInstance->Fadt3->XDsdt, &Buffer64, sizeof (UINT64));
 
         //
         // Checksum FADT table

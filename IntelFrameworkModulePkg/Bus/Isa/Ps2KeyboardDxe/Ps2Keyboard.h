@@ -1,7 +1,7 @@
 /** @file
   PS/2 keyboard driver header file
 
-Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -104,6 +104,7 @@ typedef struct {
   //
   SCAN_CODE_QUEUE                     ScancodeQueue;
   EFI_KEY_QUEUE                       EfiKeyQueue;
+  EFI_KEY_QUEUE                       EfiKeyQueueForNotify;
 
   //
   // Error state
@@ -117,6 +118,7 @@ typedef struct {
   // Notification Function List
   //
   LIST_ENTRY                          NotifyList;
+  EFI_EVENT                           KeyNotifyProcessEvent;
 } KEYBOARD_CONSOLE_IN_DEV;
 
 #define KEYBOARD_CONSOLE_IN_DEV_FROM_THIS(a)  CR (a, KEYBOARD_CONSOLE_IN_DEV, ConIn, KEYBOARD_CONSOLE_IN_DEV_SIGNATURE)
@@ -265,6 +267,19 @@ KeyboardRead (
 VOID
 KeyGetchar (
   IN OUT KEYBOARD_CONSOLE_IN_DEV *ConsoleIn
+  );
+
+/**
+  Process key notify.
+
+  @param  Event                 Indicates the event that invoke this function.
+  @param  Context               Indicates the calling context.
+**/
+VOID
+EFIAPI
+KeyNotifyProcessHandler (
+  IN  EFI_EVENT                 Event,
+  IN  VOID                      *Context
   );
 
 /**
@@ -479,9 +494,13 @@ KeyboardSetState (
 
     @param This                    - Protocol instance pointer.
     @param KeyData                 - A pointer to a buffer that is filled in with the keystroke
-                              information data for the key that was pressed.
+                                     information data for the key that was pressed. If KeyData.Key,
+                                     KeyData.KeyState.KeyToggleState and KeyData.KeyState.KeyShiftState
+                                     are 0, then any incomplete keystroke will trigger a notification of
+                                     the KeyNotificationFunction.
     @param KeyNotificationFunction - Points to the function to be called when the key
-                              sequence is typed specified by KeyData.
+                                     sequence is typed specified by KeyData. This notification function
+                                     should be called at <=TPL_CALLBACK.
     @param NotifyHandle            - Points to the unique handle assigned to the registered notification.
 
     @retval EFI_SUCCESS             - The notification function was registered successfully.

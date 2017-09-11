@@ -1,7 +1,7 @@
 ## @file
 # parse FDF file
 #
-#  Copyright (c) 2007 - 2016, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
 #  Copyright (c) 2015, Hewlett Packard Enterprise Development, L.P.<BR>
 #
 #  This program and the accompanying materials
@@ -167,6 +167,10 @@ class IncludeFileProfile :
             fsock = open(FileName, "rb", 0)
             try:
                 self.FileLinesList = fsock.readlines()
+                for index, line in enumerate(self.FileLinesList):
+                    if not line.endswith('\n'):
+                        self.FileLinesList[index] += '\n'
+
             finally:
                 fsock.close()
 
@@ -620,27 +624,46 @@ class FdfParser:
     def PreprocessIncludeFile(self):
 	    # nested include support
         Processed = False
+        MacroDict = {}
         while self.__GetNextToken():
 
-            if self.__Token == '!include':
+            if self.__Token == 'DEFINE':
+                if not self.__GetNextToken():
+                    raise Warning("expected Macro name", self.FileName, self.CurrentLineNumber)
+                Macro = self.__Token
+                if not self.__IsToken( "="):
+                    raise Warning("expected '='", self.FileName, self.CurrentLineNumber)
+                Value = self.__GetExpression()
+                MacroDict[Macro] = Value
+
+            elif self.__Token == '!include':
                 Processed = True
                 IncludeLine = self.CurrentLineNumber
                 IncludeOffset = self.CurrentOffsetWithinLine - len('!include')
                 if not self.__GetNextToken():
                     raise Warning("expected include file name", self.FileName, self.CurrentLineNumber)
                 IncFileName = self.__Token
-                __IncludeMacros = {}
-                for Macro in ['WORKSPACE', 'ECP_SOURCE', 'EFI_SOURCE', 'EDK_SOURCE']:
+                PreIndex = 0
+                StartPos = IncFileName.find('$(', PreIndex)
+                EndPos = IncFileName.find(')', StartPos+2)
+                while StartPos != -1 and EndPos != -1:
+                    Macro = IncFileName[StartPos+2 : EndPos]
                     MacroVal = self.__GetMacroValue(Macro)
-                    if MacroVal:
-                        __IncludeMacros[Macro] = MacroVal
+                    if not MacroVal:
+                        if Macro in MacroDict:
+                            MacroVal = MacroDict[Macro]
+                    if MacroVal != None:
+                        IncFileName = IncFileName.replace('$(' + Macro + ')', MacroVal, 1)
+                        if MacroVal.find('$(') != -1:
+                            PreIndex = StartPos
+                        else:
+                            PreIndex = StartPos + len(MacroVal)
+                    else:
+                        raise Warning("The Macro %s is not defined" %Macro, self.FileName, self.CurrentLineNumber)
+                    StartPos = IncFileName.find('$(', PreIndex)
+                    EndPos = IncFileName.find(')', StartPos+2)
 
-                try:
-                    IncludedFile = NormPath(ReplaceMacro(IncFileName, __IncludeMacros, RaiseError=True))
-                except:
-                    raise Warning("only these system environment variables are permitted to start the path of the included file: "
-                                  "$(WORKSPACE), $(ECP_SOURCE), $(EFI_SOURCE), $(EDK_SOURCE)",
-                                  self.FileName, self.CurrentLineNumber)
+                IncludedFile = NormPath(IncFileName)
                 #
                 # First search the include file under the same directory as FDF file
                 #
@@ -3239,13 +3262,10 @@ class FdfParser:
 
         if (FmpData.MonotonicCount and not FmpData.Certificate_Guid) or (not FmpData.MonotonicCount and FmpData.Certificate_Guid):
             EdkLogger.error("FdfParser", FORMAT_INVALID, "CERTIFICATE_GUID and MONOTONIC_COUNT must be work as a pair.")
-        # remove CERTIFICATE_GUID and MONOTONIC_COUNT from FmpKeyList, since these keys are optional
-        if 'CERTIFICATE_GUID' in FmpKeyList:
-            FmpKeyList.remove('CERTIFICATE_GUID')
-        if 'MONOTONIC_COUNT' in FmpKeyList:
-            FmpKeyList.remove('MONOTONIC_COUNT')
-        if FmpKeyList:
-            raise Warning("Missing keywords %s in FMP payload section." % ', '.join(FmpKeyList), self.FileName, self.CurrentLineNumber)
+
+        # Only the IMAGE_TYPE_ID is required item
+        if FmpKeyList and 'IMAGE_TYPE_ID' in FmpKeyList:
+            raise Warning("Missing keywords IMAGE_TYPE_ID in FMP payload section.", self.FileName, self.CurrentLineNumber)
         # get the Image file and Vendor code file
         self.__GetFMPCapsuleData(FmpData)
         if not FmpData.ImageFile:
@@ -3656,7 +3676,7 @@ class FdfParser:
                              "DXE_SMM_DRIVER", "DXE_RUNTIME_DRIVER", \
                              "UEFI_DRIVER", "UEFI_APPLICATION", "USER_DEFINED", "DEFAULT", "BASE", \
                              "SECURITY_CORE", "COMBINED_PEIM_DRIVER", "PIC_PEIM", "RELOCATABLE_PEIM", \
-                             "PE32_PEIM", "BS_DRIVER", "RT_DRIVER", "SAL_RT_DRIVER", "APPLICATION", "ACPITABLE", "SMM_CORE"):
+                                        "PE32_PEIM", "BS_DRIVER", "RT_DRIVER", "SAL_RT_DRIVER", "APPLICATION", "ACPITABLE", "SMM_CORE", "MM_STANDALONE", "MM_CORE_STANDALONE"):
             raise Warning("Unknown Module type '%s'" % self.__Token, self.FileName, self.CurrentLineNumber)
         return self.__Token
 
@@ -3700,7 +3720,7 @@ class FdfParser:
 
         Type = self.__Token.strip().upper()
         if Type not in ("RAW", "FREEFORM", "SEC", "PEI_CORE", "PEIM",\
-                             "PEI_DXE_COMBO", "DRIVER", "DXE_CORE", "APPLICATION", "FV_IMAGE", "SMM", "SMM_CORE"):
+                             "PEI_DXE_COMBO", "DRIVER", "DXE_CORE", "APPLICATION", "FV_IMAGE", "SMM", "SMM_CORE", "MM_STANDALONE", "MM_CORE_STANDALONE"):
             raise Warning("Unknown FV type '%s'" % self.__Token, self.FileName, self.CurrentLineNumber)
 
         if not self.__IsToken("="):
@@ -4780,6 +4800,10 @@ class FdfParser:
                         FvAnalyzedList.append(RefFvName)
 
         return False
+
+    def GetAllIncludedFile (self):
+        global AllIncludeFileList
+        return AllIncludeFileList
 
 if __name__ == "__main__":
     import sys

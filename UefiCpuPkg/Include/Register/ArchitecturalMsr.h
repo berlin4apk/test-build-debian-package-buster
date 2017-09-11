@@ -6,7 +6,7 @@
   returned is a single 32-bit or 64-bit value, then a data structure is not
   provided for that MSR.
 
-  Copyright (c) 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2016 - 2017, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -17,15 +17,15 @@
 
   @par Specification Reference:
   Intel(R) 64 and IA-32 Architectures Software Developer's Manual, Volume 3,
-  December 2015, Chapter 35 Model-Specific-Registers (MSR), Section 35-1.
+  September 2016, Chapter 35 Model-Specific-Registers (MSR), Section 35.1.
 
   @par Specification Reference:
   Intel(R) 64 and IA-32 Architectures Software Developer's Manual, Volume 3,
-  December 2015, Appendix A VMX Capability Reporting Facility, Section A.1.
+  September 2016, Appendix A VMX Capability Reporting Facility, Section A.1.
 
   @par Specification Reference:
   Intel(R) 64 and IA-32 Architectures Software Developer's Manual, Volume 3,
-  December 2015, Appendix A VMX Capability Reporting Facility, Section A.6.
+  September 2016, Appendix A VMX Capability Reporting Facility, Section A.6.
 
 **/
 
@@ -33,7 +33,7 @@
 #define __ARCHITECTURAL_MSR_H__
 
 /**
-  See Section 35.20, "MSRs in Pentium Processors.". Pentium Processor (05_01H).
+  See Section 35.22, "MSRs in Pentium Processors.". Pentium Processor (05_01H).
 
   @param  ECX  MSR_IA32_P5_MC_ADDR (0x00000000)
   @param  EAX  Lower 32-bits of MSR value.
@@ -52,7 +52,7 @@
 
 
 /**
-  See Section 35.20, "MSRs in Pentium Processors.". DF_DM = 05_01H.
+  See Section 35.22, "MSRs in Pentium Processors.". DF_DM = 05_01H.
 
   @param  ECX  MSR_IA32_P5_MC_TYPE (0x00000001)
   @param  EAX  Lower 32-bits of MSR value.
@@ -91,7 +91,7 @@
 
 
 /**
-  See Section 17.14, "Time-Stamp Counter.". Introduced at Display Family /
+  See Section 17.15, "Time-Stamp Counter.". Introduced at Display Family /
   Display Model 05_01H.
 
   @param  ECX  MSR_IA32_TIME_STAMP_COUNTER (0x00000010)
@@ -295,11 +295,16 @@ typedef union {
     /// 6] is set. If CPUID.01H:ECX[6] = 1.
     ///
     UINT32  SenterGlobalEnable:1;
-    UINT32  Reserved2:2;
+    UINT32  Reserved2:1;
+    ///
+    /// [Bit 17] SGX Launch Control Enable (R/WL): This bit must be set to
+    /// enable runtime reconfiguration of SGX Launch Control via
+    /// IA32_SGXLEPUBKEYHASHn MSR. If CPUID.(EAX=07H, ECX=0H): ECX[30] = 1.
+    ///
+    UINT32  SgxLaunchControlEnable:1;
     ///
     /// [Bit 18] SGX Global Enable (R/WL): This bit must be set to enable SGX
-    /// leaf functions. This bit is supported only if CPUID.1:ECX.[bit 6] is
-    /// set. If CPUID.(EAX=07H, ECX=0H): EBX[2] = 1.
+    /// leaf functions. If CPUID.(EAX=07H, ECX=0H): EBX[2] = 1.
     ///
     UINT32  SgxEnable:1;
     UINT32  Reserved3:1;
@@ -419,6 +424,37 @@ typedef union {
 
 
 /**
+  IA32_SGXLEPUBKEYHASH[(64*n+63):(64*n)] (R/W) Bits (64*n+63):(64*n) of the
+  SHA256 digest of the SIGSTRUCT.MODULUS for SGX Launch Enclave. On reset, the
+  default value is the digest of Intel's signing key. Read permitted If
+  CPUID.(EAX=12H,ECX=0H):EAX[0]=1, Write permitted if CPUID.(EAX=12H,ECX=0H):
+  EAX[0]=1 && IA32_FEATURE_CONTROL[17] = 1 && IA32_FEATURE_CONTROL[0] = 1.
+
+  @param  ECX  MSR_IA32_SGXLEPUBKEYHASHn
+  @param  EAX  Lower 32-bits of MSR value.
+  @param  EDX  Upper 32-bits of MSR value.
+
+  <b>Example usage</b>
+  @code
+  UINT64  Msr;
+
+  Msr = AsmReadMsr64 (MSR_IA32_SGXLEPUBKEYHASHn);
+  AsmWriteMsr64 (MSR_IA32_SGXLEPUBKEYHASHn, Msr);
+  @endcode
+  @note MSR_IA32_SGXLEPUBKEYHASH0 is defined as IA32_SGXLEPUBKEYHASH0 in SDM.
+        MSR_IA32_SGXLEPUBKEYHASH1 is defined as IA32_SGXLEPUBKEYHASH1 in SDM.
+        MSR_IA32_SGXLEPUBKEYHASH2 is defined as IA32_SGXLEPUBKEYHASH2 in SDM.
+        MSR_IA32_SGXLEPUBKEYHASH3 is defined as IA32_SGXLEPUBKEYHASH3 in SDM.
+  @{
+**/
+#define MSR_IA32_SGXLEPUBKEYHASH0                0x0000008C
+#define MSR_IA32_SGXLEPUBKEYHASH1                0x0000008D
+#define MSR_IA32_SGXLEPUBKEYHASH2                0x0000008E
+#define MSR_IA32_SGXLEPUBKEYHASH3                0x0000008F
+/// @}
+
+
+/**
   SMM Monitor Configuration (R/W). If CPUID.01H: ECX[5]=1 or CPUID.01H: ECX[6] =
   1.
 
@@ -484,7 +520,19 @@ typedef union {
   field of #MSR_IA32_SMM_MONITOR_CTL_REGISTER.
 **/
 typedef struct {
+  ///
+  /// Different processors may use different MSEG revision identifiers. These
+  /// identifiers enable software to avoid using an MSEG header formatted for
+  /// one processor on a processor that uses a different format. Software can
+  /// discover the MSEG revision identifier that a processor uses by reading
+  /// the VMX capability MSR IA32_VMX_MISC.
+  //
   UINT32  MsegHeaderRevision;
+  ///
+  /// Bits 31:1 of this field are reserved and must be zero. Bit 0 of the field
+  /// is the IA-32e mode SMM feature bit. It indicates whether the logical
+  /// processor will be in IA-32e mode after the STM is activated.
+  ///
   UINT32  MonitorFeatures;
   UINT32  GdtrLimit;
   UINT32  GdtrBaseOffset;
@@ -492,12 +540,19 @@ typedef struct {
   UINT32  EipOffset;
   UINT32  EspOffset;
   UINT32  Cr3Offset;
-  //
-  // Pad header so total size is 2KB
-  //
+  ///
+  /// Pad header so total size is 2KB
+  ///
   UINT8   Reserved[SIZE_2KB - 8 * sizeof (UINT32)];
 } MSEG_HEADER;
 
+///
+/// @{ Define values for the MonitorFeatures field of #MSEG_HEADER
+///
+#define STM_FEATURES_IA32E 0x1
+///
+/// @}
+///
 
 /**
   Base address of the logical processor's SMRAM image (RO, SMM only). If
@@ -1113,7 +1168,7 @@ typedef union {
 
 /**
   Clock Modulation Control (R/W) See Section 14.7.3, "Software Controlled
-  Clock Modulation.". Introduced at Display Family / Display Model 0F_0H.
+  Clock Modulation.". If CPUID.01H:EDX[22] = 1.
 
   @param  ECX  MSR_IA32_CLOCK_MODULATION (0x0000019A)
   @param  EAX  Lower 32-bits of MSR value.
@@ -1147,11 +1202,12 @@ typedef union {
     UINT32  ExtendedOnDemandClockModulationDutyCycle:1;
     ///
     /// [Bits 3:1] On-Demand Clock Modulation Duty Cycle: Specific encoded
-    /// values for target duty cycle modulation.
+    /// values for target duty cycle modulation. If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  OnDemandClockModulationDutyCycle:3;
     ///
     /// [Bit 4] On-Demand Clock Modulation Enable: Set 1 to enable modulation.
+    /// If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  OnDemandClockModulationEnable:1;
     UINT32  Reserved1:27;
@@ -1172,7 +1228,7 @@ typedef union {
   Thermal Interrupt Control (R/W) Enables and disables the generation of an
   interrupt on temperature transitions detected with the processor's thermal
   sensors and thermal monitor. See Section 14.7.2, "Thermal Monitor.".
-  Introduced at Display Family / Display Model 0F_0H.
+  If CPUID.01H:EDX[22] = 1
 
   @param  ECX  MSR_IA32_THERM_INTERRUPT (0x0000019B)
   @param  EAX  Lower 32-bits of MSR value.
@@ -1200,40 +1256,41 @@ typedef union {
   ///
   struct {
     ///
-    /// [Bit 0] High-Temperature Interrupt Enable.
+    /// [Bit 0] High-Temperature Interrupt Enable. If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  HighTempEnable:1;
     ///
-    /// [Bit 1] Low-Temperature Interrupt Enable.
+    /// [Bit 1] Low-Temperature Interrupt Enable. If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  LowTempEnable:1;
     ///
-    /// [Bit 2] PROCHOT# Interrupt Enable.
+    /// [Bit 2] PROCHOT# Interrupt Enable. If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  PROCHOT_Enable:1;
     ///
-    /// [Bit 3] FORCEPR# Interrupt Enable.
+    /// [Bit 3] FORCEPR# Interrupt Enable. If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  FORCEPR_Enable:1;
     ///
     /// [Bit 4] Critical Temperature Interrupt Enable.
+    /// If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  CriticalTempEnable:1;
     UINT32  Reserved1:3;
     ///
-    /// [Bits 14:8] Threshold #1 Value.
+    /// [Bits 14:8] Threshold #1 Value. If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  Threshold1:7;
     ///
-    /// [Bit 15] Threshold #1 Interrupt Enable.
+    /// [Bit 15] Threshold #1 Interrupt Enable. If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  Threshold1Enable:1;
     ///
-    /// [Bits 22:16] Threshold #2 Value.
+    /// [Bits 22:16] Threshold #2 Value. If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  Threshold2:7;
     ///
-    /// [Bit 23] Threshold #2 Interrupt Enable.
+    /// [Bit 23] Threshold #2 Interrupt Enable. If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  Threshold2Enable:1;
     ///
@@ -1257,8 +1314,7 @@ typedef union {
 /**
   Thermal Status Information (RO) Contains status information about the
   processor's thermal sensor and automatic thermal monitoring facilities. See
-  Section 14.7.2, "Thermal Monitor". Introduced at Display Family / Display
-  Model 0F_0H.
+  Section 14.7.2, "Thermal Monitor". If CPUID.01H:EDX[22] = 1.
 
   @param  ECX  MSR_IA32_THERM_STATUS (0x0000019C)
   @param  EAX  Lower 32-bits of MSR value.
@@ -1285,27 +1341,28 @@ typedef union {
   ///
   struct {
     ///
-    /// [Bit 0] Thermal Status (RO):.
+    /// [Bit 0] Thermal Status (RO):. If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  ThermalStatus:1;
     ///
-    /// [Bit 1] Thermal Status Log (R/W):.
+    /// [Bit 1] Thermal Status Log (R/W):. If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  ThermalStatusLog:1;
     ///
-    /// [Bit 2] PROCHOT # or FORCEPR# event (RO).
+    /// [Bit 2] PROCHOT # or FORCEPR# event (RO). If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  PROCHOT_FORCEPR_Event:1;
     ///
-    /// [Bit 3] PROCHOT # or FORCEPR# log (R/WC0).
+    /// [Bit 3] PROCHOT # or FORCEPR# log (R/WC0). If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  PROCHOT_FORCEPR_Log:1;
     ///
-    /// [Bit 4] Critical Temperature Status (RO).
+    /// [Bit 4] Critical Temperature Status (RO). If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  CriticalTempStatus:1;
     ///
     /// [Bit 5] Critical Temperature Status log (R/WC0).
+    /// If CPUID.01H:EDX[22] = 1.
     ///
     UINT32  CriticalTempStatusLog:1;
     ///
@@ -1418,8 +1475,9 @@ typedef union {
     /// automatically reduce power consumption in response to TCC activation.
     /// 0 = Disabled. Note: In some products clearing this bit might be
     /// ignored in critical thermal conditions, and TM1, TM2 and adaptive
-    /// thermal throttling will still be activated. Introduced at Display
-    /// Family / Display Model 0F_0H.
+    /// thermal throttling will still be activated. The default value of this
+    /// field varies with product. See respective tables where default value is
+    /// listed. Introduced at Display Family / Display Model 0F_0H.
     ///
     UINT32  AutomaticThermalControlCircuit:1;
     UINT32  Reserved2:3;
@@ -1437,7 +1495,7 @@ typedef union {
     ///
     UINT32  BTS:1;
     ///
-    /// [Bit 12] Precise Event Based Sampling (PEBS)  Unavailable (RO)  1 =
+    /// [Bit 12] Processor Event Based Sampling (PEBS)  Unavailable (RO)  1 =
     /// PEBS is not supported; 0 = PEBS is supported. Introduced at Display
     /// Family / Display Model 06_0FH.
     ///
@@ -1466,15 +1524,15 @@ typedef union {
     UINT32  Reserved6:3;
     ///
     /// [Bit 22] Limit CPUID Maxval (R/W) When this bit is set to 1, CPUID.00H
-    /// returns a maximum value in EAX[7:0] of 3. BIOS should contain a setup
+    /// returns a maximum value in EAX[7:0] of 2. BIOS should contain a setup
     /// question that allows users to specify when the installed OS does not
-    /// support CPUID functions greater than 3. Before setting this bit, BIOS
+    /// support CPUID functions greater than 2. Before setting this bit, BIOS
     /// must execute the CPUID.0H and examine the maximum value returned in
-    /// EAX[7:0]. If the maximum value is greater than 3, the bit is
-    /// supported. Otherwise, the bit is not supported. Writing to this bit
-    /// when the maximum value is greater than 3 may generate a #GP exception.
+    /// EAX[7:0]. If the maximum value is greater than 2, this bit is
+    /// supported. Otherwise, this bit is not supported. Setting this bit when
+    /// the maximum value is not greater than 2 may generate a #GP exception.
     /// Setting this bit may cause unexpected behavior in software that
-    /// depends on the availability of CPUID leaves greater than 3. Introduced
+    /// depends on the availability of CPUID leaves greater than 2. Introduced
     /// at Display Family / Display Model 0F_03H.
     ///
     UINT32  LimitCpuidMaxval:1;
@@ -2687,8 +2745,8 @@ typedef union {
 
 
 /**
-  Fixed-Function Performance Counter 1 0 (R/W): Counts CPU_CLK_Unhalted.Core.
-  If CPUID.0AH: EDX[4:0] > 1.
+  Fixed-Function Performance Counter 1 (R/W): Counts CPU_CLK_Unhalted.Core. If
+  CPUID.0AH: EDX[4:0] > 1.
 
   @param  ECX  MSR_IA32_FIXED_CTR1 (0x0000030A)
   @param  EAX  Lower 32-bits of MSR value.
@@ -2707,8 +2765,8 @@ typedef union {
 
 
 /**
-  Fixed-Function Performance Counter 0 0 (R/W): Counts CPU_CLK_Unhalted.Ref.
-  If CPUID.0AH: EDX[4:0] > 2.
+  Fixed-Function Performance Counter 2 (R/W): Counts CPU_CLK_Unhalted.Ref. If
+  CPUID.0AH: EDX[4:0] > 2.
 
   @param  ECX  MSR_IA32_FIXED_CTR2 (0x0000030B)
   @param  EAX  Lower 32-bits of MSR value.
@@ -3789,10 +3847,10 @@ typedef union {
     ///
     UINT32  MemoryType:4;
     ///
-    /// [Bit 54] If bit 54 is read as 1, the logical processor reports
-    /// information in the VM-exit instruction-information field on VM exits
-    /// due to execution of the INS and OUTS instructions. This reporting is
-    /// done only if this bit is read as 1.
+    /// [Bit 54] If bit 54 is read as 1, the processor reports information in
+    /// the VM-exit instruction-information field on VM exitsdue to execution
+    /// of the INS and OUTS instructions (see Section 27.2.4). This reporting
+    /// is done only if this bit is read as 1.
     ///
     UINT32  InsOutsReporting:1;
     ///
@@ -3951,11 +4009,21 @@ typedef union {
     /// [Bit 8] reports (if set) the support for activity state 3 (wait-for-SIPI).
     ///
     UINT32  WaitForSipiActivityStateSupported:1;
-    UINT32  Reserved1:6;
+    UINT32  Reserved1:5;
+    ///
+    /// [Bit 14] If read as 1, Intel(R) Processor Trace (Intel PT) can be used
+    /// in VMX operation. If the processor supports Intel PT but does not allow
+    /// it to be used in VMX operation, execution of VMXON clears
+    /// IA32_RTIT_CTL.TraceEn (see "VMXON-Enter VMX Operation" in Chapter 30);
+    /// any attempt to set that bit while in VMX operation (including VMX root
+    /// operation) using the WRMSR instruction causes a general-protection
+    /// exception.
+    ///
+    UINT32  ProcessorTraceSupported:1;
     ///
     /// [Bit 15] If read as 1, the RDMSR instruction can be used in system-
     /// management mode (SMM) to read the IA32_SMBASE MSR (MSR address 9EH).
-    /// See Section 34.15.6.4.
+    /// See Section 34.15.6.3.
     ///
     UINT32  SmBaseMsrSupported:1;
     ///
@@ -3986,7 +4054,13 @@ typedef union {
     /// information fields.
     ///
     UINT32  VmWriteSupported:1;
-    UINT32  Reserved2:2;
+    ///
+    /// [Bit 30] If read as 1, VM entry allows injection of a software
+    /// interrupt, software exception, or privileged software exception with an
+    /// instruction length of 0.
+    ///
+    UINT32  VmInjectSupported:1;
+    UINT32  Reserved2:1;
     ///
     /// [Bits 63:32] Reports the 32-bit MSEG revision identifier used by the
     /// processor.
@@ -4343,13 +4417,13 @@ typedef union {
   ///
   struct {
     ///
-    /// [Bit 0] Lock. See Section 42.12.3, "Interactions with Authenticated
+    /// [Bit 0] Lock. See Section 42.11.3, "Interactions with Authenticated
     /// Code Modules (ACMs)".
     ///
     UINT32  Lock:1;
     UINT32  Reserved1:15;
     ///
-    /// [Bits 23:16] SGX_SVN_SINIT. See Section 42.12.3, "Interactions with
+    /// [Bits 23:16] SGX_SVN_SINIT. See Section 42.11.3, "Interactions with
     /// Authenticated Code Modules (ACMs)".
     ///
     UINT32  SGX_SVN_SINIT:8;
@@ -4460,6 +4534,83 @@ typedef union {
   UINT64  Uint64;
 } MSR_IA32_RTIT_OUTPUT_MASK_PTRS_REGISTER;
 
+/**
+  Format of ToPA table entries.
+**/
+typedef union {
+  ///
+  /// Individual bit fields
+  ///
+  struct {
+    ///
+    /// [Bit 0] END. See Section 35.2.6.2, "Table of Physical Addresses (ToPA)".
+    ///
+    UINT32  END:1;
+    UINT32  Reserved1:1;
+    ///
+    /// [Bit 2] INT. See Section 35.2.6.2, "Table of Physical Addresses (ToPA)".
+    ///
+    UINT32  INT:1;
+    UINT32  Reserved2:1;
+    ///
+    /// [Bit 4] STOP. See Section 35.2.6.2, "Table of Physical Addresses (ToPA)".
+    ///
+    UINT32  STOP:1;
+    UINT32  Reserved3:1;
+    ///
+    /// [Bit 6:9] Indicates the size of the associated output region. See Section
+    /// 35.2.6.2, "Table of Physical Addresses (ToPA)".
+    ///
+    UINT32  Size:4;
+    UINT32  Reserved4:2;
+    ///
+    /// [Bit 12:31] Output Region Base Physical Address low part.
+    /// [Bit 12:31] Output Region Base Physical Address [12:63] value to match.
+    /// ATTENTION: The size of the address field is determined by the processor's
+    /// physical-address width (MAXPHYADDR) in bits, as reported in
+    /// CPUID.80000008H:EAX[7:0]. the above part of address reserved.
+    /// True address field is [12:MAXPHYADDR-1], [MAXPHYADDR:63] is reserved part.
+    /// Detail see Section 35.2.6.2, "Table of Physical Addresses (ToPA)".
+    ///
+    UINT32  Base:20;
+    ///
+    /// [Bit 32:63] Output Region Base Physical Address high part.
+    /// [Bit 32:63] Output Region Base Physical Address [12:63] value to match.
+    /// ATTENTION: The size of the address field is determined by the processor's
+    /// physical-address width (MAXPHYADDR) in bits, as reported in
+    /// CPUID.80000008H:EAX[7:0]. the above part of address reserved.
+    /// True address field is [12:MAXPHYADDR-1], [MAXPHYADDR:63] is reserved part.
+    /// Detail see Section 35.2.6.2, "Table of Physical Addresses (ToPA)".
+    ///
+    UINT32  BaseHi:32;
+  } Bits;
+  ///
+  /// All bit fields as a 64-bit value
+  ///
+  UINT64  Uint64;
+} RTIT_TOPA_TABLE_ENTRY;
+
+///
+/// The size of the associated output region usd by Topa.
+///
+typedef enum {
+  RtitTopaMemorySize4K = 0,
+  RtitTopaMemorySize8K,
+  RtitTopaMemorySize16K,
+  RtitTopaMemorySize32K,
+  RtitTopaMemorySize64K,
+  RtitTopaMemorySize128K,
+  RtitTopaMemorySize256K,
+  RtitTopaMemorySize512K,
+  RtitTopaMemorySize1M,
+  RtitTopaMemorySize2M,
+  RtitTopaMemorySize4M,
+  RtitTopaMemorySize8M,
+  RtitTopaMemorySize16M,
+  RtitTopaMemorySize32M,
+  RtitTopaMemorySize64M,
+  RtitTopaMemorySize128M
+} RTIT_TOPA_MEMORY_SIZE;
 
 /**
   Trace Control Register (R/W). If (CPUID.(EAX=07H, ECX=0):EBX[25] = 1).
@@ -4776,7 +4927,7 @@ typedef union {
 /**
   DS Save Area (R/W)  Points to the linear address of the first byte of the DS
   buffer management area, which is used to manage the BTS and PEBS buffers.
-  See Section 18.12.4, "Debug Store (DS) Mechanism.". If( CPUID.01H:EDX.DS[21]
+  See Section 18.15.4, "Debug Store (DS) Mechanism.". If( CPUID.01H:EDX.DS[21]
   = 1.
 
     [Bits 31..0] The linear address of the first byte of the DS buffer
@@ -5876,8 +6027,8 @@ typedef union {
 
 
 /**
-  Resource Association Register (R/W). If ( CPUID.(EAX=07H, ECX=0):EBX.[12] =
-  1 ).
+  Resource Association Register (R/W). If ( (CPUID.(EAX=07H, ECX=0):EBX[12]
+  =1) or (CPUID.(EAX=07H, ECX=0):EBX[15] =1 ) ).
 
   @param  ECX  MSR_IA32_PQR_ASSOC (0x00000C8F)
   @param  EAX  Lower 32-bits of MSR value.

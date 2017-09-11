@@ -1075,9 +1075,6 @@ XenStoreInit (
 
   /* Initialize the shared memory rings to talk to xenstored */
   Status = XenStoreInitComms (&xs);
-  if (EFI_ERROR (Status)) {
-    return Status;
-  }
 
   return Status;
 }
@@ -1307,6 +1304,7 @@ XenStoreTransactionEnd (
 }
 
 XENSTORE_STATUS
+EFIAPI
 XenStoreVSPrint (
   IN CONST XENSTORE_TRANSACTION *Transaction,
   IN CONST CHAR8           *DirectoryPath,

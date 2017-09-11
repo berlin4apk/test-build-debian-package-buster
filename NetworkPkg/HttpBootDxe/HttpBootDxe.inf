@@ -1,7 +1,7 @@
 ## @file
 #  This modules produce the Load File Protocol for UEFI HTTP boot.
 # 
-#  Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2015 - 2017, Intel Corporation. All rights reserved.<BR>
 #  This program and the accompanying materials
 #  are licensed and made available under the terms and conditions of the BSD License
 #  which accompanies this distribution.  The full text of the license may be found at
@@ -60,6 +60,7 @@
   HttpLib
   HiiLib
   PrintLib
+  DpcLib
   UefiHiiServicesLib
   UefiBootManagerLib
 
@@ -84,7 +85,8 @@
   gEfiNetworkInterfaceIdentifierProtocolGuid_31   ## SOMETIMES_CONSUMES
   gEfiRamDiskProtocolGuid                         ## SOMETIMES_CONSUMES
   gEfiHiiConfigAccessProtocolGuid                 ## BY_START
-
+  gEfiHttpBootCallbackProtocolGuid                ## SOMETIMES_PRODUCES
+  
 [Guids]
   ## SOMETIMES_CONSUMES ## GUID # HiiIsConfigHdrMatch   mHttpBootConfigStorageName
   ## SOMETIMES_PRODUCES ## GUID # HiiConstructConfigHdr mHttpBootConfigStorageName
@@ -93,6 +95,9 @@
   gHttpBootConfigGuid
   gEfiVirtualCdGuid            ## SOMETIMES_CONSUMES ## GUID
   gEfiVirtualDiskGuid          ## SOMETIMES_CONSUMES ## GUID
+
+[Pcd]
+  gEfiNetworkPkgTokenSpaceGuid.PcdAllowHttpConnections       ## CONSUMES  
 
 [UserExtensions.TianoCore."ExtraFiles"]
   HttpBootDxeExtra.uni

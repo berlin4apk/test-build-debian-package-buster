@@ -1,7 +1,7 @@
 ## @file
 # Generate AutoGen.h, AutoGen.c and *.depex files
 #
-# Copyright (c) 2007 - 2016, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -42,6 +42,7 @@ from GenPcdDb import CreatePcdDatabaseCode
 from Workspace.MetaFileCommentParser import UsageList
 from Common.MultipleWorkspace import MultipleWorkspace as mws
 import InfSectionParser
+import datetime
 
 ## Regular expression for splitting Dependency Expression string into tokens
 gDepexTokenPattern = re.compile("(\(|\)|\w+| \S+\.inf)")
@@ -61,7 +62,10 @@ gMakeTypeMap = {"MSFT":"nmake", "GCC":"gmake"}
 
 
 ## Build rule configuration file
-gDefaultBuildRuleFile = 'Conf/build_rule.txt'
+gDefaultBuildRuleFile = 'build_rule.txt'
+
+## Tools definition configuration file
+gDefaultToolsDefFile = 'tools_def.txt'
 
 ## Build rule default version
 AutoGenReqBuildRuleVerNum = "0.1"
@@ -138,6 +142,8 @@ ${END}
 #  ${libraryclasses_item}${END}
 
 ${depexsection_item}
+
+${userextension_tianocore_item}
 
 ${tail_comments}
 
@@ -412,7 +418,7 @@ class WorkspaceAutoGen(AutoGen):
                             if HasTokenSpace:
                                 if (PcdItem.TokenCName, PcdItem.TokenSpaceGuidCName) == (TokenCName, TokenSpaceGuidCName):
                                     PcdDatumType = PcdItem.DatumType
-                                    NewValue = self._BuildOptionPcdValueFormat(TokenSpaceGuidCName, TokenCName, PcdDatumType, pcdvalue)
+                                    NewValue = BuildOptionPcdValueFormat(TokenSpaceGuidCName, TokenCName, PcdDatumType, pcdvalue)
                                     FoundFlag = True
                             else:
                                 if PcdItem.TokenCName == TokenCName:
@@ -421,7 +427,7 @@ class WorkspaceAutoGen(AutoGen):
                                             TokenSpaceGuidCNameList.append(PcdItem.TokenSpaceGuidCName)
                                             PcdDatumType = PcdItem.DatumType
                                             TokenSpaceGuidCName = PcdItem.TokenSpaceGuidCName
-                                            NewValue = self._BuildOptionPcdValueFormat(TokenSpaceGuidCName, TokenCName, PcdDatumType, pcdvalue)
+                                            NewValue = BuildOptionPcdValueFormat(TokenSpaceGuidCName, TokenCName, PcdDatumType, pcdvalue)
                                             FoundFlag = True
                                         else:
                                             EdkLogger.error(
@@ -500,6 +506,22 @@ class WorkspaceAutoGen(AutoGen):
                                 SourcePcdDict['FixedAtBuild'].append((BuildData.Pcds[key].TokenCName, BuildData.Pcds[key].TokenSpaceGuidCName))
                 else:
                     pass
+            #
+            # A PCD can only use one type for all source modules
+            #
+            for i in SourcePcdDict_Keys:
+                for j in SourcePcdDict_Keys:
+                    if i != j:
+                        IntersectionList = list(set(SourcePcdDict[i]).intersection(set(SourcePcdDict[j])))
+                        if len(IntersectionList) > 0:
+                            EdkLogger.error(
+                            'build',
+                            FORMAT_INVALID,
+                            "Building modules from source INFs, following PCD use %s and %s access method. It must be corrected to use only one access method." % (i, j),
+                            ExtraData="%s" % '\n\t'.join([str(P[1]+'.'+P[0]) for P in IntersectionList])
+                            )
+                    else:
+                        pass
 
             #
             # intersection the BinaryPCD for Mixed PCD
@@ -640,33 +662,111 @@ class WorkspaceAutoGen(AutoGen):
         self._MakeFileDir = None
         self._BuildCommand = None
 
+        #
+        # Create BuildOptions Macro & PCD metafile, also add the Active Platform and FDF file.
+        #
+        content = 'gCommandLineDefines: '
+        content += str(GlobalData.gCommandLineDefines)
+        content += os.linesep
+        content += 'BuildOptionPcd: '
+        content += str(GlobalData.BuildOptionPcd)
+        content += os.linesep
+        content += 'Active Platform: '
+        content += str(self.Platform)
+        content += os.linesep
+        if self.FdfFile:
+            content += 'Flash Image Definition: '
+            content += str(self.FdfFile)
+        SaveFileOnChange(os.path.join(self.BuildDir, 'BuildOptions'), content, False)
+
+        #
+        # Create PcdToken Number file for Dynamic/DynamicEx Pcd.
+        #
+        PcdTokenNumber = 'PcdTokenNumber: '
+        if Pa.PcdTokenNumber:
+            if Pa.DynamicPcdList:
+                for Pcd in Pa.DynamicPcdList:
+                    PcdTokenNumber += os.linesep
+                    PcdTokenNumber += str((Pcd.TokenCName, Pcd.TokenSpaceGuidCName))
+                    PcdTokenNumber += ' : '
+                    PcdTokenNumber += str(Pa.PcdTokenNumber[Pcd.TokenCName, Pcd.TokenSpaceGuidCName])
+        SaveFileOnChange(os.path.join(self.BuildDir, 'PcdTokenNumber'), PcdTokenNumber, False)
+
+        #
+        # Get set of workspace metafiles
+        #
+        AllWorkSpaceMetaFiles = self._GetMetaFiles(Target, Toolchain, Arch)
+
+        #
+        # Retrieve latest modified time of all metafiles
+        #
+        SrcTimeStamp = 0
+        for f in AllWorkSpaceMetaFiles:
+            if os.stat(f)[8] > SrcTimeStamp:
+                SrcTimeStamp = os.stat(f)[8]
+        self._SrcTimeStamp = SrcTimeStamp
+
+        #
+        # Write metafile list to build directory
+        #
+        AutoGenFilePath = os.path.join(self.BuildDir, 'AutoGen')
+        if os.path.exists (AutoGenFilePath):
+            os.remove(AutoGenFilePath)
+        if not os.path.exists(self.BuildDir):
+            os.makedirs(self.BuildDir)
+        with open(os.path.join(self.BuildDir, 'AutoGen'), 'w+') as file:
+            for f in AllWorkSpaceMetaFiles:
+                print >> file, f
         return True
 
-    def _BuildOptionPcdValueFormat(self, TokenSpaceGuidCName, TokenCName, PcdDatumType, Value):
-        if PcdDatumType == 'VOID*':
-            if Value.startswith('L'):
-                if not Value[1]:
-                    EdkLogger.error('build', OPTION_VALUE_INVALID, 'For Void* type PCD, when specify the Value in the command line, please use the following format: "string", L"string", B"{...}"')
-                Value = Value[0] + '"' + Value[1:] + '"'
-            elif Value.startswith('B'):
-                if not Value[1]:
-                    EdkLogger.error('build', OPTION_VALUE_INVALID, 'For Void* type PCD, when specify the Value in the command line, please use the following format: "string", L"string", B"{...}"')
-                Value = Value[1:]
-            else:
-                if not Value[0]:
-                    EdkLogger.error('build', OPTION_VALUE_INVALID, 'For Void* type PCD, when specify the Value in the command line, please use the following format: "string", L"string", B"{...}"')
-                Value = '"' + Value + '"'
 
-        IsValid, Cause = CheckPcdDatum(PcdDatumType, Value)
-        if not IsValid:
-            EdkLogger.error('build', FORMAT_INVALID, Cause, ExtraData="%s.%s" % (TokenSpaceGuidCName, TokenCName))
-        if PcdDatumType == 'BOOLEAN':
-            Value = Value.upper()
-            if Value == 'TRUE' or Value == '1':
-                Value = '1'
-            elif Value == 'FALSE' or Value == '0':
-                Value = '0'
-        return  Value
+    def _GetMetaFiles(self, Target, Toolchain, Arch):
+        AllWorkSpaceMetaFiles = set()
+        #
+        # add fdf
+        #
+        if self.FdfFile:
+            AllWorkSpaceMetaFiles.add (self.FdfFile.Path)
+            if self.FdfFile:
+                FdfFiles = GlobalData.gFdfParser.GetAllIncludedFile()
+                for f in FdfFiles:
+                    AllWorkSpaceMetaFiles.add (f.FileName)
+        #
+        # add dsc
+        #
+        AllWorkSpaceMetaFiles.add(self.MetaFile.Path)
+
+        #
+        # add build_rule.txt & tools_def.txt
+        #
+        AllWorkSpaceMetaFiles.add(os.path.join(GlobalData.gConfDirectory, gDefaultBuildRuleFile))
+        AllWorkSpaceMetaFiles.add(os.path.join(GlobalData.gConfDirectory, gDefaultToolsDefFile))
+
+        # add BuildOption metafile
+        #
+        AllWorkSpaceMetaFiles.add(os.path.join(self.BuildDir, 'BuildOptions'))
+
+        # add PcdToken Number file for Dynamic/DynamicEx Pcd
+        #
+        AllWorkSpaceMetaFiles.add(os.path.join(self.BuildDir, 'PcdTokenNumber'))
+
+        for Arch in self.ArchList:
+            Platform = self.BuildDatabase[self.MetaFile, Arch, Target, Toolchain]
+            PGen = PlatformAutoGen(self, self.MetaFile, Target, Toolchain, Arch)
+
+            #
+            # add dec
+            #
+            for Package in PGen.PackageList:
+                AllWorkSpaceMetaFiles.add(Package.MetaFile.Path)
+
+            #
+            # add included dsc
+            #
+            for filePath in Platform._RawData.IncludedFiles:
+                AllWorkSpaceMetaFiles.add(filePath.Path)
+
+        return AllWorkSpaceMetaFiles
 
     ## _CheckDuplicateInFV() method
     #
@@ -1718,7 +1818,10 @@ class PlatformAutoGen(AutoGen):
                         if self.BuildOption[Tool][Attr].startswith('='):
                             Value = self.BuildOption[Tool][Attr][1:]
                         else:
-                            Value += " " + self.BuildOption[Tool][Attr]
+                            if Attr != 'PATH':
+                                Value += " " + self.BuildOption[Tool][Attr]
+                            else:
+                                Value = self.BuildOption[Tool][Attr]
 
                     if Attr == "PATH":
                         # Don't put MAKE definition in the file
@@ -2232,8 +2335,18 @@ class PlatformAutoGen(AutoGen):
         if Module in self.Platform.Modules:
             PlatformModule = self.Platform.Modules[str(Module)]
             for Key  in PlatformModule.Pcds:
+                Flag = False
                 if Key in Pcds:
-                    self._OverridePcd(Pcds[Key], PlatformModule.Pcds[Key], Module)
+                    ToPcd = Pcds[Key]
+                    Flag = True
+                elif Key in GlobalData.MixedPcd:
+                    for PcdItem in GlobalData.MixedPcd[Key]:
+                        if PcdItem in Pcds:
+                            ToPcd = Pcds[PcdItem]
+                            Flag = True
+                            break
+                if Flag:
+                    self._OverridePcd(ToPcd, PlatformModule.Pcds[Key], Module)
         return Pcds.values()
 
     ## Resolve library names to library modules
@@ -2381,8 +2494,11 @@ class PlatformAutoGen(AutoGen):
                         if Attr != "FLAGS" or Attr not in BuildOptions[Tool] or Options[Key].startswith('='):
                             BuildOptions[Tool][Attr] = Options[Key]
                         else:
-                            # append options for the same tool
-                            BuildOptions[Tool][Attr] += " " + Options[Key]
+                            # append options for the same tool except PATH
+                            if Attr != 'PATH':
+                                BuildOptions[Tool][Attr] += " " + Options[Key]
+                            else:
+                                BuildOptions[Tool][Attr] = Options[Key]
         # Build Option Family has been checked, which need't to be checked again for family.
         if FamilyMatch or FamilyIsNull:
             return BuildOptions
@@ -2413,8 +2529,11 @@ class PlatformAutoGen(AutoGen):
                         if Attr != "FLAGS" or Attr not in BuildOptions[Tool] or Options[Key].startswith('='):
                             BuildOptions[Tool][Attr] = Options[Key]
                         else:
-                            # append options for the same tool
-                            BuildOptions[Tool][Attr] += " " + Options[Key]
+                            # append options for the same tool except PATH
+                            if Attr != 'PATH':
+                                BuildOptions[Tool][Attr] += " " + Options[Key]
+                            else:
+                                BuildOptions[Tool][Attr] = Options[Key]
         return BuildOptions
 
     ## Append build options in platform to a module
@@ -2473,7 +2592,10 @@ class PlatformAutoGen(AutoGen):
                         BuildOptions[Tool][Attr] = ToolPath
                     else:
                         Value = mws.handleWsMacro(Value)
-                        BuildOptions[Tool][Attr] += " " + Value
+                        if Attr != 'PATH':
+                            BuildOptions[Tool][Attr] += " " + Value
+                        else:
+                            BuildOptions[Tool][Attr] = Value
         if Module.AutoGenVersion < 0x00010005 and self.Workspace.UniFlag != None:
             #
             # Override UNI flag only for EDK module.
@@ -2520,6 +2642,10 @@ class PlatformAutoGen(AutoGen):
 # to the [depex] section in module's inf file.
 #
 class ModuleAutoGen(AutoGen):
+    ## Cache the timestamps of metafiles of every module in a class variable
+    #
+    TimeDict = {}
+
     ## The real constructor of ModuleAutoGen
     #
     #  This method is not supposed to be called by users of ModuleAutoGen. It's
@@ -2591,6 +2717,7 @@ class ModuleAutoGen(AutoGen):
         self._IncludePathLength = 0
         self._AutoGenFileList = None
         self._UnicodeFileList = None
+        self._VfrFileList = None
         self._IdfFileList = None
         self._SourceFileList  = None
         self._ObjectFileList  = None
@@ -2619,6 +2746,11 @@ class ModuleAutoGen(AutoGen):
         self._FinalBuildTargetList    = None
         self._FileTypes               = None
         self._BuildRules              = None
+
+        self._TimeStampPath           = None
+
+        self.AutoGenDepSet = set()
+
         
         ## The Modules referenced to this Library
         #  Only Library has this attribute
@@ -2638,10 +2770,7 @@ class ModuleAutoGen(AutoGen):
         if self._FixedAtBuildPcds:
             return self._FixedAtBuildPcds
         for Pcd in self.ModulePcdList:
-            if self.IsLibrary:
-                if not (Pcd.Pending == False and Pcd.Type == "FixedAtBuild"):
-                    continue
-            elif Pcd.Type != "FixedAtBuild":
+            if Pcd.Type != "FixedAtBuild":
                 continue
             if Pcd not in self._FixedAtBuildPcds:
                 self._FixedAtBuildPcds.append(Pcd)
@@ -2971,6 +3100,30 @@ class ModuleAutoGen(AutoGen):
                 self._DepexExpressionList[ModuleType] = DepexExpressionList
         return self._DepexExpressionList
 
+    # Get the tiano core user extension, it is contain dependent library.
+    # @retval: a list contain tiano core userextension.
+    #
+    def _GetTianoCoreUserExtensionList(self):
+        TianoCoreUserExtentionList = []
+        for M in [self.Module] + self.DependentLibraryList:
+            Filename = M.MetaFile.Path
+            InfObj = InfSectionParser.InfSectionParser(Filename)
+            TianoCoreUserExtenList = InfObj.GetUserExtensionTianoCore()
+            for TianoCoreUserExtent in TianoCoreUserExtenList:
+                for Section in TianoCoreUserExtent.keys():
+                    ItemList = Section.split(TAB_SPLIT)
+                    Arch = self.Arch
+                    if len(ItemList) == 4:
+                        Arch = ItemList[3]
+                    if Arch.upper() == TAB_ARCH_COMMON or Arch.upper() == self.Arch.upper():
+                        TianoCoreList = []
+                        TianoCoreList.extend([TAB_SECTION_START + Section + TAB_SECTION_END])
+                        TianoCoreList.extend(TianoCoreUserExtent[Section][:])
+                        TianoCoreList.append('\n')
+                        TianoCoreUserExtentionList.append(TianoCoreList)
+
+        return TianoCoreUserExtentionList
+
     ## Return the list of specification version required for the module
     #
     #   @retval     list    The list of specification defined in module file
@@ -3115,6 +3268,15 @@ class ModuleAutoGen(AutoGen):
             else:
                 self._UnicodeFileList = []
         return self._UnicodeFileList
+
+    ## Return the list of vfr files
+    def _GetVfrFileList(self):
+        if self._VfrFileList == None:
+            if TAB_VFR_FILE in self.FileTypes:
+                self._VfrFileList = self.FileTypes[TAB_VFR_FILE]
+            else:
+                self._VfrFileList = []
+        return self._VfrFileList
 
     ## Return the list of Image Definition files
     def _GetIdfFileList(self):
@@ -3729,6 +3891,11 @@ class ModuleAutoGen(AutoGen):
           'libraryclasses_item'               : []
         }
 
+        if 'MODULE_UNI_FILE' in MDefs:
+            UNIFile = os.path.join(self.MetaFile.Dir, MDefs['MODULE_UNI_FILE'])
+            if os.path.isfile(UNIFile):
+                shutil.copy2(UNIFile, self.OutputDir)
+
         if self.AutoGenVersion > int(gInfSpecVersion, 0):
             AsBuiltInfDict['module_inf_version'] = '0x%08x' % self.AutoGenVersion
         else:
@@ -3811,6 +3978,13 @@ class ModuleAutoGen(AutoGen):
                 else:
                     continue
                 PcdValue = ''
+                if Pcd.DatumType == 'BOOLEAN':
+                    BoolValue = Pcd.DefaultValue.upper()
+                    if BoolValue == 'TRUE':
+                        Pcd.DefaultValue = '1'
+                    elif BoolValue == 'FALSE':
+                        Pcd.DefaultValue = '0'
+
                 if Pcd.DatumType != 'VOID*':
                     HexFormat = '0x%02x'
                     if Pcd.DatumType == 'UINT16':
@@ -3921,6 +4095,16 @@ class ModuleAutoGen(AutoGen):
         for Library in self.LibraryAutoGenList:
             AsBuiltInfDict['libraryclasses_item'] += [Library.MetaFile.File.replace('\\', '/')]
         
+        # Generated UserExtensions TianoCore section.
+        # All tianocore user extensions are copied.
+        UserExtStr = ''
+        for TianoCore in self._GetTianoCoreUserExtensionList():
+            UserExtStr += '\n'.join(TianoCore)
+            ExtensionFile = os.path.join(self.MetaFile.Dir, TianoCore[1])
+            if os.path.isfile(ExtensionFile):
+                shutil.copy2(ExtensionFile, self.OutputDir)
+        AsBuiltInfDict['userextension_tianocore_item'] = UserExtStr
+
         # Generated depex expression section in comments.
         AsBuiltInfDict['depexsection_item'] = ''
         DepexExpresion = self._GetDepexExpresionString()
@@ -3946,6 +4130,8 @@ class ModuleAutoGen(AutoGen):
 
         if self.IsMakeFileCreated:
             return
+        if self.CanSkip():
+            return
 
         if not self.IsLibrary and CreateLibraryMakeFile:
             for LibraryAutoGen in self.LibraryAutoGenList:
@@ -3962,6 +4148,7 @@ class ModuleAutoGen(AutoGen):
             EdkLogger.debug(EdkLogger.DEBUG_9, "Skipped the generation of makefile for module %s [%s]" %
                             (self.Name, self.Arch))
 
+        self.CreateTimeStamp(Makefile)
         self.IsMakeFileCreated = True
 
     def CopyBinaryFiles(self):
@@ -3976,6 +4163,8 @@ class ModuleAutoGen(AutoGen):
     #
     def CreateCodeFile(self, CreateLibraryCodeFile=True):
         if self.IsCodeFileCreated:
+            return
+        if self.CanSkip():
             return
 
         # Need to generate PcdDatabase even PcdDriver is binarymodule
@@ -4056,6 +4245,55 @@ class ModuleAutoGen(AutoGen):
                         self._ApplyBuildRule(Lib.Target, TAB_UNKNOWN_FILE)
         return self._LibraryAutoGenList
 
+    ## Decide whether we can skip the ModuleAutoGen process
+    #  If any source file is newer than the modeule than we cannot skip
+    #
+    def CanSkip(self):
+        if not os.path.exists(self.GetTimeStampPath()):
+            return False
+        #last creation time of the module
+        DstTimeStamp = os.stat(self.GetTimeStampPath())[8]
+
+        SrcTimeStamp = self.Workspace._SrcTimeStamp
+        if SrcTimeStamp > DstTimeStamp:
+            return False
+
+        with open(self.GetTimeStampPath(),'r') as f:
+            for source in f:
+                source = source.rstrip('\n')
+                if not os.path.exists(source):
+                    return False
+                if source not in ModuleAutoGen.TimeDict :
+                    ModuleAutoGen.TimeDict[source] = os.stat(source)[8]
+                if ModuleAutoGen.TimeDict[source] > DstTimeStamp:
+                    return False
+        return True
+
+    def GetTimeStampPath(self):
+        if self._TimeStampPath == None:
+            self._TimeStampPath = os.path.join(self.MakeFileDir, 'AutoGenTimeStamp')
+        return self._TimeStampPath
+    def CreateTimeStamp(self, Makefile):
+
+        FileSet = set()
+
+        FileSet.add (self.MetaFile.Path)
+
+        for SourceFile in self.Module.Sources:
+            FileSet.add (SourceFile.Path)
+
+        for Lib in self.DependentLibraryList:
+            FileSet.add (Lib.MetaFile.Path)
+
+        for f in self.AutoGenDepSet:
+            FileSet.add (f.Path)
+
+        if os.path.exists (self.GetTimeStampPath()):
+            os.remove (self.GetTimeStampPath())
+        with open(self.GetTimeStampPath(), 'w+') as file:
+            for f in FileSet:
+                print >> file, f
+
     Module          = property(_GetModule)
     Name            = property(_GetBaseName)
     Guid            = property(_GetGuid)
@@ -4080,6 +4318,7 @@ class ModuleAutoGen(AutoGen):
     IncludePathLength = property(_GetIncludePathLength)
     AutoGenFileList = property(_GetAutoGenFileList)
     UnicodeFileList = property(_GetUnicodeFileList)
+    VfrFileList     = property(_GetVfrFileList)
     SourceFileList  = property(_GetSourceFileList)
     BinaryFileList  = property(_GetBinaryFiles) # FileType : [File List]
     Targets         = property(_GetTargets)

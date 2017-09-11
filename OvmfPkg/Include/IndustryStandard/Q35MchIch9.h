@@ -19,6 +19,9 @@
 #define __Q35_MCH_ICH9_H__
 
 #include <Library/PciLib.h>
+#include <Uefi/UefiBaseType.h>
+#include <Uefi/UefiSpec.h>
+#include <Protocol/PciRootBridgeIo.h>
 
 //
 // Host Bridge Device ID (DID) value for Q35/MCH
@@ -29,6 +32,9 @@
 // B/D/F/Type: 0/0/0/PCI
 //
 #define DRAMC_REGISTER_Q35(Offset) PCI_LIB_ADDRESS (0, 0, 0, (Offset))
+
+#define MCH_EXT_TSEG_MB       0x50
+#define MCH_EXT_TSEG_MB_QUERY   0xFFFF
 
 #define MCH_GGC               0x52
 #define MCH_GGC_IVD             BIT1
@@ -51,6 +57,7 @@
 #define MCH_ESMRAMC_SM_CACHE    BIT5
 #define MCH_ESMRAMC_SM_L1       BIT4
 #define MCH_ESMRAMC_SM_L2       BIT3
+#define MCH_ESMRAMC_TSEG_EXT    (BIT2 | BIT1)
 #define MCH_ESMRAMC_TSEG_8MB    BIT2
 #define MCH_ESMRAMC_TSEG_2MB    BIT1
 #define MCH_ESMRAMC_TSEG_1MB    0
@@ -74,6 +81,9 @@
 //
 #define POWER_MGMT_REGISTER_Q35(Offset) \
   PCI_LIB_ADDRESS (0, 0x1f, 0, (Offset))
+
+#define POWER_MGMT_REGISTER_Q35_EFI_PCI_ADDRESS(Offset) \
+  EFI_PCI_ADDRESS (0, 0x1f, 0, (Offset))
 
 #define ICH9_PMBASE               0x40
 #define ICH9_PMBASE_MASK            (BIT15 | BIT14 | BIT13 | BIT12 | BIT11 | \

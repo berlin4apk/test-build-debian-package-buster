@@ -3,9 +3,11 @@
 # It also provides the definitions(including PPIs/PROTOCOLs/GUIDs and library classes)
 # and libraries instances, which are used for those modules.
 #
-# Copyright (c) 2007 - 2016, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
 # Copyright (c) 2016, Linaro Ltd. All rights reserved.<BR>
 # (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
+# Copyright (c) 2017, AMD Incorporated. All rights reserved.<BR>
+#
 # This program and the accompanying materials are licensed and made available under
 # the terms and conditions of the BSD License that accompanies this distribution.
 # The full text of the license may be found at
@@ -22,7 +24,7 @@
   PACKAGE_NAME                   = MdeModulePkg
   PACKAGE_UNI_FILE               = MdeModulePkg.uni
   PACKAGE_GUID                   = BA0D78D6-2CAF-414b-BD4D-B6762A894288
-  PACKAGE_VERSION                = 0.96
+  PACKAGE_VERSION                = 0.97
 
 [Includes]
   Include
@@ -160,6 +162,10 @@
   ## @libraryclass  Provides services to authenticate a UEFI defined FMP Capsule.
   #
   FmpAuthenticationLib|Include/Library/FmpAuthenticationLib.h
+
+  ## @libraryclass   Provides a service to register non-discoverable device
+  ##
+  NonDiscoverableDeviceRegistrationLib|Include/Library/NonDiscoverableDeviceRegistrationLib.h
 
 [Guids]
   ## MdeModule package token space guid
@@ -340,6 +346,9 @@
   ## Include/Protocol/VarErrorFlag.h
   gEdkiiVarErrorFlagGuid               = { 0x4b37fe8, 0xf6ae, 0x480b, { 0xbd, 0xd5, 0x37, 0xd9, 0x8c, 0x5e, 0x89, 0xaa } }
 
+  ## GUID indicates the BROTLI custom compress/decompress algorithm.
+  gBrotliCustomDecompressGuid      = { 0x3D532050, 0x5CDA, 0x4FD0, { 0x87, 0x9E, 0x0F, 0x7F, 0x63, 0x0D, 0x5A, 0xFB }}
+
   ## GUID indicates the LZMA custom compress/decompress algorithm.
   #  Include/Guid/LzmaDecompress.h
   gLzmaCustomDecompressGuid      = { 0xEE4E5898, 0x3914, 0x4259, { 0x9D, 0x6E, 0xDC, 0x7B, 0xD7, 0x94, 0x03, 0xCF }}
@@ -361,6 +370,23 @@
 
   ## Include/Guid/PiSmmMemoryAttributesTable.h
   gEdkiiPiSmmMemoryAttributesTableGuid = { 0x6b9fd3f7, 0x16df, 0x45e8, {0xbd, 0x39, 0xb9, 0x4a, 0x66, 0x54, 0x1a, 0x5d}}
+
+  ## Include/Guid/SmiHandlerProfile.h
+  gSmiHandlerProfileGuid = {0x49174342, 0x7108, 0x409b, {0x8b, 0xbe, 0x65, 0xfd, 0xa8, 0x53, 0x89, 0xf5}}
+
+  ## Include/Guid/NonDiscoverableDevice.h
+  gEdkiiNonDiscoverableAhciDeviceGuid = { 0xC7D35798, 0xE4D2, 0x4A93, {0xB1, 0x45, 0x54, 0x88, 0x9F, 0x02, 0x58, 0x4B } }
+  gEdkiiNonDiscoverableAmbaDeviceGuid = { 0x94440339, 0xCC93, 0x4506, {0xB4, 0xC6, 0xEE, 0x8D, 0x0F, 0x4C, 0xA1, 0x91 } }
+  gEdkiiNonDiscoverableEhciDeviceGuid = { 0xEAEE5615, 0x0CFD, 0x45FC, {0x87, 0x69, 0xA0, 0xD8, 0x56, 0x95, 0xAF, 0x85 } }
+  gEdkiiNonDiscoverableNvmeDeviceGuid = { 0xC5F25542, 0x2A79, 0x4A26, {0x81, 0xBB, 0x4E, 0xA6, 0x32, 0x33, 0xB3, 0x09 } }
+  gEdkiiNonDiscoverableOhciDeviceGuid = { 0xB20005B0, 0xBB2D, 0x496F, {0x86, 0x9C, 0x23, 0x0B, 0x44, 0x79, 0xE7, 0xD1 } }
+  gEdkiiNonDiscoverableSdhciDeviceGuid = { 0x1DD1D619, 0xF9B8, 0x463E, {0x86, 0x81, 0xD1, 0xDC, 0x7C, 0x07, 0xB7, 0x2C } }
+  gEdkiiNonDiscoverableUfsDeviceGuid = { 0x2EA77912, 0x80A8, 0x4947, {0xBE, 0x69, 0xCD, 0xD0, 0x0A, 0xFB, 0xE5, 0x56 } }
+  gEdkiiNonDiscoverableUhciDeviceGuid = { 0xA8CDA0A2, 0x4F37, 0x4A1B, {0x8E, 0x10, 0x8E, 0xF3, 0xCC, 0x3B, 0xF3, 0xA8 } }
+  gEdkiiNonDiscoverableXhciDeviceGuid = { 0xB1BE0BC5, 0x6C28, 0x442D, {0xAA, 0x37, 0x15, 0x1B, 0x42, 0x57, 0xBD, 0x78 } }
+
+  ## Include/Guid/PlatformHasAcpi.h
+  gEdkiiPlatformHasAcpiGuid = { 0xf0966b41, 0xc23f, 0x41b9, { 0x96, 0x04, 0x0f, 0xf7, 0xe1, 0x11, 0x96, 0x5a } }
 
 [Ppis]
   ## Include/Ppi/AtaController.h
@@ -412,9 +438,10 @@
   #  If developer need implement such functionality, they should use BasePeCoffLib.
   gEfiLoadPeImageProtocolGuid    = { 0x5CB5C776, 0x60D5, 0x45EE, { 0x88, 0x3C, 0x45, 0x27, 0x08, 0xCD, 0x74, 0x3F }}
 
-  ## Print protocol defines basic print functions to print the format unicode and ascii string.
+  ## Print protocols define basic print functions to print the format unicode and ascii string.
   # Include/Protocol/Print2.h
   gEfiPrint2ProtocolGuid          = { 0xf05976ef, 0x83f1, 0x4f3d, { 0x86, 0x19, 0xf7, 0x59, 0x5d, 0x41, 0xe5, 0x38 } }
+  gEfiPrint2SProtocolGuid         = { 0xcc252d2, 0xc106, 0x4661, { 0xb5, 0xbd, 0x31, 0x47, 0xa4, 0xf8, 0x1f, 0x92 } }
 
   ## This protocol defines the generic memory test interfaces in Dxe phase.
   # Include/Protocol/GenericMemoryTest.h
@@ -515,6 +542,12 @@
   ## PS/2 policy protocol abstracts the specific platform initialization and setting.
   #  Include/Protocol/Ps2Policy.h
   gEfiPs2PolicyProtocolGuid = { 0x4DF19259, 0xDC71, 0x4D46, { 0xBE, 0xF1, 0x35, 0x7B, 0xB5, 0x78, 0xC4, 0x18 } }
+
+  ## Include/Protocol/NonDiscoverableDevice.h
+  gEdkiiNonDiscoverableDeviceProtocolGuid = { 0x0d51905b, 0xb77e, 0x452a, {0xa2, 0xc0, 0xec, 0xa0, 0xcc, 0x8d, 0x51, 0x4a } }
+
+  ## Include/Protocol/IoMmu.h
+  gEdkiiIoMmuProtocolGuid = { 0x4e939de9, 0xd948, 0x4b0f, { 0x88, 0xed, 0xe6, 0xe1, 0xce, 0x51, 0x7c, 0x1e } }
 
 #
 # [Error.gEfiMdeModulePkgTokenSpaceGuid]
@@ -1028,6 +1061,12 @@
   # @Expression  0x80000002 | (gEfiMdeModulePkgTokenSpaceGuid.PcdMemoryProfilePropertyMask & 0x7C) == 0
   gEfiMdeModulePkgTokenSpaceGuid.PcdMemoryProfilePropertyMask|0x0|UINT8|0x30001041
 
+  ## The mask is used to control SmiHandlerProfile behavior.<BR><BR>
+  #  BIT0 - Enable SmiHandlerProfile.<BR>
+  # @Prompt SmiHandlerProfile Property.
+  # @Expression  0x80000002 | (gEfiMdeModulePkgTokenSpaceGuid.PcdSmiHandlerProfilePropertyMask & 0xFE) == 0
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSmiHandlerProfilePropertyMask|0|UINT8|0x00000108
+
   ## This flag is to control which memory types of alloc info will be recorded by DxeCore & SmmCore.<BR><BR>
   # For SmmCore, only EfiRuntimeServicesCode and EfiRuntimeServicesData are valid.<BR>
   #
@@ -1068,6 +1107,48 @@
   #      0x7F, 0xFF, 0x04, 0x00}<BR>
   # @Prompt Memory profile driver path.
   gEfiMdeModulePkgTokenSpaceGuid.PcdMemoryProfileDriverPath|{0x0}|VOID*|0x00001043
+
+  ## Set image protection policy. The policy is bitwise.
+  #  If a bit is set, the image will be protected by DxeCore if it is aligned.
+  #   The code section becomes read-only, and the data section becomes non-executable.
+  #  If a bit is clear, the image will not be protected.<BR><BR>
+  #    BIT0       - Image from unknown device. <BR>
+  #    BIT1       - Image from firmware volume.<BR>
+  # @Prompt Set image protection policy.
+  # @ValidRange 0x80000002 | 0x00000000 - 0x0000001F
+  gEfiMdeModulePkgTokenSpaceGuid.PcdImageProtectionPolicy|0x00000002|UINT32|0x00001047
+
+  ## Set DXE memory protection policy. The policy is bitwise.
+  #  If a bit is set, memory regions of the associated type will be mapped
+  #  non-executable.<BR><BR>
+  #
+  # Below is bit mask for this PCD: (Order is same as UEFI spec)<BR>
+  #  EfiReservedMemoryType          0x0001<BR>
+  #  EfiLoaderCode                  0x0002<BR>
+  #  EfiLoaderData                  0x0004<BR>
+  #  EfiBootServicesCode            0x0008<BR>
+  #  EfiBootServicesData            0x0010<BR>
+  #  EfiRuntimeServicesCode         0x0020<BR>
+  #  EfiRuntimeServicesData         0x0040<BR>
+  #  EfiConventionalMemory          0x0080<BR>
+  #  EfiUnusableMemory              0x0100<BR>
+  #  EfiACPIReclaimMemory           0x0200<BR>
+  #  EfiACPIMemoryNVS               0x0400<BR>
+  #  EfiMemoryMappedIO              0x0800<BR>
+  #  EfiMemoryMappedIOPortSpace     0x1000<BR>
+  #  EfiPalCode                     0x2000<BR>
+  #  EfiPersistentMemory            0x4000<BR>
+  #  OEM Reserved       0x4000000000000000<BR>
+  #  OS Reserved        0x8000000000000000<BR>
+  #
+  # NOTE: User must NOT set NX protection for EfiLoaderCode / EfiBootServicesCode / EfiRuntimeServicesCode. <BR>
+  #       User MUST set the same NX protection for EfiBootServicesData and EfiConventionalMemory. <BR>
+  #
+  # e.g. 0x7FD5 can be used for all memory except Code. <BR>
+  # e.g. 0x7BD4 can be used for all memory except Code and ACPINVS/Reserved. <BR>
+  #
+  # @Prompt Set DXE memory protection policy.
+  gEfiMdeModulePkgTokenSpaceGuid.PcdDxeNxMemoryProtectionPolicy|0x0000000|UINT64|0x00001048
 
   ## PCI Serial Device Info. It is an array of Device, Function, and Power Management
   #  information that describes the path that contains zero or more PCI to PCI briges
@@ -1497,11 +1578,11 @@
 
   ## SMBIOS version.
   # @Prompt SMBIOS version.
-  gEfiMdeModulePkgTokenSpaceGuid.PcdSmbiosVersion|0x0300|UINT16|0x00010055
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSmbiosVersion|0x0301|UINT16|0x00010055
 
   ## SMBIOS Docrev field in SMBIOS 3.0 (64-bit) Entry Point Structure.
   # @Prompt SMBIOS Docrev field in SMBIOS 3.0 (64-bit) Entry Point Structure.
-  gEfiMdeModulePkgTokenSpaceGuid.PcdSmbiosDocRev|0x0|UINT8|0x0001006A
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSmbiosDocRev|0x1|UINT8|0x0001006A
 
   ## SMBIOS produce method.
   #  BIT0 set indicates 32-bit entry point and table are produced.<BR>
@@ -1656,12 +1737,19 @@
   #  The file must be in the root directory.
   #  The file name must be the 8.3 format.
   #  The PCD data must be in UNICODE format.
+  # @Prompt Recover file name in PEI phase
   gEfiMdeModulePkgTokenSpaceGuid.PcdRecoveryFileName|L"FVMAIN.FV"|VOID*|0x30001045
 
   ## This PCD hold a list GUIDs for the ImageTypeId to indicate the
   #  FMP capsule is a system FMP.
   # @Prompt A list of system FMP ImageTypeId GUIDs
   gEfiMdeModulePkgTokenSpaceGuid.PcdSystemFmpCapsuleImageTypeIdGuid|{0x0}|VOID*|0x30001046
+
+  ## This PCD holds the address mask for page table entries when memory encryption is
+  #  enabled on AMD processors supporting the Secure Encrypted Virtualization (SEV) feature.
+  #  This mask should be applied when creating 1:1 virtual to physical mapping tables.
+  # @Prompt The address mask when memory encryption is enabled.
+  gEfiMdeModulePkgTokenSpaceGuid.PcdPteMemoryEncryptionAddressOrMask|0x0|UINT64|0x30001047
 
 [PcdsPatchableInModule]
   ## Specify memory size with page number for PEI code when

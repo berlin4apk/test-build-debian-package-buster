@@ -4,7 +4,7 @@
 # This module contains the functionality to generate build report after
 # build all target completes successfully.
 #
-# Copyright (c) 2010 - 2016, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2010 - 2017, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -123,6 +123,8 @@ gDriverTypeMap = {
   'UEFI_APPLICATION'  : '0x9 (APPLICATION)',
   'SMM_CORE'          : '0xD (SMM_CORE)',
   'SMM_DRIVER'        : '0xA (SMM)', # Extension of module type to support PI 1.1 SMM drivers
+  'MM_STANDALONE'     : '0xE (MM_STANDALONE)',
+  'MM_CORE_STANDALONE' : '0xF (MM_CORE_STANDALONE)'
   }
 
 ## The look up table of the supported opcode in the dependency expression binaries
@@ -318,9 +320,9 @@ class LibraryReport(object):
     # @param File            The file object for report
     #
     def GenerateReport(self, File):
-        FileWrite(File, gSubSectionStart)
-        FileWrite(File, TAB_BRG_LIBRARY)
         if len(self.LibraryList) > 0:
+            FileWrite(File, gSubSectionStart)
+            FileWrite(File, TAB_BRG_LIBRARY)
             FileWrite(File, gSubSectionSep)
             for LibraryItem in self.LibraryList:
                 LibInfPath = LibraryItem[0]
@@ -347,7 +349,7 @@ class LibraryReport(object):
                     else:
                         FileWrite(File, "{%s}" % LibClass)
 
-        FileWrite(File, gSubSectionEnd)
+            FileWrite(File, gSubSectionEnd)
 
 ##
 # Reports dependency expression information
@@ -374,7 +376,7 @@ class DepexReport(object):
         if not ModuleType:
             ModuleType = gComponentType2ModuleType.get(M.ComponentType, "")
 
-        if ModuleType in ["SEC", "PEI_CORE", "DXE_CORE", "SMM_CORE", "UEFI_APPLICATION"]:
+        if ModuleType in ["SEC", "PEI_CORE", "DXE_CORE", "SMM_CORE", "MM_CORE_STANDALONE", "UEFI_APPLICATION"]:
             return
       
         for Source in M.SourceFileList:
@@ -411,9 +413,6 @@ class DepexReport(object):
     #
     def GenerateReport(self, File, GlobalDepexParser):
         if not self.Depex:
-            FileWrite(File, gSubSectionStart)
-            FileWrite(File, TAB_DEPEX)
-            FileWrite(File, gSubSectionEnd)
             return
         FileWrite(File, gSubSectionStart)
         if os.path.isfile(self._DepexFileName):
@@ -739,6 +738,13 @@ class PcdReport(object):
             for item in Pa.Platform.Pcds:
                 Pcd = Pa.Platform.Pcds[item]
                 if not Pcd.Type:
+                    # check the Pcd in FDF file, whether it is used in module first
+                    for T in ["FixedAtBuild", "PatchableInModule", "FeatureFlag", "Dynamic", "DynamicEx"]:
+                        PcdList = self.AllPcds.setdefault(Pcd.TokenSpaceGuidCName, {}).setdefault(T, [])
+                        if Pcd in PcdList:
+                            Pcd.Type = T
+                            break
+                if not Pcd.Type:
                     PcdTypeFlag = False
                     for package in Pa.PackageList:
                         for T in ["FixedAtBuild", "PatchableInModule", "FeatureFlag", "Dynamic", "DynamicEx"]:
@@ -866,7 +872,7 @@ class PcdReport(object):
                 FileWrite(File, "  *M  - Module scoped PCD override")
             FileWrite(File, gSectionSep)
         else:
-            if not ReportSubType:
+            if not ReportSubType and ModulePcdSet:
                 #
                 # For module PCD sub-section
                 #
@@ -885,6 +891,15 @@ class PcdReport(object):
                 #
                 TypeName, DecType = gPcdTypeMap.get(Type, ("", Type))
                 for Pcd in PcdDict[Key][Type]:
+                    PcdTokenCName = Pcd.TokenCName
+                    MixedPcdFlag = False
+                    if GlobalData.MixedPcd:
+                        for PcdKey in GlobalData.MixedPcd:
+                            if (Pcd.TokenCName, Pcd.TokenSpaceGuidCName) in GlobalData.MixedPcd[PcdKey]:
+                                PcdTokenCName = PcdKey[0]
+                                MixedPcdFlag = True
+                        if MixedPcdFlag and not ModulePcdSet:
+                            continue
                     #
                     # Get PCD default value and their override relationship
                     #
@@ -956,18 +971,18 @@ class PcdReport(object):
                     #
                     # Report PCD item according to their override relationship
                     #
-                    if BuildOptionMatch:
-                        FileWrite(File, ' *B %-*s: %6s %10s = %-22s' % (self.MaxLen, Pcd.TokenCName, TypeName, '(' + Pcd.DatumType + ')', PcdValue.strip()))
-                    elif DecMatch and InfMatch:
-                        FileWrite(File, '    %-*s: %6s %10s = %-22s' % (self.MaxLen, Pcd.TokenCName, TypeName, '(' + Pcd.DatumType + ')', PcdValue.strip()))
+                    if DecMatch and InfMatch:
+                        FileWrite(File, '    %-*s: %6s %10s = %-22s' % (self.MaxLen, PcdTokenCName, TypeName, '(' + Pcd.DatumType + ')', PcdValue.strip()))
+                    elif BuildOptionMatch:
+                        FileWrite(File, ' *B %-*s: %6s %10s = %-22s' % (self.MaxLen, PcdTokenCName, TypeName, '(' + Pcd.DatumType + ')', PcdValue.strip()))
                     else:
                         if DscMatch:
                             if (Pcd.TokenCName, Key) in self.FdfPcdSet:
-                                FileWrite(File, ' *F %-*s: %6s %10s = %-22s' % (self.MaxLen, Pcd.TokenCName, TypeName, '(' + Pcd.DatumType + ')', PcdValue.strip()))
+                                FileWrite(File, ' *F %-*s: %6s %10s = %-22s' % (self.MaxLen, PcdTokenCName, TypeName, '(' + Pcd.DatumType + ')', PcdValue.strip()))
                             else:
-                                FileWrite(File, ' *P %-*s: %6s %10s = %-22s' % (self.MaxLen, Pcd.TokenCName, TypeName, '(' + Pcd.DatumType + ')', PcdValue.strip()))
+                                FileWrite(File, ' *P %-*s: %6s %10s = %-22s' % (self.MaxLen, PcdTokenCName, TypeName, '(' + Pcd.DatumType + ')', PcdValue.strip()))
                         else:
-                            FileWrite(File, ' *M %-*s: %6s %10s = %-22s' % (self.MaxLen, Pcd.TokenCName, TypeName, '(' + Pcd.DatumType + ')', PcdValue.strip()))
+                            FileWrite(File, ' *M %-*s: %6s %10s = %-22s' % (self.MaxLen, PcdTokenCName, TypeName, '(' + Pcd.DatumType + ')', PcdValue.strip()))
 
                     if TypeName in ('DYNHII', 'DEXHII', 'DYNVPD', 'DEXVPD'):
                         for SkuInfo in Pcd.SkuInfoList.values():
@@ -1002,7 +1017,7 @@ class PcdReport(object):
         if ModulePcdSet == None:
             FileWrite(File, gSectionEnd)
         else:
-            if not ReportSubType:
+            if not ReportSubType and ModulePcdSet:
                 FileWrite(File, gSubSectionEnd)
 
 

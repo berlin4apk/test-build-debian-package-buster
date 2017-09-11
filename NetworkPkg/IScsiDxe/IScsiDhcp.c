@@ -1,7 +1,7 @@
 /** @file
   iSCSI DHCP4 related configuration routines.
 
-Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -123,11 +123,24 @@ IScsiDhcpExtractRootPath (
     IpMode = ConfigData->AutoConfigureMode;
   }
 
-  Status = IScsiAsciiStrToIp (Field->Str, IpMode, &Ip);
-  CopyMem (&ConfigNvData->TargetIp, &Ip, sizeof (EFI_IP_ADDRESS));
+  //
+  // Server name is expressed as domain name, just save it.
+  //
+  if ((!NET_IS_DIGIT (*(Field->Str))) && (*(Field->Str) != '[')) {
+    ConfigNvData->DnsMode = TRUE;
+    if (Field->Len > sizeof (ConfigNvData->TargetUrl)) {
+      return EFI_INVALID_PARAMETER;
+    }
+    CopyMem (&ConfigNvData->TargetUrl, Field->Str, Field->Len);
+    ConfigNvData->TargetUrl[Field->Len + 1] = '\0';
+  } else {
+    ZeroMem(ConfigNvData->TargetUrl, sizeof (ConfigNvData->TargetUrl));
+    Status = IScsiAsciiStrToIp (Field->Str, IpMode, &Ip);
+    CopyMem (&ConfigNvData->TargetIp, &Ip, sizeof (EFI_IP_ADDRESS));
 
-  if (EFI_ERROR (Status)) {
-    goto ON_EXIT;
+    if (EFI_ERROR (Status)) {
+      goto ON_EXIT;
+    }
   }
   //
   // Check the protocol type.
@@ -358,6 +371,50 @@ IScsiParseDhcpAck (
   return Status;
 }
 
+/**
+  This function will switch the IP4 configuration policy to Static.
+
+  @param[in]  Ip4Config2          Pointer to the IP4 configuration protocol.
+
+  @retval     EFI_SUCCESS         The policy is already configured to static.
+  @retval     Others              Other error as indicated.
+
+**/
+EFI_STATUS
+IScsiSetIp4Policy (
+  IN EFI_IP4_CONFIG2_PROTOCOL        *Ip4Config2
+  )
+{
+  EFI_IP4_CONFIG2_POLICY          Policy;
+  EFI_STATUS                      Status;
+  UINTN                           DataSize;
+
+  DataSize = sizeof (EFI_IP4_CONFIG2_POLICY);
+  Status = Ip4Config2->GetData (
+                         Ip4Config2,
+                         Ip4Config2DataTypePolicy,
+                         &DataSize,
+                         &Policy
+                         );
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+
+  if (Policy != Ip4Config2PolicyStatic) {
+    Policy = Ip4Config2PolicyStatic;
+    Status= Ip4Config2->SetData (
+                          Ip4Config2,
+                          Ip4Config2DataTypePolicy,
+                          sizeof (EFI_IP4_CONFIG2_POLICY),
+                          &Policy
+                          );
+    if (EFI_ERROR (Status)) {
+      return Status;
+    } 
+  }
+
+  return EFI_SUCCESS;
+}
 
 /**
   Parse the DHCP ACK to get the address configuration and DNS information.
@@ -380,6 +437,7 @@ IScsiDoDhcp (
   )
 {
   EFI_HANDLE                    Dhcp4Handle;
+  EFI_IP4_CONFIG2_PROTOCOL      *Ip4Config2;
   EFI_DHCP4_PROTOCOL            *Dhcp4;
   EFI_STATUS                    Status;
   EFI_DHCP4_PACKET_OPTION       *ParaList;
@@ -388,6 +446,7 @@ IScsiDoDhcp (
   BOOLEAN                       MediaPresent;
 
   Dhcp4Handle = NULL;
+  Ip4Config2  = NULL;
   Dhcp4       = NULL;
   ParaList    = NULL;
 
@@ -398,6 +457,21 @@ IScsiDoDhcp (
   NetLibDetectMedia (Controller, &MediaPresent);
   if (!MediaPresent) {
     return EFI_NO_MEDIA;
+  }
+
+  //
+  // DHCP4 service allows only one of its children to be configured in  
+  // the active state, If the DHCP4 D.O.R.A started by IP4 auto  
+  // configuration and has not been completed, the Dhcp4 state machine 
+  // will not be in the right state for the iSCSI to start a new round D.O.R.A. 
+  // So, we need to switch it's policy to static.
+  //
+  Status = gBS->HandleProtocol (Controller, &gEfiIp4Config2ProtocolGuid, (VOID **) &Ip4Config2);
+  if (!EFI_ERROR (Status)) {
+    Status = IScsiSetIp4Policy (Ip4Config2);
+    if (EFI_ERROR (Status)) {
+      return Status;
+    }
   }
 
   //

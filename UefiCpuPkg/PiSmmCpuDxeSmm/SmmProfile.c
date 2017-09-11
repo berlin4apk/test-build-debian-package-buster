@@ -1,7 +1,9 @@
 /** @file
 Enable SMM profile.
 
-Copyright (c) 2012 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2012 - 2017, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2017, AMD Incorporated. All rights reserved.<BR>
+
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -79,6 +81,12 @@ MEMORY_PROTECTION_RANGE mProtectionMemRangeTemplate[] = {
   // It is always present and instruction fetches are not allowed.
   //
   {{0x00000000, 0x00000000},TRUE,TRUE},
+
+  //
+  // SMRAM ranges not covered by mCpuHotPlugData.SmrrBase/mCpuHotPlugData.SmrrSiz (to be fixed in runtime).
+  // It is always present and instruction fetches are allowed.
+  // {{0x00000000, 0x00000000},TRUE,FALSE},
+  //
 
   //
   // Future extended range could be added here.
@@ -245,6 +253,33 @@ DebugExceptionHandler (
 }
 
 /**
+  Check if the input address is in SMM ranges.
+
+  @param[in]  Address       The input address.
+
+  @retval TRUE     The input address is in SMM.
+  @retval FALSE    The input address is not in SMM.
+**/
+BOOLEAN
+IsInSmmRanges (
+  IN EFI_PHYSICAL_ADDRESS   Address
+  )
+{
+  UINTN  Index;
+
+  if ((Address >= mCpuHotPlugData.SmrrBase) && (Address < mCpuHotPlugData.SmrrBase + mCpuHotPlugData.SmrrSize)) {
+    return TRUE;
+  }
+  for (Index = 0; Index < mSmmCpuSmramRangeCount; Index++) {
+    if (Address >= mSmmCpuSmramRanges[Index].CpuStart &&
+        Address < mSmmCpuSmramRanges[Index].CpuStart + mSmmCpuSmramRanges[Index].PhysicalSize) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**
   Check if the memory address will be mapped by 4KB-page.
 
   @param  Address  The address of Memory.
@@ -259,7 +294,6 @@ IsAddressValid (
 {
   UINTN  Index;
 
-  *Nx = FALSE;
   if (FeaturePcdGet (PcdCpuSmmProfileEnable)) {
     //
     // Check configuration
@@ -274,9 +308,9 @@ IsAddressValid (
     return FALSE;
 
   } else {
-    if ((Address < mCpuHotPlugData.SmrrBase) ||
-        (Address >= mCpuHotPlugData.SmrrBase + mCpuHotPlugData.SmrrSize)) {
-      *Nx = TRUE;
+    *Nx = TRUE;
+    if (IsInSmmRanges (Address)) {
+      *Nx = FALSE;
     }
     return TRUE;
   }
@@ -332,7 +366,7 @@ InitProtectedMemRange (
 {
   UINTN                            Index;
   UINTN                            NumberOfDescriptors;
-  UINTN                            NumberOfMmioDescriptors;
+  UINTN                            NumberOfAddedDescriptors;
   UINTN                            NumberOfProtectRange;
   UINTN                            NumberOfSpliteRange;
   EFI_GCD_MEMORY_SPACE_DESCRIPTOR  *MemorySpaceMap;
@@ -345,7 +379,7 @@ InitProtectedMemRange (
   UINT64                           Low4KBPageSize;
 
   NumberOfDescriptors      = 0;
-  NumberOfMmioDescriptors  = 0;
+  NumberOfAddedDescriptors = mSmmCpuSmramRangeCount;
   NumberOfSpliteRange      = 0;
   MemorySpaceMap           = NULL;
 
@@ -358,12 +392,12 @@ InitProtectedMemRange (
        );
   for (Index = 0; Index < NumberOfDescriptors; Index++) {
     if (MemorySpaceMap[Index].GcdMemoryType == EfiGcdMemoryTypeMemoryMappedIo) {
-      NumberOfMmioDescriptors++;
+      NumberOfAddedDescriptors++;
     }
   }
 
-  if (NumberOfMmioDescriptors != 0) {
-    TotalSize = NumberOfMmioDescriptors * sizeof (MEMORY_PROTECTION_RANGE) + sizeof (mProtectionMemRangeTemplate);
+  if (NumberOfAddedDescriptors != 0) {
+    TotalSize = NumberOfAddedDescriptors * sizeof (MEMORY_PROTECTION_RANGE) + sizeof (mProtectionMemRangeTemplate);
     mProtectionMemRange = (MEMORY_PROTECTION_RANGE *) AllocateZeroPool (TotalSize);
     ASSERT (mProtectionMemRange != NULL);
     mProtectionMemRangeCount = TotalSize / sizeof (MEMORY_PROTECTION_RANGE);
@@ -381,9 +415,27 @@ InitProtectedMemRange (
     ASSERT (mSplitMemRange != NULL);
 
     //
+    // Create SMM ranges which are set to present and execution-enable.
+    //
+    NumberOfProtectRange = sizeof (mProtectionMemRangeTemplate) / sizeof (MEMORY_PROTECTION_RANGE);
+    for (Index = 0; Index < mSmmCpuSmramRangeCount; Index++) {
+      if (mSmmCpuSmramRanges[Index].CpuStart >= mProtectionMemRange[0].Range.Base &&
+          mSmmCpuSmramRanges[Index].CpuStart + mSmmCpuSmramRanges[Index].PhysicalSize < mProtectionMemRange[0].Range.Top) {
+        //
+        // If the address have been already covered by mCpuHotPlugData.SmrrBase/mCpuHotPlugData.SmrrSiz
+        //
+        break;
+      }
+      mProtectionMemRange[NumberOfProtectRange].Range.Base = mSmmCpuSmramRanges[Index].CpuStart;
+      mProtectionMemRange[NumberOfProtectRange].Range.Top  = mSmmCpuSmramRanges[Index].CpuStart + mSmmCpuSmramRanges[Index].PhysicalSize;
+      mProtectionMemRange[NumberOfProtectRange].Present    = TRUE;
+      mProtectionMemRange[NumberOfProtectRange].Nx         = FALSE;
+      NumberOfProtectRange++;
+    }
+
+    //
     // Create MMIO ranges which are set to present and execution-disable.
     //
-    NumberOfProtectRange    = sizeof (mProtectionMemRangeTemplate) / sizeof (MEMORY_PROTECTION_RANGE);
     for (Index = 0; Index < NumberOfDescriptors; Index++) {
       if (MemorySpaceMap[Index].GcdMemoryType != EfiGcdMemoryTypeMemoryMappedIo) {
         continue;
@@ -394,6 +446,12 @@ InitProtectedMemRange (
       mProtectionMemRange[NumberOfProtectRange].Nx         = TRUE;
       NumberOfProtectRange++;
     }
+
+    //
+    // Check and updated actual protected memory ranges count
+    //
+    ASSERT (NumberOfProtectRange <= mProtectionMemRangeCount);
+    mProtectionMemRangeCount = NumberOfProtectRange;
   }
 
   //
@@ -513,7 +571,7 @@ InitPaging (
         //
         continue;
       }
-      Pde = (UINT64 *)(UINTN)(Pml4[Level1] & PHYSICAL_ADDRESS_MASK);
+      Pde = (UINT64 *)(UINTN)(Pml4[Level1] & ~mAddressEncMask & PHYSICAL_ADDRESS_MASK);
     } else {
       Pde = (UINT64*)(UINTN)mSmmProfileCr3;
     }
@@ -530,7 +588,7 @@ InitPaging (
         //
         continue;
       }
-      Pte = (UINT64 *)(UINTN)(*Pde & PHYSICAL_ADDRESS_MASK);
+      Pte = (UINT64 *)(UINTN)(*Pde & ~mAddressEncMask & PHYSICAL_ADDRESS_MASK);
       if (Pte == 0) {
         continue;
       }
@@ -557,9 +615,9 @@ InitPaging (
 
           // Split it
           for (Level4 = 0; Level4 < SIZE_4KB / sizeof(*Pt); Level4++) {
-            Pt[Level4] = Address + ((Level4 << 12) | PAGE_ATTRIBUTE_BITS);
+            Pt[Level4] = Address + ((Level4 << 12) | mAddressEncMask | PAGE_ATTRIBUTE_BITS);
           } // end for PT
-          *Pte = (UINTN)Pt | PAGE_ATTRIBUTE_BITS;
+          *Pte = (UINT64)(UINTN)Pt | mAddressEncMask | PAGE_ATTRIBUTE_BITS;
         } // end if IsAddressSplit
       } // end for PTE
     } // end for PDE
@@ -577,7 +635,7 @@ InitPaging (
         //
         continue;
       }
-      Pde = (UINT64 *)(UINTN)(Pml4[Level1] & PHYSICAL_ADDRESS_MASK);
+      Pde = (UINT64 *)(UINTN)(Pml4[Level1] & ~mAddressEncMask & PHYSICAL_ADDRESS_MASK);
     } else {
       Pde = (UINT64*)(UINTN)mSmmProfileCr3;
     }
@@ -597,7 +655,7 @@ InitPaging (
         }
         continue;
       }
-      Pte = (UINT64 *)(UINTN)(*Pde & PHYSICAL_ADDRESS_MASK);
+      Pte = (UINT64 *)(UINTN)(*Pde & ~mAddressEncMask & PHYSICAL_ADDRESS_MASK);
       if (Pte == 0) {
         continue;
       }
@@ -624,7 +682,7 @@ InitPaging (
           }
         } else {
           // 4KB page
-          Pt = (UINT64 *)(UINTN)(*Pte & PHYSICAL_ADDRESS_MASK);
+          Pt = (UINT64 *)(UINTN)(*Pte & ~mAddressEncMask & PHYSICAL_ADDRESS_MASK);
           if (Pt == 0) {
             continue;
           }

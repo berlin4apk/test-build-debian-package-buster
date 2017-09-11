@@ -1,7 +1,7 @@
 /** @file
   Functions implementation related with DHCPv6 for HTTP boot driver.
 
-Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2015 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials are licensed and made available under 
 the terms and conditions of the BSD License that accompanies this distribution.  
 The full text of the license may be found at
@@ -329,17 +329,24 @@ HttpBootParseDhcp6Packet (
   @param[in]  Dst          The pointer to the cache buffer for DHCPv6 packet.
   @param[in]  Src          The pointer to the DHCPv6 packet to be cached.
 
+  @retval     EFI_SUCCESS                Packet is copied.
+  @retval     EFI_BUFFER_TOO_SMALL       Cache buffer is not big enough to hold the packet.
+
 **/
-VOID
+EFI_STATUS
 HttpBootCacheDhcp6Packet (
   IN EFI_DHCP6_PACKET          *Dst,
   IN EFI_DHCP6_PACKET          *Src
   )
 {
-  ASSERT (Dst->Size >= Src->Length);
+  if (Dst->Size < Src->Length) {
+    return EFI_BUFFER_TOO_SMALL;
+  }
 
   CopyMem (&Dst->Dhcp6, &Src->Dhcp6, Src->Length);
   Dst->Length = Src->Length;
+  
+  return EFI_SUCCESS;
 }
 
 /**
@@ -348,8 +355,11 @@ HttpBootCacheDhcp6Packet (
   @param[in]  Private               The pointer to HTTP_BOOT_PRIVATE_DATA.
   @param[in]  RcvdOffer             The pointer to the received offer packet.
 
+  @retval     EFI_SUCCESS      Cache and parse the packet successfully.
+  @retval     Others           Operation failed.
+
 **/
-VOID
+EFI_STATUS
 HttpBootCacheDhcp6Offer (
   IN HTTP_BOOT_PRIVATE_DATA  *Private,
   IN EFI_DHCP6_PACKET        *RcvdOffer
@@ -358,6 +368,7 @@ HttpBootCacheDhcp6Offer (
   HTTP_BOOT_DHCP6_PACKET_CACHE   *Cache6;
   EFI_DHCP6_PACKET               *Offer;
   HTTP_BOOT_OFFER_TYPE           OfferType;
+  EFI_STATUS                     Status;
 
   Cache6 = &Private->OfferBuffer[Private->OfferNum].Dhcp6;
   Offer  = &Cache6->Packet.Offer;
@@ -365,13 +376,16 @@ HttpBootCacheDhcp6Offer (
   //
   // Cache the content of DHCPv6 packet firstly.
   //
-  HttpBootCacheDhcp6Packet(Offer, RcvdOffer);
+  Status = HttpBootCacheDhcp6Packet(Offer, RcvdOffer);
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
 
   //
   // Validate the DHCPv6 packet, and parse the options and offer type.
   //
   if (EFI_ERROR (HttpBootParseDhcp6Packet (Cache6))) {
-    return ;
+    return EFI_ABORTED;
   }
 
   //
@@ -382,7 +396,9 @@ HttpBootCacheDhcp6Offer (
   ASSERT (Private->OfferCount[OfferType] < HTTP_BOOT_OFFER_MAX_NUM);
   Private->OfferIndex[OfferType][Private->OfferCount[OfferType]] = Private->OfferNum;
   Private->OfferCount[OfferType]++;
-  Private->OfferNum++;  
+  Private->OfferNum++;
+  
+  return EFI_SUCCESS;
 }
 
 /**
@@ -415,55 +431,78 @@ HttpBootDhcp6CallBack (
   OUT EFI_DHCP6_PACKET             **NewPacket     OPTIONAL
   )
 {
-   HTTP_BOOT_PRIVATE_DATA          *Private;
-   EFI_DHCP6_PACKET                *SelectAd;
-   EFI_STATUS                      Status;
+  HTTP_BOOT_PRIVATE_DATA          *Private;
+  EFI_DHCP6_PACKET                *SelectAd;
+  EFI_STATUS                      Status;
+  BOOLEAN                         Received;
+  
+  if ((Dhcp6Event != Dhcp6SendSolicit) &&
+    (Dhcp6Event != Dhcp6RcvdAdvertise) &&
+    (Dhcp6Event != Dhcp6SendRequest) &&
+    (Dhcp6Event != Dhcp6RcvdReply) &&
+    (Dhcp6Event != Dhcp6SelectAdvertise)) {
+    return EFI_SUCCESS;
+  }
 
-   ASSERT (Packet != NULL);
+  ASSERT (Packet != NULL);
+  
+  Private     = (HTTP_BOOT_PRIVATE_DATA *) Context;
+  Status = EFI_SUCCESS;
+  if (Private->HttpBootCallback != NULL && Dhcp6Event != Dhcp6SelectAdvertise) {
+    Received = (BOOLEAN) (Dhcp6Event == Dhcp6RcvdAdvertise || Dhcp6Event == Dhcp6RcvdReply);
+    Status = Private->HttpBootCallback->Callback (
+               Private->HttpBootCallback, 
+               HttpBootDhcp6,
+               Received,
+               Packet->Length,
+               &Packet->Dhcp6
+               );
+    if (EFI_ERROR (Status)) {
+      return EFI_ABORTED;
+    }
+  }
+  switch (Dhcp6Event) {
    
-   Private     = (HTTP_BOOT_PRIVATE_DATA *) Context;
-   Status = EFI_SUCCESS;
-   switch (Dhcp6Event) {
-    
-   case Dhcp6RcvdAdvertise:
-     Status = EFI_NOT_READY;
+  case Dhcp6RcvdAdvertise:
+    Status = EFI_NOT_READY;
     if (Packet->Length > HTTP_BOOT_DHCP6_PACKET_MAX_SIZE) {
       //
       // Ignore the incoming packets which exceed the maximum length.
       //
       break;
     }
-     if (Private->OfferNum < HTTP_BOOT_OFFER_MAX_NUM) {
-       //
-       // Cache the dhcp offers to OfferBuffer[] for select later, and record
-       // the OfferIndex and OfferCount.
-       //
-       HttpBootCacheDhcp6Offer (Private, Packet);
-     }
-     break;
+    if (Private->OfferNum < HTTP_BOOT_OFFER_MAX_NUM) {
+      //
+      // Cache the dhcp offers to OfferBuffer[] for select later, and record
+      // the OfferIndex and OfferCount.
+      // If error happens, just ignore this packet and continue to wait more offer.
+      //
+      HttpBootCacheDhcp6Offer (Private, Packet);
+    }
+    break;
 
-   case Dhcp6SelectAdvertise:
-     //
-     // Select offer by the default policy or by order, and record the SelectIndex
-     // and SelectProxyType.
-     //
-     HttpBootSelectDhcpOffer (Private);
+  case Dhcp6SelectAdvertise:
+    //
+    // Select offer by the default policy or by order, and record the SelectIndex
+    // and SelectProxyType.
+    //
+    HttpBootSelectDhcpOffer (Private);
 
-     if (Private->SelectIndex == 0) {
-       Status = EFI_ABORTED;
-     } else {
-       ASSERT (NewPacket != NULL);
-       SelectAd   = &Private->OfferBuffer[Private->SelectIndex - 1].Dhcp6.Packet.Offer;
-       *NewPacket = AllocateZeroPool (SelectAd->Size);
-       if (*NewPacket == NULL) {
-         return EFI_OUT_OF_RESOURCES;
-       }
-       CopyMem (*NewPacket, SelectAd, SelectAd->Size);
-     }
-     break;
+    if (Private->SelectIndex == 0) {
+      Status = EFI_ABORTED;
+    } else {
+      ASSERT (NewPacket != NULL);
+      SelectAd   = &Private->OfferBuffer[Private->SelectIndex - 1].Dhcp6.Packet.Offer;
+      *NewPacket = AllocateZeroPool (SelectAd->Size);
+      if (*NewPacket == NULL) {
+        return EFI_OUT_OF_RESOURCES;
+      }
+      CopyMem (*NewPacket, SelectAd, SelectAd->Size);
+    }
+    break;
      
-   default:
-     break;
+  default:
+    break;
   }
 
   return Status;   

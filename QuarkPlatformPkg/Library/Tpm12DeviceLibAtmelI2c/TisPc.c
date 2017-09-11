@@ -1,7 +1,7 @@
 /** @file
   Basic TIS (TPM Interface Specification) functions for Atmel I2C TPM.
 
-  Copyright (c) 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2016 - 2017, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -18,7 +18,6 @@
 #include <Library/TimerLib.h>
 #include <Library/DebugLib.h>
 #include <Library/I2cLib.h>
-#include <Library/Tpm12CommandLib.h>
 
 //
 // Atmel I2C TPM slave address
@@ -59,6 +58,8 @@ WriteTpmBufferMultiple (
   EFI_I2C_DEVICE_ADDRESS  I2CDeviceAddr;
   UINTN                   Index;
   UINTN                   PartialLength;
+
+  Status = EFI_SUCCESS;
 
   I2CDeviceAddr.I2CDeviceAddress = ATMEL_I2C_TPM_SLAVE_ADDRESS;
 
@@ -112,6 +113,8 @@ ReadTpmBufferMultiple (
   UINTN                   WriteLength;
   UINTN                   Index;
   UINTN                   PartialLength;
+
+  Status = EFI_SUCCESS;
 
   I2CDeviceAddr.I2CDeviceAddress = ATMEL_I2C_TPM_SLAVE_ADDRESS;
   WriteLength = 0;
@@ -224,15 +227,6 @@ Tpm12RequestUseTpm (
     }
   } while (EFI_ERROR (Status));
 
-  //
-  // Send Physical Presence Command to Atmel I2C TPM
-  //
-  Status = Tpm12PhysicalPresence (TPM_PHYSICAL_PRESENCE_PRESENT);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((EFI_D_ERROR, "Atmel I2C TPM failed to submit physical presence command: %r\n", Status));
-    return Status;
-  }
-
   return EFI_SUCCESS;
 }
 
@@ -273,6 +267,13 @@ Tpm12SubmitCommand (
   INT64                Delta;
 
   //
+  // Initialize local variables
+  //
+  Start   = 0;
+  End     = 0;
+  Total   = 0;
+
+  //
   // Make sure response buffer is big enough to hold a response header
   //
   if (*OutputParameterBlockSize < sizeof (TPM_RSP_COMMAND_HDR)) {
@@ -284,13 +285,6 @@ Tpm12SubmitCommand (
   // Get the current timer value
   //
   Current = GetPerformanceCounter();
-
-  //
-  // Initialize local variables
-  //
-  Start = 0;
-  End   = 0;
-  Total = 0;
 
   //
   // Retrieve the performance counter properties and compute the number of
@@ -365,6 +359,7 @@ Tpm12SubmitCommand (
 
   TpmOutSize = SwapBytes32 (ReadUnaligned32 (&ResponseHeader->paramSize));
   if (TpmOutSize == sizeof (TPM_RSP_COMMAND_HDR)) {
+    *OutputParameterBlockSize = TpmOutSize;
     Status = EFI_SUCCESS;
     goto Done;
   }

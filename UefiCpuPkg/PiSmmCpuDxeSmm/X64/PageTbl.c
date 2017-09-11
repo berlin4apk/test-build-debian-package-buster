@@ -1,7 +1,9 @@
 /** @file
 Page Fault (#PF) handler for X64 processors
 
-Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2009 - 2017, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2017, AMD Incorporated. All rights reserved.<BR>
+
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -16,9 +18,9 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 #define PAGE_TABLE_PAGES            8
 #define ACC_MAX_BIT                 BIT3
+
 LIST_ENTRY                          mPagePool = INITIALIZE_LIST_HEAD_VARIABLE (mPagePool);
 BOOLEAN                             m1GPageTableSupport = FALSE;
-UINT8                               mPhysicalAddressBits;
 BOOLEAN                             mCpuSmmStaticPageTable;
 
 /**
@@ -168,13 +170,13 @@ SetStaticPageTable (
     //
     // Each PML4 entry points to a page of Page Directory Pointer entries.
     //
-    PageDirectoryPointerEntry = (UINT64 *) ((*PageMapLevel4Entry) & gPhyMask);
+    PageDirectoryPointerEntry = (UINT64 *) ((*PageMapLevel4Entry) & ~mAddressEncMask & gPhyMask);
     if (PageDirectoryPointerEntry == NULL) {
       PageDirectoryPointerEntry = AllocatePageTableMemory (1);
       ASSERT(PageDirectoryPointerEntry != NULL);
       ZeroMem (PageDirectoryPointerEntry, EFI_PAGES_TO_SIZE(1));
 
-      *PageMapLevel4Entry = ((UINTN)PageDirectoryPointerEntry & gPhyMask)  | PAGE_ATTRIBUTE_BITS;
+      *PageMapLevel4Entry = (UINT64)(UINTN)PageDirectoryPointerEntry | mAddressEncMask | PAGE_ATTRIBUTE_BITS;
     }
 
     if (m1GPageTableSupport) {
@@ -189,7 +191,7 @@ SetStaticPageTable (
         //
         // Fill in the Page Directory entries
         //
-        *PageDirectory1GEntry = (PageAddress & gPhyMask) | IA32_PG_PS | PAGE_ATTRIBUTE_BITS;
+        *PageDirectory1GEntry = PageAddress | mAddressEncMask | IA32_PG_PS | PAGE_ATTRIBUTE_BITS;
       }
     } else {
       PageAddress = BASE_4GB;
@@ -204,7 +206,7 @@ SetStaticPageTable (
         // Each Directory Pointer entries points to a page of Page Directory entires.
         // So allocate space for them and fill them in in the IndexOfPageDirectoryEntries loop.
         //
-        PageDirectoryEntry = (UINT64 *) ((*PageDirectoryPointerEntry) & gPhyMask);
+        PageDirectoryEntry = (UINT64 *) ((*PageDirectoryPointerEntry) & ~mAddressEncMask & gPhyMask);
         if (PageDirectoryEntry == NULL) {
           PageDirectoryEntry = AllocatePageTableMemory (1);
           ASSERT(PageDirectoryEntry != NULL);
@@ -213,14 +215,14 @@ SetStaticPageTable (
           //
           // Fill in a Page Directory Pointer Entries
           //
-          *PageDirectoryPointerEntry = (UINT64)(UINTN)PageDirectoryEntry | PAGE_ATTRIBUTE_BITS;
+          *PageDirectoryPointerEntry = (UINT64)(UINTN)PageDirectoryEntry | mAddressEncMask | PAGE_ATTRIBUTE_BITS;
         }
 
         for (IndexOfPageDirectoryEntries = 0; IndexOfPageDirectoryEntries < 512; IndexOfPageDirectoryEntries++, PageDirectoryEntry++, PageAddress += SIZE_2MB) {
           //
           // Fill in the Page Directory entries
           //
-          *PageDirectoryEntry = (UINT64)PageAddress | IA32_PG_PS | PAGE_ATTRIBUTE_BITS;
+          *PageDirectoryEntry = PageAddress | mAddressEncMask | IA32_PG_PS | PAGE_ATTRIBUTE_BITS;
         }
       }
     }
@@ -276,7 +278,7 @@ SmmInitPageTable (
   //
   PTEntry = (UINT64*)AllocatePageTableMemory (1);
   ASSERT (PTEntry != NULL);
-  *PTEntry = Pages | PAGE_ATTRIBUTE_BITS;
+  *PTEntry = Pages | mAddressEncMask | PAGE_ATTRIBUTE_BITS;
   ZeroMem (PTEntry + 1, EFI_PAGE_SIZE - sizeof (*PTEntry));
 
   //
@@ -457,7 +459,7 @@ ReclaimPages (
       //
       continue;
     }
-    Pdpt = (UINT64*)(UINTN)(Pml4[Pml4Index] & gPhyMask);
+    Pdpt = (UINT64*)(UINTN)(Pml4[Pml4Index] & ~mAddressEncMask & gPhyMask);
     PML4EIgnore = FALSE;
     for (PdptIndex = 0; PdptIndex < EFI_PAGE_SIZE / sizeof (*Pdpt); PdptIndex++) {
       if ((Pdpt[PdptIndex] & IA32_PG_P) == 0 || (Pdpt[PdptIndex] & IA32_PG_PMNT) != 0) {
@@ -478,7 +480,7 @@ ReclaimPages (
         // we will not check PML4 entry more
         //
         PML4EIgnore = TRUE;
-        Pdt =  (UINT64*)(UINTN)(Pdpt[PdptIndex] & gPhyMask);
+        Pdt =  (UINT64*)(UINTN)(Pdpt[PdptIndex] & ~mAddressEncMask & gPhyMask);
         PDPTEIgnore = FALSE;
         for (PdtIndex = 0; PdtIndex < EFI_PAGE_SIZE / sizeof(*Pdt); PdtIndex++) {
           if ((Pdt[PdtIndex] & IA32_PG_P) == 0 || (Pdt[PdtIndex] & IA32_PG_PMNT) != 0) {
@@ -560,7 +562,7 @@ ReclaimPages (
   //
   // Secondly, insert the page pointed by this entry into page pool and clear this entry
   //
-  InsertTailList (&mPagePool, (LIST_ENTRY*)(UINTN)(*ReleasePageAddress & gPhyMask));
+  InsertTailList (&mPagePool, (LIST_ENTRY*)(UINTN)(*ReleasePageAddress & ~mAddressEncMask & gPhyMask));
   *ReleasePageAddress = 0;
 
   //
@@ -572,14 +574,14 @@ ReclaimPages (
       //
       // If 4 KByte Page Table is released, check the PDPT entry
       //
-      Pdpt = (UINT64*)(UINTN)(Pml4[MinPml4] & gPhyMask);
+      Pdpt = (UINT64*)(UINTN)(Pml4[MinPml4] & ~mAddressEncMask & gPhyMask);
       SubEntriesNum = GetSubEntriesNum(Pdpt + MinPdpt);
       if (SubEntriesNum == 0) {
         //
         // Release the empty Page Directory table if there was no more 4 KByte Page Table entry
         // clear the Page directory entry
         //
-        InsertTailList (&mPagePool, (LIST_ENTRY*)(UINTN)(Pdpt[MinPdpt] & gPhyMask));
+        InsertTailList (&mPagePool, (LIST_ENTRY*)(UINTN)(Pdpt[MinPdpt] & ~mAddressEncMask & gPhyMask));
         Pdpt[MinPdpt] = 0;
         //
         // Go on checking the PML4 table
@@ -603,7 +605,7 @@ ReclaimPages (
         // Release the empty PML4 table if there was no more 1G KByte Page Table entry
         // clear the Page directory entry
         //
-        InsertTailList (&mPagePool, (LIST_ENTRY*)(UINTN)(Pml4[MinPml4] & gPhyMask));
+        InsertTailList (&mPagePool, (LIST_ENTRY*)(UINTN)(Pml4[MinPml4] & ~mAddressEncMask & gPhyMask));
         Pml4[MinPml4] = 0;
         MinPdpt = (UINTN)-1;
         continue;
@@ -747,7 +749,7 @@ SmiDefaultPFHandler (
         //
         // If the entry is not present, allocate one page from page pool for it
         //
-        PageTable[PTIndex] = AllocPage () | PAGE_ATTRIBUTE_BITS;
+        PageTable[PTIndex] = AllocPage () | mAddressEncMask | PAGE_ATTRIBUTE_BITS;
       } else {
         //
         // Save the upper entry address
@@ -760,7 +762,7 @@ SmiDefaultPFHandler (
       //
       PageTable[PTIndex] |= (UINT64)IA32_PG_A;
       SetAccNum (PageTable + PTIndex, 7);
-      PageTable = (UINT64*)(UINTN)(PageTable[PTIndex] & gPhyMask);
+      PageTable = (UINT64*)(UINTN)(PageTable[PTIndex] & ~mAddressEncMask & gPhyMask);
     }
 
     PTIndex = BitFieldRead64 (PFAddress, StartBit, StartBit + 8);
@@ -776,7 +778,7 @@ SmiDefaultPFHandler (
     //
     // Fill the new entry
     //
-    PageTable[PTIndex] = (PFAddress & gPhyMask & ~((1ull << EndBit) - 1)) |
+    PageTable[PTIndex] = ((PFAddress | mAddressEncMask) & gPhyMask & ~((1ull << EndBit) - 1)) |
                          PageAttribute | IA32_PG_A | PAGE_ATTRIBUTE_BITS;
     if (UpperEntry != NULL) {
       SetSubEntriesNum (UpperEntry, GetSubEntriesNum (UpperEntry) + 1);
@@ -799,8 +801,8 @@ SmiDefaultPFHandler (
 VOID
 EFIAPI
 SmiPFHandler (
-    IN EFI_EXCEPTION_TYPE   InterruptType,
-    IN EFI_SYSTEM_CONTEXT   SystemContext
+  IN EFI_EXCEPTION_TYPE   InterruptType,
+  IN EFI_SYSTEM_CONTEXT   SystemContext
   )
 {
   UINTN             PFAddress;
@@ -814,6 +816,7 @@ SmiPFHandler (
   PFAddress = AsmReadCr2 ();
 
   if (mCpuSmmStaticPageTable && (PFAddress >= LShiftU64 (1, (mPhysicalAddressBits - 1)))) {
+    DumpCpuContext (InterruptType, SystemContext);
     DEBUG ((DEBUG_ERROR, "Do not support address 0x%lx by processor!\n", PFAddress));
     CpuDeadLoop ();
   }
@@ -824,6 +827,7 @@ SmiPFHandler (
   //
   if ((PFAddress >= mCpuHotPlugData.SmrrBase) &&
       (PFAddress < (mCpuHotPlugData.SmrrBase + mCpuHotPlugData.SmrrSize))) {
+    DumpCpuContext (InterruptType, SystemContext);
     CpuIndex = GetCpuIndex ();
     GuardPageAddress = (mSmmStackArrayBase + EFI_PAGE_SIZE + CpuIndex * mSmmStackSize);
     if ((FeaturePcdGet (PcdCpuSmmStackGuard)) &&
@@ -831,15 +835,6 @@ SmiPFHandler (
         (PFAddress < (GuardPageAddress + EFI_PAGE_SIZE))) {
       DEBUG ((DEBUG_ERROR, "SMM stack overflow!\n"));
     } else {
-      DEBUG ((DEBUG_ERROR, "SMM exception data - 0x%lx(", SystemContext.SystemContextX64->ExceptionData));
-      DEBUG ((DEBUG_ERROR, "I:%x, R:%x, U:%x, W:%x, P:%x",
-        (SystemContext.SystemContextX64->ExceptionData & IA32_PF_EC_ID) != 0,
-        (SystemContext.SystemContextX64->ExceptionData & IA32_PF_EC_RSVD) != 0,
-        (SystemContext.SystemContextX64->ExceptionData & IA32_PF_EC_US) != 0,
-        (SystemContext.SystemContextX64->ExceptionData & IA32_PF_EC_WR) != 0,
-        (SystemContext.SystemContextX64->ExceptionData & IA32_PF_EC_P) != 0
-        ));
-      DEBUG ((DEBUG_ERROR, ")\n"));
       if ((SystemContext.SystemContextX64->ExceptionData & IA32_PF_EC_ID) != 0) {
         DEBUG ((DEBUG_ERROR, "SMM exception at execution (0x%lx)\n", PFAddress));
         DEBUG_CODE (
@@ -860,10 +855,18 @@ SmiPFHandler (
   //
   if ((PFAddress < mCpuHotPlugData.SmrrBase) ||
       (PFAddress >= mCpuHotPlugData.SmrrBase + mCpuHotPlugData.SmrrSize)) {
+    DumpCpuContext (InterruptType, SystemContext);
     if ((SystemContext.SystemContextX64->ExceptionData & IA32_PF_EC_ID) != 0) {
       DEBUG ((DEBUG_ERROR, "Code executed on IP(0x%lx) out of SMM range after SMM is locked!\n", PFAddress));
       DEBUG_CODE (
         DumpModuleInfoByIp (*(UINTN *)(UINTN)SystemContext.SystemContextX64->Rsp);
+      );
+      CpuDeadLoop ();
+    }
+    if (IsSmmCommBufferForbiddenAddress (PFAddress)) {
+      DEBUG ((DEBUG_ERROR, "Access SMM communication forbidden address (0x%lx)!\n", PFAddress));
+      DEBUG_CODE (
+        DumpModuleInfoByIp ((UINTN)SystemContext.SystemContextX64->Rip);
       );
       CpuDeadLoop ();
     }
@@ -920,7 +923,7 @@ SetPageTableAttributes (
     PageTableSplitted = (PageTableSplitted || IsSplitted);
 
     for (Index4 = 0; Index4 < SIZE_4KB/sizeof(UINT64); Index4++) {
-      L3PageTable = (UINT64 *)(UINTN)(L4PageTable[Index4] & PAGING_4K_ADDRESS_MASK_64);
+      L3PageTable = (UINT64 *)(UINTN)(L4PageTable[Index4] & ~mAddressEncMask & PAGING_4K_ADDRESS_MASK_64);
       if (L3PageTable == NULL) {
         continue;
       }
@@ -933,7 +936,7 @@ SetPageTableAttributes (
           // 1G
           continue;
         }
-        L2PageTable = (UINT64 *)(UINTN)(L3PageTable[Index3] & PAGING_4K_ADDRESS_MASK_64);
+        L2PageTable = (UINT64 *)(UINTN)(L3PageTable[Index3] & ~mAddressEncMask & PAGING_4K_ADDRESS_MASK_64);
         if (L2PageTable == NULL) {
           continue;
         }
@@ -946,7 +949,7 @@ SetPageTableAttributes (
             // 2M
             continue;
           }
-          L1PageTable = (UINT64 *)(UINTN)(L2PageTable[Index2] & PAGING_4K_ADDRESS_MASK_64);
+          L1PageTable = (UINT64 *)(UINTN)(L2PageTable[Index2] & ~mAddressEncMask & PAGING_4K_ADDRESS_MASK_64);
           if (L1PageTable == NULL) {
             continue;
           }

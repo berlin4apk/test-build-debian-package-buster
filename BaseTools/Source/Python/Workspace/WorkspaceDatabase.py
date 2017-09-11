@@ -1,7 +1,7 @@
 ## @file
 # This file is used to create a database used by build tool
 #
-# Copyright (c) 2008 - 2016, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2008 - 2017, Intel Corporation. All rights reserved.<BR>
 # (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
@@ -237,7 +237,7 @@ class DscBuildData(PlatformBuildClassObject):
                         EdkLogger.error('build', FORMAT_INVALID, 'Missing double quotes in the end of %s statement.' % TAB_DSC_PREBUILD,
                                     File=self.MetaFile, Line=Record[-1])
                     PrebuildValue = Record[2][1:-1]
-                self._Prebuild = PathClass(NormPath(PrebuildValue, self._Macros), GlobalData.gWorkspace)
+                self._Prebuild = PrebuildValue
             elif Name == TAB_DSC_POSTBUILD:
                 PostbuildValue = Record[2]
                 if Record[2][0] == '"':
@@ -245,7 +245,7 @@ class DscBuildData(PlatformBuildClassObject):
                         EdkLogger.error('build', FORMAT_INVALID, 'Missing double quotes in the end of %s statement.' % TAB_DSC_POSTBUILD,
                                     File=self.MetaFile, Line=Record[-1])
                     PostbuildValue = Record[2][1:-1]
-                self._Postbuild = PathClass(NormPath(PostbuildValue, self._Macros), GlobalData.gWorkspace)
+                self._Postbuild = PostbuildValue
             elif Name == TAB_DSC_DEFINES_SUPPORTED_ARCHITECTURES:
                 self._SupArchList = GetSplitValueList(Record[2], TAB_VALUE_SPLIT)
             elif Name == TAB_DSC_DEFINES_BUILD_TARGETS:
@@ -1894,6 +1894,7 @@ class InfBuildData(ModuleBuildClassObject):
                 if self._Defs == None:
                     self._Defs = sdict()
                 self._Defs[Name] = Value
+                self._Macros[Name] = Value
             # some special items in [Defines] section need special treatment
             elif Name in ('EFI_SPECIFICATION_VERSION', 'UEFI_SPECIFICATION_VERSION', 'EDK_RELEASE_VERSION', 'PI_SPECIFICATION_VERSION'):
                 if Name in ('EFI_SPECIFICATION_VERSION', 'UEFI_SPECIFICATION_VERSION'):
@@ -1954,6 +1955,7 @@ class InfBuildData(ModuleBuildClassObject):
                 if self._Defs == None:
                     self._Defs = sdict()
                 self._Defs[Name] = Value
+                self._Macros[Name] = Value
 
         #
         # Retrieve information in sections specific to Edk.x modules
@@ -1975,6 +1977,11 @@ class InfBuildData(ModuleBuildClassObject):
             if (self._Specification == None) or (not 'PI_SPECIFICATION_VERSION' in self._Specification) or (int(self._Specification['PI_SPECIFICATION_VERSION'], 16) < 0x0001000A):
                 if self._ModuleType == SUP_MODULE_SMM_CORE:
                     EdkLogger.error("build", FORMAT_NOT_SUPPORTED, "SMM_CORE module type can't be used in the module with PI_SPECIFICATION_VERSION less than 0x0001000A", File=self.MetaFile)
+            if (self._Specification == None) or (not 'PI_SPECIFICATION_VERSION' in self._Specification) or (int(self._Specification['PI_SPECIFICATION_VERSION'], 16) < 0x00010032):
+                if self._ModuleType == SUP_MODULE_MM_CORE_STANDALONE:
+                    EdkLogger.error("build", FORMAT_NOT_SUPPORTED, "MM_CORE_STANDALONE module type can't be used in the module with PI_SPECIFICATION_VERSION less than 0x00010032", File=self.MetaFile)
+                if self._ModuleType == SUP_MODULE_MM_STANDALONE:
+                    EdkLogger.error("build", FORMAT_NOT_SUPPORTED, "MM_STANDALONE module type can't be used in the module with PI_SPECIFICATION_VERSION less than 0x00010032", File=self.MetaFile)
             if self._Defs and 'PCI_DEVICE_ID' in self._Defs and 'PCI_VENDOR_ID' in self._Defs \
                and 'PCI_CLASS_CODE' in self._Defs and 'PCI_REVISION' in self._Defs:
                 self._BuildType = 'UEFI_OPTIONROM'
@@ -3102,7 +3109,7 @@ determine whether database file is out of date!\n")
     def GetPackageList(self, Platform, Arch, TargetName, ToolChainTag):
         self.Platform = Platform
         PackageList = []
-        Pa = self.BuildObject[self.Platform, 'COMMON']
+        Pa = self.BuildObject[self.Platform, Arch]
         #
         # Get Package related to Modules
         #

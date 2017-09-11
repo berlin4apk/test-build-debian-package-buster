@@ -1,6 +1,6 @@
 /** @file
 
-Copyright (c) 2004 - 2008, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2017, Intel Corporation. All rights reserved.<BR>
 Copyright (c) 2014, ARM Ltd. All rights reserved.<BR>
 
 This program and the accompanying materials
@@ -31,24 +31,6 @@ PlatformIntelBdsConstructor (
   return EFI_SUCCESS;
 }
 
-/**
-  An empty function to pass error checking of CreateEventEx ().
-
-  @param  Event                 Event whose notification function is being invoked.
-  @param  Context               Pointer to the notification function's context,
-                                which is implementation-dependent.
-
-**/
-STATIC
-VOID
-EFIAPI
-EmptyCallbackFunction (
-  IN EFI_EVENT                Event,
-  IN VOID                     *Context
-  )
-{
-}
-
 //
 // BDS Platform Functions
 //
@@ -63,24 +45,10 @@ PlatformBdsInit (
   VOID
   )
 {
-  EFI_EVENT           EndOfDxeEvent;
-  EFI_STATUS          Status;
-
   //
   // Signal EndOfDxe PI Event
   //
-  Status = gBS->CreateEventEx (
-                  EVT_NOTIFY_SIGNAL,
-                  TPL_CALLBACK,
-                  EmptyCallbackFunction,
-                  NULL,
-                  &gEfiEndOfDxeEventGroupGuid,
-                  &EndOfDxeEvent
-                  );
-  if (!EFI_ERROR (Status)) {
-    gBS->SignalEvent (EndOfDxeEvent);
-    gBS->CloseEvent (EndOfDxeEvent);
-  }
+  EfiEventGroupSignal (&gEfiEndOfDxeEventGroupGuid);
 }
 
 STATIC
@@ -180,12 +148,23 @@ InitializeConsolePipe (
 
     Status = BdsLibConnectDevicePath (DevicePath);
     if (!EFI_ERROR (Status)) {
+
       //
-      // If BdsLibConnectDevicePath () succeeded, *Handle must have a non-NULL
-      // value. So ASSERT that this is the case.
+      // We connect all supplied console device paths, but only return the first
+      // one that connects successfully via *Handle/*Interface. Note that this
+      // may imply that *Handle/*Interface are not updated at all if they have
+      // been connected already, e.g., by the console splitter driver.
       //
-      gBS->LocateDevicePath (&gEfiDevicePathProtocolGuid, &DevicePath, Handle);
-      ASSERT (*Handle != NULL);
+      if (*Interface == NULL) {
+        //
+        // If BdsLibConnectDevicePath () succeeded, *Handle must have a non-NULL
+        // value. So ASSERT that this is the case.
+        //
+        gBS->LocateDevicePath (&gEfiDevicePathProtocolGuid, &DevicePath, Handle);
+        ASSERT (*Handle != NULL);
+
+        gBS->HandleProtocol (*Handle, Protocol, Interface);
+      }
     }
     DEBUG_CODE_BEGIN();
       if (EFI_ERROR(Status)) {
@@ -204,12 +183,6 @@ InitializeConsolePipe (
         }
       }
     DEBUG_CODE_END();
-
-    // If the console splitter driver is not supported by the platform then use the first Device Path
-    // instance for the console interface.
-    if (!EFI_ERROR(Status) && (*Interface == NULL)) {
-      Status = gBS->HandleProtocol (*Handle, Protocol, Interface);
-    }
   }
 
   // No Device Path has been defined for this console interface. We take the first protocol implementation

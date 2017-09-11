@@ -1,6 +1,6 @@
 #------------------------------------------------------------------------------
 #
-# Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2009 - 2017, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -28,6 +28,7 @@ ASM_GLOBAL  ASM_PFX(mXdSupported)
 ASM_GLOBAL  ASM_PFX(FeaturePcdGet (PcdCpuSmmStackGuard))
 ASM_GLOBAL  ASM_PFX(gSmiHandlerIdtr)
 
+.equ            MSR_IA32_MISC_ENABLE, 0x1A0
 .equ            MSR_EFER, 0xc0000080
 .equ            MSR_EFER_XD, 0x800
 
@@ -158,6 +159,7 @@ L13:
     rdmsr
     orw     $MSR_EFER_XD,%ax               # enable NXE
     wrmsr
+    jmp     NxeDone
 SkipNxe:
     subl    $4, %esp
 NxeDone:

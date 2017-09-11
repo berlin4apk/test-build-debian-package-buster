@@ -32,6 +32,7 @@
 #include <Library/PeimEntryPoint.h>
 #include <Library/PeiServicesLib.h>
 #include <Library/QemuFwCfgLib.h>
+#include <Library/QemuFwCfgS3Lib.h>
 #include <Library/ResourcePublicationLib.h>
 #include <Guid/MemoryTypeInformation.h>
 #include <Ppi/MasterBootMode.h>
@@ -512,9 +513,8 @@ ReserveEmuVariableNvStore (
   //
   VariableStore =
     (EFI_PHYSICAL_ADDRESS)(UINTN)
-      AllocateAlignedRuntimePages (
-        EFI_SIZE_TO_PAGES (2 * PcdGet32 (PcdFlashNvStorageFtwSpareSize)),
-        PcdGet32 (PcdFlashNvStorageFtwSpareSize)
+      AllocateRuntimePages (
+        EFI_SIZE_TO_PAGES (2 * PcdGet32 (PcdFlashNvStorageFtwSpareSize))
         );
   DEBUG ((EFI_D_INFO,
           "Reserved variable store memory: 0x%lX; size: %dkb\n",
@@ -627,7 +627,7 @@ InitializePlatform (
 {
   EFI_STATUS    Status;
 
-  DEBUG ((EFI_D_ERROR, "Platform PEIM Loaded\n"));
+  DEBUG ((DEBUG_INFO, "Platform PEIM Loaded\n"));
 
   DebugDumpCmos ();
 
@@ -645,6 +645,15 @@ InitializePlatform (
   AddressWidthInitialization ();
   MaxCpuCountInitialization ();
 
+  //
+  // Query Host Bridge DID
+  //
+  mHostBridgeDevId = PciRead16 (OVMF_HOSTBRIDGE_DID);
+
+  if (FeaturePcdGet (PcdSmmSmramRequire)) {
+    Q35TsegMbytesInitialization ();
+  }
+
   PublishPeiMemory ();
 
   InitializeRamRegions ();
@@ -654,18 +663,16 @@ InitializePlatform (
     InitializeXen ();
   }
 
-  //
-  // Query Host Bridge DID
-  //
-  mHostBridgeDevId = PciRead16 (OVMF_HOSTBRIDGE_DID);
-
   if (mBootMode != BOOT_ON_S3_RESUME) {
-    ReserveEmuVariableNvStore ();
+    if (!FeaturePcdGet (PcdSmmSmramRequire)) {
+      ReserveEmuVariableNvStore ();
+    }
     PeiFvInitialization ();
     MemMapInitialization ();
     NoexecDxeInitialization ();
   }
 
+  AmdSevInitialize ();
   MiscInitialization ();
   InstallFeatureControlCallback ();
 

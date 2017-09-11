@@ -1,4 +1,5 @@
-/*++
+/** @file
+  Initialization routines.
 
 Copyright (c) 2005 - 2013, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials are licensed and made available
@@ -9,19 +10,25 @@ http://opensource.org/licenses/bsd-license.php
 THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
 WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
-
-Module Name:
-
-  Init.c
-
-Abstract:
-
-  Initialization routines
-
---*/
+**/
 
 #include "Fat.h"
 
+/**
+
+  Allocates volume structure, detects FAT file system, installs protocol,
+  and initialize cache.
+
+  @param  Handle                - The handle of parent device.
+  @param  DiskIo                - The DiskIo of parent device.
+  @param  DiskIo2               - The DiskIo2 of parent device.
+  @param  BlockIo               - The BlockIo of parent devicel
+
+  @retval EFI_SUCCESS           - Allocate a new volume successfully.
+  @retval EFI_OUT_OF_RESOURCES  - Can not allocate the memory.
+  @return Others                - Allocating a new volume failed.
+
+**/
 EFI_STATUS
 FatAllocateVolume (
   IN  EFI_HANDLE                Handle,
@@ -29,26 +36,6 @@ FatAllocateVolume (
   IN  EFI_DISK_IO2_PROTOCOL     *DiskIo2,
   IN  EFI_BLOCK_IO_PROTOCOL     *BlockIo
   )
-/*++
-
-Routine Description:
-
-  Allocates volume structure, detects FAT file system, installs protocol,
-  and initialize cache.
-
-Arguments:
-
-  Handle                - The handle of parent device.
-  DiskIo                - The DiskIo of parent device.
-  BlockIo               - The BlockIo of parent devicel
-
-Returns:
-
-  EFI_SUCCESS           - Allocate a new volume successfully.
-  EFI_OUT_OF_RESOURCES  - Can not allocate the memory.
-  Others                - Allocating a new volume failed.
-
---*/
 {
   EFI_STATUS  Status;
   FAT_VOLUME  *Volume;
@@ -120,26 +107,20 @@ Done:
   return Status;
 }
 
+/**
+
+  Called by FatDriverBindingStop(), Abandon the volume.
+
+  @param  Volume                - The volume to be abandoned.
+
+  @retval EFI_SUCCESS           - Abandoned the volume successfully.
+  @return Others                - Can not uninstall the protocol interfaces.
+
+**/
 EFI_STATUS
 FatAbandonVolume (
   IN FAT_VOLUME *Volume
   )
-/*++
-
-Routine Description:
-
-  Called by FatDriverBindingStop(), Abandon the volume.
-
-Arguments:
-
-  Volume                - The volume to be abandoned.
-
-Returns:
-
-  EFI_SUCCESS           - Abandoned the volume successfully.
-  Others                - Can not uninstall the protocol interfaces.
-
---*/
 {
   EFI_STATUS  Status;
   BOOLEAN     LockedByMe;
@@ -202,27 +183,21 @@ Returns:
   return EFI_SUCCESS;
 }
 
+/**
+
+  Detects FAT file system on Disk and set relevant fields of Volume.
+
+  @param Volume                - The volume structure.
+
+  @retval EFI_SUCCESS           - The Fat File System is detected successfully
+  @retval EFI_UNSUPPORTED       - The volume is not FAT file system.
+  @retval EFI_VOLUME_CORRUPTED  - The volume is corrupted.
+
+**/
 EFI_STATUS
 FatOpenDevice (
   IN OUT FAT_VOLUME           *Volume
   )
-/*++
-
-Routine Description:
-
-  Detects FAT file system on Disk and set relevant fields of Volume
-
-Arguments:
-
-  Volume                - The volume structure.
-
-Returns:
-
-  EFI_SUCCESS           - The Fat File System is detected successfully
-  EFI_UNSUPPORTED       - The volume is not FAT file system.
-  EFI_VOLUME_CORRUPTED  - The volume is corrupted.
-
---*/
 {
   EFI_STATUS            Status;
   UINT32                BlockSize;
@@ -265,7 +240,7 @@ Returns:
   SectorsPerFat = FatBs.FatBsb.SectorsPerFat;
   if (SectorsPerFat == 0) {
     SectorsPerFat = FatBs.FatBse.Fat32Bse.LargeSectorsPerFat;
-    FatType       = FAT32;
+    FatType       = Fat32;
   }
   //
   // Is boot sector a fat sector?
@@ -305,7 +280,7 @@ Returns:
   //
   // Initialize fields the volume information for this FatType
   //
-  if (FatType != FAT32) {
+  if (FatType != Fat32) {
     if (FatBs.FatBsb.RootEntries == 0) {
       return EFI_UNSUPPORTED;
     }
@@ -350,12 +325,12 @@ Returns:
   //
   // If this is not a fat32, determine if it's a fat16 or fat12
   //
-  if (FatType != FAT32) {
+  if (FatType != Fat32) {
     if (Volume->MaxCluster >= FAT_MAX_FAT16_CLUSTER) {
       return EFI_VOLUME_CORRUPTED;
     }
 
-    FatType = Volume->MaxCluster < FAT_MAX_FAT12_CLUSTER ? FAT12 : FAT16;
+    FatType = Volume->MaxCluster < FAT_MAX_FAT12_CLUSTER ? Fat12 : Fat16;
     //
     // fat12 & fat16 fat-entries are 2 bytes
     //
@@ -376,8 +351,8 @@ Returns:
   // We should keep the initial value as the NotDirtyValue
   // in case the volume is dirty already
   //
-  if (FatType != FAT12) {
-    Status = FatAccessVolumeDirty (Volume, READ_DISK, &Volume->NotDirtyValue);
+  if (FatType != Fat12) {
+    Status = FatAccessVolumeDirty (Volume, ReadDisk, &Volume->NotDirtyValue);
     if (EFI_ERROR (Status)) {
       return Status;
     }
@@ -387,10 +362,10 @@ Returns:
   //
   // If present, read the fat hint info
   //
-  if (FatType == FAT32) {
+  if (FatType == Fat32) {
     Volume->FreeInfoPos = FatBs.FatBse.Fat32Bse.FsInfoSector * BlockSize;
     if (FatBs.FatBse.Fat32Bse.FsInfoSector != 0) {
-      FatDiskIo (Volume, READ_DISK, Volume->FreeInfoPos, sizeof (FAT_INFO_SECTOR), &Volume->FatInfoSector, NULL);
+      FatDiskIo (Volume, ReadDisk, Volume->FreeInfoPos, sizeof (FAT_INFO_SECTOR), &Volume->FatInfoSector, NULL);
       if (Volume->FatInfoSector.Signature == FAT_INFO_SIGNATURE &&
           Volume->FatInfoSector.InfoBeginSignature == FAT_INFO_BEGIN_SIGNATURE &&
           Volume->FatInfoSector.InfoEndSignature == FAT_INFO_END_SIGNATURE &&

@@ -2,7 +2,7 @@
   The internal header file includes the common header files, defines
   internal structure and functions used by DxeCore module.
 
-Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -123,31 +123,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 ///
 #define DEPEX_STACK_SIZE_INCREMENT  0x1000
 
-#if defined (MDE_CPU_IPF)
-///
-/// For Itanium machines make the default allocations 8K aligned
-///
-#define EFI_ACPI_RUNTIME_PAGE_ALLOCATION_ALIGNMENT  (EFI_PAGE_SIZE * 2)
-#define DEFAULT_PAGE_ALLOCATION                     (EFI_PAGE_SIZE * 2)
-
-#elif defined (MDE_CPU_AARCH64)
-///
-/// 64-bit ARM systems allow the OS to execute with 64 KB page size,
-/// so for improved interoperability with the firmware, align the
-/// runtime regions to 64 KB as well
-///
-#define EFI_ACPI_RUNTIME_PAGE_ALLOCATION_ALIGNMENT  (SIZE_64KB)
-#define DEFAULT_PAGE_ALLOCATION                     (EFI_PAGE_SIZE)
-
-#else
-///
-/// For generic EFI machines make the default allocations 4K aligned
-///
-#define EFI_ACPI_RUNTIME_PAGE_ALLOCATION_ALIGNMENT  (EFI_PAGE_SIZE)
-#define DEFAULT_PAGE_ALLOCATION                     (EFI_PAGE_SIZE)
-
-#endif
-
 typedef struct {
   EFI_GUID                    *ProtocolGuid;
   VOID                        **Protocol;
@@ -266,6 +241,26 @@ typedef struct {
 
 #define LOADED_IMAGE_PRIVATE_DATA_FROM_THIS(a) \
           CR(a, LOADED_IMAGE_PRIVATE_DATA, Info, LOADED_IMAGE_PRIVATE_DATA_SIGNATURE)
+
+#define IMAGE_PROPERTIES_RECORD_CODE_SECTION_SIGNATURE SIGNATURE_32 ('I','P','R','C')
+
+typedef struct {
+  UINT32                 Signature;
+  LIST_ENTRY             Link;
+  EFI_PHYSICAL_ADDRESS   CodeSegmentBase;
+  UINT64                 CodeSegmentSize;
+} IMAGE_PROPERTIES_RECORD_CODE_SECTION;
+
+#define IMAGE_PROPERTIES_RECORD_SIGNATURE SIGNATURE_32 ('I','P','R','D')
+
+typedef struct {
+  UINT32                 Signature;
+  LIST_ENTRY             Link;
+  EFI_PHYSICAL_ADDRESS   ImageBase;
+  UINT64                 ImageSize;
+  UINTN                  CodeSegmentCount;
+  LIST_ENTRY             CodeSegmentList;
+} IMAGE_PROPERTIES_RECORD;
 
 //
 // DXE Core Global Variables
@@ -2675,22 +2670,6 @@ CoreReleaseLock (
   IN EFI_LOCK  *Lock
   );
 
-
-/**
-  An empty function to pass error checking of CreateEventEx ().
-
-  @param  Event                 Event whose notification function is being invoked.
-  @param  Context               Pointer to the notification function's context,
-                                which is implementation-dependent.
-
-**/
-VOID
-EFIAPI
-CoreEmptyCallbackFunction (
-  IN EFI_EVENT                Event,
-  IN VOID                     *Context
-  );
-
 /**
   Read data from Firmware Block by FVB protocol Read. 
   The data may cross the multi block ranges.
@@ -2875,6 +2854,15 @@ CoreInitializeMemoryAttributesTable (
   );
 
 /**
+  Initialize Memory Protection support.
+**/
+VOID
+EFIAPI
+CoreInitializeMemoryProtection (
+  VOID
+  );
+
+/**
   Install MemoryAttributesTable on memory allocation.
 
   @param[in] MemoryType EFI memory type.
@@ -2902,6 +2890,62 @@ InsertImageRecord (
 VOID
 RemoveImageRecord (
   IN EFI_RUNTIME_IMAGE_ENTRY  *RuntimeImage
+  );
+
+/**
+  Protect UEFI image.
+
+  @param[in]  LoadedImage              The loaded image protocol
+  @param[in]  LoadedImageDevicePath    The loaded image device path protocol
+**/
+VOID
+ProtectUefiImage (
+  IN EFI_LOADED_IMAGE_PROTOCOL   *LoadedImage,
+  IN EFI_DEVICE_PATH_PROTOCOL    *LoadedImageDevicePath
+  );
+
+/**
+  Unprotect UEFI image.
+
+  @param[in]  LoadedImage              The loaded image protocol
+  @param[in]  LoadedImageDevicePath    The loaded image device path protocol
+**/
+VOID
+UnprotectUefiImage (
+  IN EFI_LOADED_IMAGE_PROTOCOL   *LoadedImage,
+  IN EFI_DEVICE_PATH_PROTOCOL    *LoadedImageDevicePath
+  );
+
+/**
+  ExitBootServices Callback function for memory protection.
+**/
+VOID
+MemoryProtectionExitBootServicesCallback (
+  VOID
+  );
+
+/**
+  Manage memory permission attributes on a memory range, according to the
+  configured DXE memory protection policy.
+
+  @param  OldType           The old memory type of the range
+  @param  NewType           The new memory type of the range
+  @param  Memory            The base address of the range
+  @param  Length            The size of the range (in bytes)
+
+  @return EFI_SUCCESS       If the the CPU arch protocol is not installed yet
+  @return EFI_SUCCESS       If no DXE memory protection policy has been configured
+  @return EFI_SUCCESS       If OldType and NewType use the same permission attributes
+  @return other             Return value of gCpu->SetMemoryAttributes()
+
+**/
+EFI_STATUS
+EFIAPI
+ApplyMemoryProtectionPolicy (
+  IN  EFI_MEMORY_TYPE       OldType,
+  IN  EFI_MEMORY_TYPE       NewType,
+  IN  EFI_PHYSICAL_ADDRESS  Memory,
+  IN  UINT64                Length
   );
 
 #endif

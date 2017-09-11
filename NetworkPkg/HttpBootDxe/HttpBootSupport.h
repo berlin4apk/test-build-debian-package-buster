@@ -1,7 +1,7 @@
 /** @file
   Support functions declaration for UEFI HTTP boot driver.
 
-Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2015 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials are licensed and made available under 
 the terms and conditions of the BSD License that accompanies this distribution.  
 The full text of the license may be found at
@@ -145,6 +145,32 @@ HttpBootSetHeader (
   IN  CHAR8                *FieldValue
   );
 
+///
+/// HTTP_IO_CALLBACK_EVENT
+///
+typedef enum {
+  HttpIoRequest,
+  HttpIoResponse
+} HTTP_IO_CALLBACK_EVENT;
+
+/**
+  HttpIo Callback function which will be invoked when specified HTTP_IO_CALLBACK_EVENT happened.
+
+  @param[in]    EventType      Indicate the Event type that occurs in the current callback.
+  @param[in]    Message        HTTP message which will be send to, or just received from HTTP server.
+  @param[in]    Context        The Callback Context pointer.
+  
+  @retval EFI_SUCCESS          Tells the HttpIo to continue the HTTP process.
+  @retval Others               Tells the HttpIo to abort the current HTTP process.
+**/
+typedef
+EFI_STATUS
+(EFIAPI * HTTP_IO_CALLBACK) (
+  IN  HTTP_IO_CALLBACK_EVENT    EventType,
+  IN  EFI_HTTP_MESSAGE          *Message,
+  IN  VOID                      *Context
+  );
+
 //
 // HTTP_IO configuration data for IPv4
 //
@@ -188,6 +214,9 @@ typedef struct {
   EFI_HANDLE                Handle;
   
   EFI_HTTP_PROTOCOL         *Http;
+
+  HTTP_IO_CALLBACK          Callback;
+  VOID                      *Context;
 
   EFI_HTTP_TOKEN            ReqToken;
   EFI_HTTP_MESSAGE          ReqMessage;
@@ -252,6 +281,9 @@ HttpBootCommonNotify (
   @param[in]  Controller     The handle of the controller.
   @param[in]  IpVersion      IP_VERSION_4 or IP_VERSION_6.
   @param[in]  ConfigData     The HTTP_IO configuration data.
+  @param[in]  Callback       Callback function which will be invoked when specified
+                             HTTP_IO_CALLBACK_EVENT happened.
+  @param[in]  Context        The Context data which will be passed to the Callback function.
   @param[out] HttpIo         The HTTP_IO.
   
   @retval EFI_SUCCESS            The HTTP_IO is created and configured.
@@ -268,6 +300,8 @@ HttpIoCreateIo (
   IN EFI_HANDLE             Controller,
   IN UINT8                  IpVersion,
   IN HTTP_IO_CONFIG_DATA    *ConfigData,
+  IN HTTP_IO_CALLBACK       Callback,
+  IN VOID                   *Context,
   OUT HTTP_IO               *HttpIo
   );
 
@@ -329,6 +363,21 @@ HttpIoRecvResponse (
   IN      HTTP_IO                  *HttpIo,
   IN      BOOLEAN                  RecvMsgHeader,
      OUT  HTTP_IO_RESPONSE_DATA    *ResponseData
+  );
+
+/**
+  This function checks the HTTP(S) URI scheme.
+
+  @param[in]    Uri              The pointer to the URI string.
+  
+  @retval EFI_SUCCESS            The URI scheme is valid.
+  @retval EFI_INVALID_PARAMETER  The URI scheme is not HTTP or HTTPS.
+  @retval EFI_ACCESS_DENIED      HTTP is disabled and the URI is HTTP.
+
+**/
+EFI_STATUS
+HttpBootCheckUriScheme (
+  IN      CHAR8                  *Uri
   );
 
 /**
@@ -395,5 +444,18 @@ HttpBootRegisterRamDisk (
   IN  UINTN                        BufferSize,
   IN  VOID                         *Buffer,
   IN  HTTP_BOOT_IMAGE_TYPE         ImageType
+  );
+
+/**
+  Indicate if the HTTP status code indicates a redirection.
+  
+  @param[in]  StatusCode      HTTP status code from server.
+
+  @return                     TRUE if it's redirection.
+
+**/
+BOOLEAN
+HttpBootIsHttpRedirectStatusCode (
+  IN   EFI_HTTP_STATUS_CODE        StatusCode
   );
 #endif

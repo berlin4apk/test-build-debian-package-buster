@@ -1,6 +1,6 @@
 /** @file
 
-  Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2015 - 2017, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -1032,7 +1032,7 @@ EmmcPeimCreateTrb (
     goto Error;
   }
 
-  if (Trb->DataLen < Trb->BlockSize) {
+  if ((Trb->DataLen != 0) && (Trb->DataLen < Trb->BlockSize)) {
     Trb->BlockSize = (UINT16)Trb->DataLen;
   }
 
@@ -2520,9 +2520,6 @@ EmmcPeimSwitchToHighSpeed (
 
   HsTiming = 1;
   Status = EmmcPeimSwitchClockFreq (Slot, Rca, HsTiming, ClockFreq);
-  if (EFI_ERROR (Status)) {
-    return Status;
-  }
 
   return Status;
 }
@@ -2830,6 +2827,7 @@ EmmcPeimIdentification (
   EFI_STATUS                     Status;
   UINT32                         Ocr;
   UINT32                         Rca;
+  UINTN                          Retry;
 
   Status = EmmcPeimReset (Slot);
   if (EFI_ERROR (Status)) {
@@ -2837,13 +2835,20 @@ EmmcPeimIdentification (
     return Status;
   }
 
-  Ocr = 0;
+  Ocr   = 0;
+  Retry = 0;
   do {
     Status = EmmcPeimGetOcr (Slot, &Ocr);
     if (EFI_ERROR (Status)) {
       DEBUG ((EFI_D_ERROR, "EmmcPeimIdentification: EmmcPeimGetOcr fails with %r\n", Status));
       return Status;
     }
+
+    if (Retry++ == 100) {
+      DEBUG ((EFI_D_ERROR, "EmmcPeimIdentification: EmmcPeimGetOcr fails too many times\n"));
+      return EFI_DEVICE_ERROR;
+    }
+    MicroSecondDelay (10 * 1000);
   } while ((Ocr & BIT31) == 0);
 
   Status = EmmcPeimGetAllCid (Slot);

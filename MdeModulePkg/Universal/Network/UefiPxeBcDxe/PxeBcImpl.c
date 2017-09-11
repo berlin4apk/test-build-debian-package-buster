@@ -1,7 +1,7 @@
 /** @file
   Interface routines for PxeBc.
 
-Copyright (c) 2007 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -338,6 +338,8 @@ EfiPxeBcStart (
     return EFI_UNSUPPORTED;
   }
 
+  AsciiPrint ("\n>>Start PXE over IPv4");
+
   //
   // Configure the udp4 instance to let it receive data
   //
@@ -353,8 +355,8 @@ EfiPxeBcStart (
   //
   // Configure block size for TFTP as a default value to handle all link layers.
   // 
-  Private->BlockSize   = (UINTN) (MIN (Private->Ip4MaxPacketSize, PXEBC_DEFAULT_PACKET_SIZE) - 
-                           PXEBC_DEFAULT_UDP_OVERHEAD_SIZE - PXEBC_DEFAULT_TFTP_OVERHEAD_SIZE);
+  Private->BlockSize   = MIN (Private->Ip4MaxPacketSize, PXEBC_DEFAULT_PACKET_SIZE) -
+                           PXEBC_DEFAULT_UDP_OVERHEAD_SIZE - PXEBC_DEFAULT_TFTP_OVERHEAD_SIZE;
   //
   // If PcdTftpBlockSize is set to non-zero, override the default value.
   //
@@ -666,6 +668,11 @@ EfiPxeBcDhcp (
   // finished, set the various Mode members.
   //
   Status = PxeBcCheckSelectedOffer (Private);
+
+  AsciiPrint ("\n  Station IP address is ");
+
+  PxeBcShowIp4Addr (&Private->StationIp.v4);
+  AsciiPrint ("\n");
 
 ON_EXIT:
   if (EFI_ERROR (Status)) {
@@ -2321,7 +2328,7 @@ EfiPxeBcSetStationIP (
   if (NewStationIp != NULL) {
     if (IP4_IS_UNSPECIFIED(NTOHL (NewStationIp->Addr[0])) || 
         IP4_IS_LOCAL_BROADCAST(NTOHL (NewStationIp->Addr[0])) ||
-        (NewSubnetMask != NULL && !NetIp4IsUnicast (NTOHL (NewStationIp->Addr[0]), NTOHL (NewSubnetMask->Addr[0])))) {
+        (NewSubnetMask != NULL && NewSubnetMask->Addr[0] != 0 && !NetIp4IsUnicast (NTOHL (NewStationIp->Addr[0]), NTOHL (NewSubnetMask->Addr[0])))) {
       return EFI_INVALID_PARAMETER;
     }
   }
@@ -2740,6 +2747,14 @@ DiscoverBootFile (
 
   Private->FileSize = (UINTN) *BufferSize;
 
+  //
+  // Display all the information: boot server address, boot file name and boot file size.
+  //
+  AsciiPrint ("\n  Server IP address is ");
+  PxeBcShowIp4Addr (&Private->ServerIp.v4);
+  AsciiPrint ("\n  NBP filename is %a", Private->BootFileName);
+  AsciiPrint ("\n  NBP filesize is %d Bytes", Private->FileSize);
+
   return Status;
 }
 
@@ -2855,6 +2870,7 @@ EfiPxeLoadFile (
     if (sizeof (UINTN) < sizeof (UINT64) && (TmpBufSize > 0xFFFFFFFF)) {
       Status = EFI_DEVICE_ERROR;
     } else if (TmpBufSize > 0 && *BufferSize >= (UINTN) TmpBufSize && Buffer != NULL) {
+      AsciiPrint ("\n Downloading NBP file...\n");
       *BufferSize = (UINTN) TmpBufSize;
       Status = PxeBc->Mtftp (
                         PxeBc,
@@ -2879,6 +2895,7 @@ EfiPxeLoadFile (
     //
     // Download the file.
     //
+    AsciiPrint ("\n Downloading NBP file...\n");
     TmpBufSize = (UINT64) (*BufferSize);
     Status = PxeBc->Mtftp (
                       PxeBc,
@@ -2913,6 +2930,7 @@ EfiPxeLoadFile (
   // Check download status
   //
   if (Status == EFI_SUCCESS) {
+    AsciiPrint ("\n  NBP file downloaded successfully.\n");
     //
     // The DHCP4 can have only one configured child instance so we need to stop
     // reset the DHCP4 child before we return. Otherwise the other programs which 

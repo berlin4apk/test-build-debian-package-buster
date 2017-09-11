@@ -1,7 +1,9 @@
 /** @file
 Agent Module to load other modules to deploy SMM Entry Vector for X86 CPU.
 
-Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2009 - 2017, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2017, AMD Incorporated. All rights reserved.<BR>
+
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -103,6 +105,8 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #define PAGING_2M_ADDRESS_MASK_64 0x000FFFFFFFE00000ull
 #define PAGING_1G_ADDRESS_MASK_64 0x000FFFFFC0000000ull
 
+#define SMRR_MAX_ADDRESS       BASE_4GB
+
 typedef enum {
   PageNone,
   Page4K,
@@ -183,7 +187,6 @@ extern EFI_SMM_CPU_PROTOCOL   mSmmCpu;
 /// The mode of the CPU at the time an SMI occurs
 ///
 extern UINT8  mSmmSaveStateRegisterLma;
-
 
 //
 // SMM CPU Protocol function prototypes.
@@ -414,6 +417,14 @@ extern UINTN                               mSemaphoreSize;
 extern SPIN_LOCK                           *mPFLock;
 extern SPIN_LOCK                           *mConfigSmmCodeAccessCheckLock;
 extern SPIN_LOCK                           *mMemoryMappedLock;
+extern EFI_SMRAM_DESCRIPTOR                *mSmmCpuSmramRanges;
+extern UINTN                               mSmmCpuSmramRangeCount;
+extern UINT8                               mPhysicalAddressBits;
+
+//
+// Copy of the PcdPteMemoryEncryptionAddressOrMask
+//
+extern UINT64  mAddressEncMask;
 
 /**
   Create 4G PageTable in SMRAM.
@@ -498,6 +509,14 @@ InitGdt (
   );
 
 /**
+  This function sets GDT/IDT buffer to be RO and XP.
+**/
+VOID
+PatchGdtIdtMap (
+  VOID
+  );
+
+/**
 
   Register the SMM Foundation entry point.
 
@@ -570,6 +589,66 @@ SmmBlockingStartupThisAp (
   );
 
 /**
+  This function sets the attributes for the memory region specified by BaseAddress and
+  Length from their current attributes to the attributes specified by Attributes.
+
+  @param[in]  BaseAddress      The physical address that is the start address of a memory region.
+  @param[in]  Length           The size in bytes of the memory region.
+  @param[in]  Attributes       The bit mask of attributes to set for the memory region.
+
+  @retval EFI_SUCCESS           The attributes were set for the memory region.
+  @retval EFI_ACCESS_DENIED     The attributes for the memory resource range specified by
+                                BaseAddress and Length cannot be modified.
+  @retval EFI_INVALID_PARAMETER Length is zero.
+                                Attributes specified an illegal combination of attributes that
+                                cannot be set together.
+  @retval EFI_OUT_OF_RESOURCES  There are not enough system resources to modify the attributes of
+                                the memory resource range.
+  @retval EFI_UNSUPPORTED       The processor does not support one or more bytes of the memory
+                                resource range specified by BaseAddress and Length.
+                                The bit mask of attributes is not support for the memory resource
+                                range specified by BaseAddress and Length.
+
+**/
+EFI_STATUS
+EFIAPI
+SmmSetMemoryAttributes (
+  IN  EFI_PHYSICAL_ADDRESS                       BaseAddress,
+  IN  UINT64                                     Length,
+  IN  UINT64                                     Attributes
+  );
+
+/**
+  This function clears the attributes for the memory region specified by BaseAddress and
+  Length from their current attributes to the attributes specified by Attributes.
+
+  @param[in]  BaseAddress      The physical address that is the start address of a memory region.
+  @param[in]  Length           The size in bytes of the memory region.
+  @param[in]  Attributes       The bit mask of attributes to clear for the memory region.
+
+  @retval EFI_SUCCESS           The attributes were cleared for the memory region.
+  @retval EFI_ACCESS_DENIED     The attributes for the memory resource range specified by
+                                BaseAddress and Length cannot be modified.
+  @retval EFI_INVALID_PARAMETER Length is zero.
+                                Attributes specified an illegal combination of attributes that
+                                cannot be set together.
+  @retval EFI_OUT_OF_RESOURCES  There are not enough system resources to modify the attributes of
+                                the memory resource range.
+  @retval EFI_UNSUPPORTED       The processor does not support one or more bytes of the memory
+                                resource range specified by BaseAddress and Length.
+                                The bit mask of attributes is not support for the memory resource
+                                range specified by BaseAddress and Length.
+
+**/
+EFI_STATUS
+EFIAPI
+SmmClearMemoryAttributes (
+  IN  EFI_PHYSICAL_ADDRESS                       BaseAddress,
+  IN  UINT64                                     Length,
+  IN  UINT64                                     Attributes
+  );
+
+/**
   Initialize MP synchronization data.
 
 **/
@@ -616,8 +695,8 @@ SmmRelocateBases (
 VOID
 EFIAPI
 SmiPFHandler (
-    IN EFI_EXCEPTION_TYPE   InterruptType,
-    IN EFI_SYSTEM_CONTEXT   SystemContext
+  IN EFI_EXCEPTION_TYPE   InterruptType,
+  IN EFI_SYSTEM_CONTEXT   SystemContext
   );
 
 /**
@@ -767,6 +846,35 @@ DumpModuleInfoByIp (
 **/
 VOID
 SetMemMapAttributes (
+  VOID
+  );
+
+/**
+  This function sets UEFI memory attribute according to UEFI memory map.
+**/
+VOID
+SetUefiMemMapAttributes (
+  VOID
+  );
+
+/**
+  Return if the Address is forbidden as SMM communication buffer.
+
+  @param[in] Address the address to be checked
+
+  @return TRUE  The address is forbidden as SMM communication buffer.
+  @return FALSE The address is allowed as SMM communication buffer.
+**/
+BOOLEAN
+IsSmmCommBufferForbiddenAddress (
+  IN UINT64  Address
+  );
+
+/**
+  This function caches the UEFI memory map information.
+**/
+VOID
+GetUefiMemoryMap (
   VOID
   );
 

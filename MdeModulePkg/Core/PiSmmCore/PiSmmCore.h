@@ -2,7 +2,7 @@
   The internal header file includes the common header files, defines
   internal structure and functions used by SmmCore module.
 
-  Copyright (c) 2009 - 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2017, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials are licensed and made available 
   under the terms and conditions of the BSD License which accompanies this 
   distribution.  The full text of the license may be found at        
@@ -37,6 +37,8 @@
 #include <Guid/EventGroup.h>
 #include <Guid/EventLegacyBios.h>
 #include <Guid/MemoryProfile.h>
+#include <Guid/LoadModuleAtFixedAddress.h>
+#include <Guid/SmiHandlerProfile.h>
 
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
@@ -67,6 +69,32 @@ typedef struct {
   EFI_HANDLE                    DispatchHandle;
   BOOLEAN                       UnRegister;
 } SMM_CORE_SMI_HANDLERS;
+
+//
+// SMM_HANDLER - used for each SMM handler
+//
+
+#define SMI_ENTRY_SIGNATURE  SIGNATURE_32('s','m','i','e')
+
+ typedef struct {
+  UINTN       Signature;
+  LIST_ENTRY  AllEntries;  // All entries
+
+  EFI_GUID    HandlerType; // Type of interrupt
+  LIST_ENTRY  SmiHandlers; // All handlers
+} SMI_ENTRY;
+
+#define SMI_HANDLER_SIGNATURE  SIGNATURE_32('s','m','i','h')
+
+ typedef struct {
+  UINTN                         Signature;
+  LIST_ENTRY                    Link;        // Link on SMI_ENTRY.SmiHandlers
+  EFI_SMM_HANDLER_ENTRY_POINT2  Handler;     // The smm handler's entry point
+  UINTN                         CallerAddr;  // The address of caller who register the SMI handler.
+  SMI_ENTRY                     *SmiEntry;
+  VOID                          *Context;    // for profile
+  UINTN                         ContextSize; // for profile
+} SMI_HANDLER;
 
 //
 // Structure for recording the state of an SMM Driver
@@ -312,7 +340,7 @@ SmmInternalAllocatePages (
   @param  NumberOfPages          The number of pages to free
 
   @retval EFI_NOT_FOUND          Could not find the entry that covers the range
-  @retval EFI_INVALID_PARAMETER  Address not aligned
+  @retval EFI_INVALID_PARAMETER  Address not aligned, Address is zero or NumberOfPages is zero.
   @return EFI_SUCCESS            Pages successfully freed.
 
 **/
@@ -330,7 +358,7 @@ SmmFreePages (
   @param  NumberOfPages          The number of pages to free
 
   @retval EFI_NOT_FOUND          Could not find the entry that covers the range
-  @retval EFI_INVALID_PARAMETER  Address not aligned
+  @retval EFI_INVALID_PARAMETER  Address not aligned, Address is zero or NumberOfPages is zero.
   @return EFI_SUCCESS            Pages successfully freed.
 
 **/
@@ -1063,11 +1091,71 @@ SmmCoreGetMemoryMap (
   OUT UINT32                    *DescriptorVersion
   );
 
-///
-/// For generic EFI machines make the default allocations 4K aligned
-///
-#define EFI_ACPI_RUNTIME_PAGE_ALLOCATION_ALIGNMENT  (EFI_PAGE_SIZE)
-#define DEFAULT_PAGE_ALLOCATION                     (EFI_PAGE_SIZE)
+/**
+  Initialize SmiHandler profile feature.
+**/
+VOID
+SmmCoreInitializeSmiHandlerProfile (
+  VOID
+  );
+
+/**
+  This function is called by SmmChildDispatcher module to report
+  a new SMI handler is registered, to SmmCore.
+
+  @param This            The protocol instance
+  @param HandlerGuid     The GUID to identify the type of the handler.
+                         For the SmmChildDispatch protocol, the HandlerGuid
+                         must be the GUID of SmmChildDispatch protocol.
+  @param Handler         The SMI handler.
+  @param CallerAddress   The address of the module who registers the SMI handler.
+  @param Context         The context of the SMI handler.
+                         For the SmmChildDispatch protocol, the Context
+                         must match the one defined for SmmChildDispatch protocol.
+  @param ContextSize     The size of the context in bytes.
+                         For the SmmChildDispatch protocol, the Context
+                         must match the one defined for SmmChildDispatch protocol.
+
+  @retval EFI_SUCCESS           The information is recorded.
+  @retval EFI_OUT_OF_RESOURCES  There is no enough resource to record the information.
+**/
+EFI_STATUS
+EFIAPI
+SmiHandlerProfileRegisterHandler (
+  IN SMI_HANDLER_PROFILE_PROTOCOL   *This,
+  IN EFI_GUID                       *HandlerGuid,
+  IN EFI_SMM_HANDLER_ENTRY_POINT2   Handler,
+  IN PHYSICAL_ADDRESS               CallerAddress,
+  IN VOID                           *Context, OPTIONAL
+  IN UINTN                          ContextSize OPTIONAL
+  );
+
+/**
+  This function is called by SmmChildDispatcher module to report
+  an existing SMI handler is unregistered, to SmmCore.
+
+  @param This            The protocol instance
+  @param HandlerGuid     The GUID to identify the type of the handler.
+                         For the SmmChildDispatch protocol, the HandlerGuid
+                         must be the GUID of SmmChildDispatch protocol.
+  @param Handler         The SMI handler.
+  @param Context         The context of the SMI handler.
+                         If it is NOT NULL, it will be used to check what is registered.
+  @param ContextSize     The size of the context in bytes.
+                         If Context is NOT NULL, it will be used to check what is registered.
+
+  @retval EFI_SUCCESS           The original record is removed.
+  @retval EFI_NOT_FOUND         There is no record for the HandlerGuid and handler.
+**/
+EFI_STATUS
+EFIAPI
+SmiHandlerProfileUnregisterHandler (
+  IN SMI_HANDLER_PROFILE_PROTOCOL   *This,
+  IN EFI_GUID                       *HandlerGuid,
+  IN EFI_SMM_HANDLER_ENTRY_POINT2   Handler,
+  IN VOID                           *Context, OPTIONAL
+  IN UINTN                          ContextSize OPTIONAL
+  );
 
 extern UINTN                    mFullSmramRangeCount;
 extern EFI_SMRAM_DESCRIPTOR     *mFullSmramRanges;
@@ -1108,16 +1196,39 @@ extern LIST_ENTRY  mSmmMemoryMap;
 //
 #define MAX_POOL_INDEX  (MAX_POOL_SHIFT - MIN_POOL_SHIFT + 1)
 
+#define POOL_HEAD_SIGNATURE   SIGNATURE_32('p','h','d','0')
+
 typedef struct {
-  UINTN        Size;
-  BOOLEAN      Available;
+  UINT32            Signature;
+  BOOLEAN           Available;
+  EFI_MEMORY_TYPE   Type;
+  UINTN             Size;
 } POOL_HEADER;
+
+#define POOL_TAIL_SIGNATURE   SIGNATURE_32('p','t','a','l')
+
+typedef struct {
+  UINT32            Signature;
+  UINT32            Reserved;
+  UINTN             Size;
+} POOL_TAIL;
+
+#define POOL_OVERHEAD (sizeof(POOL_HEADER) + sizeof(POOL_TAIL))
+
+#define HEAD_TO_TAIL(a)   \
+  ((POOL_TAIL *) (((CHAR8 *) (a)) + (a)->Size - sizeof(POOL_TAIL)));
 
 typedef struct {
   POOL_HEADER  Header;
   LIST_ENTRY   Link;
 } FREE_POOL_HEADER;
 
-extern LIST_ENTRY  mSmmPoolLists[MAX_POOL_INDEX];
+typedef enum {
+  SmmPoolTypeCode,
+  SmmPoolTypeData,
+  SmmPoolTypeMax,
+} SMM_POOL_TYPE;
+
+extern LIST_ENTRY  mSmmPoolLists[SmmPoolTypeMax][MAX_POOL_INDEX];
 
 #endif

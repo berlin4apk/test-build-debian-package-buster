@@ -2,7 +2,7 @@
   This library is used to share code between UEFI network stack modules.
   It provides the helper routines to parse the HTTP message byte stream.
 
-Copyright (c) 2015 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2015 - 2017, Intel Corporation. All rights reserved.<BR>
 (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
@@ -396,7 +396,7 @@ HttpParseUrl (
   FoundAt = FALSE;
   for (Char = Url; Char < Url + Length; Char++) {
     //
-    // Update state machine accoring to next char.
+    // Update state machine according to next char.
     //
     State = NetHttpParseUrlChar (*Char, State);
 
@@ -523,6 +523,7 @@ HttpUrlGetHostName (
              &ResultLength
              );
   if (EFI_ERROR (Status)) {
+    FreePool (Name);
     return Status;
   }
 
@@ -582,6 +583,7 @@ HttpUrlGetIp4 (
              &ResultLength
              );
   if (EFI_ERROR (Status)) {
+    FreePool (Ip4String);
     return Status;
   }
 
@@ -657,6 +659,7 @@ HttpUrlGetIp6 (
              &ResultLength
              );
   if (EFI_ERROR (Status)) {
+    FreePool (Ip6String);
     return Status;
   }
   
@@ -692,12 +695,17 @@ HttpUrlGetPort (
 {
   CHAR8         *PortString;
   EFI_STATUS    Status;
+  UINTN         Index;
+  UINTN         Data;
   UINT32        ResultLength;
   HTTP_URL_PARSER      *Parser;
 
   if (Url == NULL || UrlParser == NULL || Port == NULL) {
     return EFI_INVALID_PARAMETER;
   }
+
+  *Port = 0;
+  Index = 0;
 
   Parser = (HTTP_URL_PARSER*) UrlParser;
 
@@ -717,13 +725,31 @@ HttpUrlGetPort (
              &ResultLength
              );
   if (EFI_ERROR (Status)) {
-    return Status;
+    goto ON_EXIT;
   }
 
   PortString[ResultLength] = '\0';
-  *Port = (UINT16) AsciiStrDecimalToUintn (Url + Parser->FieldData[HTTP_URI_FIELD_PORT].Offset);
 
-  return  EFI_SUCCESS;
+  while (Index < ResultLength) {
+    if (!NET_IS_DIGIT (PortString[Index])) {
+      Status = EFI_INVALID_PARAMETER;
+      goto ON_EXIT;
+    }
+    Index ++;
+  }
+
+  Status =  AsciiStrDecimalToUintnS (Url + Parser->FieldData[HTTP_URI_FIELD_PORT].Offset, (CHAR8 **) NULL, &Data);
+
+  if (Data > HTTP_URI_PORT_MAX_NUM) {
+    Status = EFI_INVALID_PARAMETER;
+    goto ON_EXIT;
+  }
+
+  *Port = (UINT16) Data;
+
+ON_EXIT:
+  FreePool (PortString);
+  return Status;
 }
 
 /**
@@ -777,6 +803,7 @@ HttpUrlGetPath (
              &ResultLength
              );
   if (EFI_ERROR (Status)) {
+    FreePool (PathStr);
     return Status;
   }
 
@@ -932,8 +959,7 @@ HttpIoParseContentLengthHeader (
     return EFI_NOT_FOUND;
   }
 
-  *ContentLength = AsciiStrDecimalToUintn (Header->FieldValue);
-  return EFI_SUCCESS;
+  return AsciiStrDecimalToUintnS (Header->FieldValue, (CHAR8 **) NULL, ContentLength);
 }
 
 /**
@@ -1904,7 +1930,7 @@ HttpMappingToStatusCode (
   case 206:
     return HTTP_STATUS_206_PARTIAL_CONTENT;
   case 300:
-    return HTTP_STATUS_300_MULTIPLE_CHIOCES;
+    return HTTP_STATUS_300_MULTIPLE_CHOICES;
   case 301:
     return HTTP_STATUS_301_MOVED_PERMANENTLY;
   case 302:
@@ -1917,6 +1943,8 @@ HttpMappingToStatusCode (
     return HTTP_STATUS_305_USE_PROXY;
   case 307:
     return HTTP_STATUS_307_TEMPORARY_REDIRECT;
+  case 308:
+    return HTTP_STATUS_308_PERMANENT_REDIRECT;
   case 400:
     return HTTP_STATUS_400_BAD_REQUEST;
   case 401:

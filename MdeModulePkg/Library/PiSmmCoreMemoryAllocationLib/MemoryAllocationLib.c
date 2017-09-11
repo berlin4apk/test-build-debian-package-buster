@@ -11,7 +11,7 @@
   In addition, allocation for the Reserved memory types are not supported and will 
   always return NULL.
 
-  Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials                          
   are licensed and made available under the terms and conditions of the BSD License         
   which accompanies this distribution.  The full text of the license may be found at        
@@ -293,7 +293,7 @@ InternalAllocateAlignedPages (
       Status = SmmFreePages (Memory, UnalignedPages);
       ASSERT_EFI_ERROR (Status);
     }
-    Memory         = (EFI_PHYSICAL_ADDRESS) (AlignedMemory + EFI_PAGES_TO_SIZE (Pages));
+    Memory         = AlignedMemory + EFI_PAGES_TO_SIZE (Pages);
     UnalignedPages = RealPages - Pages - UnalignedPages;
     if (UnalignedPages > 0) {
       //
@@ -1068,20 +1068,44 @@ PiSmmCoreMemoryAllocationLibConstructor (
   IN EFI_SYSTEM_TABLE  *SystemTable
   )
 {
+  EFI_STATUS             Status;
   SMM_CORE_PRIVATE_DATA  *SmmCorePrivate;
   UINTN                  Size;
+  VOID                   *BootServicesData;
 
   SmmCorePrivate = (SMM_CORE_PRIVATE_DATA *)ImageHandle;
+
+  //
+  // The FreePool()/FreePages() will need use SmramRanges data to know whether
+  // the buffer to free is in SMRAM range or not. And there may be FreePool()/
+  // FreePages() indrectly during calling SmmInitializeMemoryServices(), but
+  // no SMRAM could be allocated before calling SmmInitializeMemoryServices(),
+  // so temporarily use BootServicesData to hold the SmramRanges data.
+  //
+  mSmmCoreMemoryAllocLibSmramRangeCount = SmmCorePrivate->SmramRangeCount;
+  Size = mSmmCoreMemoryAllocLibSmramRangeCount * sizeof (EFI_SMRAM_DESCRIPTOR);
+  Status = gBS->AllocatePool (EfiBootServicesData, Size, (VOID **) &mSmmCoreMemoryAllocLibSmramRanges);
+  ASSERT_EFI_ERROR (Status);
+  ASSERT (mSmmCoreMemoryAllocLibSmramRanges != NULL);
+  CopyMem (mSmmCoreMemoryAllocLibSmramRanges, SmmCorePrivate->SmramRanges, Size);
+
   //
   // Initialize memory service using free SMRAM
   //
   SmmInitializeMemoryServices (SmmCorePrivate->SmramRangeCount, SmmCorePrivate->SmramRanges);
 
-  mSmmCoreMemoryAllocLibSmramRangeCount = SmmCorePrivate->SmramRangeCount;
-  Size = mSmmCoreMemoryAllocLibSmramRangeCount * sizeof (EFI_SMRAM_DESCRIPTOR);
-  mSmmCoreMemoryAllocLibSmramRanges = (EFI_SMRAM_DESCRIPTOR *) AllocatePool (Size);
+  //
+  // Move the SmramRanges data from BootServicesData to SMRAM.
+  //
+  BootServicesData = mSmmCoreMemoryAllocLibSmramRanges;
+  mSmmCoreMemoryAllocLibSmramRanges = (EFI_SMRAM_DESCRIPTOR *) AllocateCopyPool (Size, (VOID *) BootServicesData);
   ASSERT (mSmmCoreMemoryAllocLibSmramRanges != NULL);
-  CopyMem (mSmmCoreMemoryAllocLibSmramRanges, SmmCorePrivate->SmramRanges, Size);
+
+  //
+  // Free the temporarily used BootServicesData.
+  //
+  Status = gBS->FreePool (BootServicesData);
+  ASSERT_EFI_ERROR (Status);
 
   return EFI_SUCCESS;
 }

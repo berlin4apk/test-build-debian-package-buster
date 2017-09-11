@@ -1,7 +1,7 @@
 /** @file
   CPU DXE Module to produce CPU MP Protocol.
 
-  Copyright (c) 2008 - 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2008 - 2017, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -322,7 +322,7 @@ StartupAllAPs (
                                       EFI_EVENT is defined in CreateEvent() in
                                       the Unified Extensible Firmware Interface
                                       Specification.
-  @param[in]  TimeoutInMicrosecsond   Indicates the time limit in microseconds for
+  @param[in]  TimeoutInMicroseconds   Indicates the time limit in microseconds for
                                       this AP to finish this Procedure, either for
                                       blocking or non-blocking mode. Zero means
                                       infinity.  If the timeout expires before
@@ -412,7 +412,7 @@ StartupThisAP (
   @retval EFI_UNSUPPORTED         Switching the BSP cannot be completed prior to
                                   this service returning.
   @retval EFI_UNSUPPORTED         Switching the BSP is not supported.
-  @retval EFI_SUCCESS             The calling processor is an AP.
+  @retval EFI_DEVICE_ERROR        The calling processor is an AP.
   @retval EFI_NOT_FOUND           The processor with the handle specified by
                                   ProcessorNumber does not exist.
   @retval EFI_INVALID_PARAMETER   ProcessorNumber specifies the current BSP or
@@ -571,7 +571,7 @@ CollectBistDataFromHob (
       BspCpuInstance.InfoRecord.IA32HealthFlags.Uint32  = SecPlatformInformation->IA32HealthFlags.Uint32;
       CpuInstance = &BspCpuInstance;
     } else {
-      DEBUG ((EFI_D_INFO, "Does not find any HOB stored CPU BIST information!\n"));
+      DEBUG ((DEBUG_INFO, "Does not find any HOB stored CPU BIST information!\n"));
       //
       // Does not find any HOB stored BIST information
       //
@@ -622,7 +622,7 @@ InitializeMpSupport (
 
   MpInitLibGetNumberOfProcessors (&NumberOfProcessors, &NumberOfEnabledProcessors);
   mNumberOfProcessors = NumberOfProcessors;
-  DEBUG ((EFI_D_ERROR, "Detect CPU count: %d\n", mNumberOfProcessors));
+  DEBUG ((DEBUG_INFO, "Detect CPU count: %d\n", mNumberOfProcessors));
 
   //
   // Update CPU healthy information from Guided HOB

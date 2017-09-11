@@ -1,7 +1,7 @@
 /** @file
    File explorer lib.
 
-Copyright (c) 2015, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2015 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials                          
 are licensed and made available under the terms and conditions of the BSD License         
 which accompanies this distribution.  The full text of the license may be found at        
@@ -23,7 +23,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Protocol/DevicePath.h>
 #include <Protocol/SimpleFileSystem.h>
 #include <Protocol/DevicePathToText.h>
-#include <Protocol/LoadFile.h>
 #include <Protocol/FormBrowser2.h>
 
 #include <Library/DebugLib.h>
@@ -114,7 +113,11 @@ extern UINT8    FileExplorerVfrBin[];
 #define MAX_CHAR                480
 #define FILE_OPTION_OFFSET      0x8000
 #define FILE_OPTION_MASK        0x7FFF
-
+#define QUESTION_ID_UPDATE_STEP 200
+#define MAX_FILE_NAME_LEN       20
+#define MAX_FOLDER_NAME_LEN     20
+#define NEW_FILE_QUESTION_ID_BASE   0x5000;
+#define NEW_FOLDER_QUESTION_ID_BASE 0x6000;
 
 /**
   This function processes the results of changes in configuration.

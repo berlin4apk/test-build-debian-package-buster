@@ -1,7 +1,7 @@
 /** @file
   HII Library implementation that uses DXE protocols and services.
 
-  Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -776,7 +776,14 @@ HiiConstructConfigHdr (
     // Append Guid converted to <HexCh>32
     //
     for (Index = 0, Buffer = (UINT8 *)Guid; Index < sizeof (EFI_GUID); Index++) {
-      String += UnicodeValueToString (String, PREFIX_ZERO | RADIX_HEX, *(Buffer++), 2);
+      UnicodeValueToStringS (
+        String,
+        MaxLen * sizeof (CHAR16) - ((UINTN)String - (UINTN)ReturnString),
+        PREFIX_ZERO | RADIX_HEX,
+        *(Buffer++),
+        2
+        );
+      String += StrnLenS (String, MaxLen - ((UINTN)String - (UINTN)ReturnString) / sizeof (CHAR16));
     }
   }
   
@@ -791,7 +798,14 @@ HiiConstructConfigHdr (
     // Append Name converted to <Char>NameLength
     //
     for (; *Name != L'\0'; Name++) {
-      String += UnicodeValueToString (String, PREFIX_ZERO | RADIX_HEX, *Name, 4);
+      UnicodeValueToStringS (
+        String,
+        sizeof (CHAR16) * MaxLen - ((UINTN)String - (UINTN)ReturnString),
+        PREFIX_ZERO | RADIX_HEX,
+        *Name,
+        4
+        );
+      String += StrnLenS (String, MaxLen - ((UINTN)String - (UINTN)ReturnString) / sizeof (CHAR16));
     }
   }
 
@@ -805,7 +819,14 @@ HiiConstructConfigHdr (
   // Append the device path associated with DriverHandle converted to <HexChar>DevicePathSize
   //
   for (Index = 0, Buffer = (UINT8 *)DevicePath; Index < DevicePathSize; Index++) {
-    String += UnicodeValueToString (String, PREFIX_ZERO | RADIX_HEX, *(Buffer++), 2);
+    UnicodeValueToStringS (
+      String,
+      sizeof (CHAR16) * MaxLen - ((UINTN)String - (UINTN)ReturnString),
+      PREFIX_ZERO | RADIX_HEX,
+      *(Buffer++),
+      2
+      );
+    String += StrnLenS (String, MaxLen - ((UINTN)String - (UINTN)ReturnString) / sizeof (CHAR16));
   }
 
   //
@@ -1586,7 +1607,7 @@ ValidateQuestionFromVfr (
             break;
           }
           //
-          // Get Width by OneOf Flags
+          // Get the Max size of the string.
           //
           Width  = (UINT16) (IfrString->MaxSize * sizeof (UINT16));
           if (NameValueType) {
@@ -1600,6 +1621,10 @@ ValidateQuestionFromVfr (
               //
               break;
             }
+            //
+            // Skip the VarName.
+            //
+            StringPtr += StrLen (QuestionName);
 
             //
             // Skip the "=".
@@ -1608,8 +1633,13 @@ ValidateQuestionFromVfr (
             
             //
             // Check current string length is less than maxsize
+            // e.g Config String: "0041004200430044", Unicode String: "ABCD". Unicode String length = Config String length / 4.
+            // Config string format in UEFI spec.
+            // <NvConfig> ::= <Label>'='<String>
+            // <String> ::= [<Char>]+
+            // <Char> ::= <HexCh>4
             //
-            if (StrSize (StringPtr) > Width) {
+            if (StrLen (StringPtr) / 4 > IfrString->MaxSize) {
               return EFI_INVALID_PARAMETER;
             }
           } else {
@@ -1639,7 +1669,7 @@ ValidateQuestionFromVfr (
             //
             // Check current string length is less than maxsize
             //
-            if (StrSize ((CHAR16 *) (VarBuffer + Offset)) > Width) {
+            if (StrLen ((CHAR16 *) (VarBuffer + Offset)) > IfrString->MaxSize) {
               return EFI_INVALID_PARAMETER;
             }
           }
@@ -1853,7 +1883,7 @@ GetBlockDataInfo (
     //
     // Check whether VarBuffer is enough
     //
-    if ((UINTN) (Offset + Width) > MaxBufferSize) {
+    if ((UINT32)Offset + Width > MaxBufferSize) {
       DataBuffer = ReallocatePool (
                     MaxBufferSize,
                     Offset + Width + HII_LIB_DEFAULT_VARSTORE_SIZE,
@@ -2180,8 +2210,9 @@ InternalHiiIfrValueAction (
   }
   
   StringPtr = ConfigAltResp;
-  
-  while (StringPtr != L'\0') {
+  ASSERT (StringPtr != NULL);
+
+  while (*StringPtr != L'\0') {
     //
     // 1. Find <ConfigHdr> GUID=...&NAME=...&PATH=...
     //

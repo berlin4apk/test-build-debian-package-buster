@@ -1,7 +1,7 @@
 ## @file
 # generate flash image
 #
-#  Copyright (c) 2007 - 2016, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
 #
 #  This program and the accompanying materials
 #  are licensed and made available under the terms and conditions of the BSD License
@@ -30,7 +30,7 @@ from EfiSection import EfiSection
 import StringIO
 import Common.TargetTxtClassObject as TargetTxtClassObject
 import Common.ToolDefClassObject as ToolDefClassObject
-import Common.DataType
+from Common.DataType import *
 import Common.GlobalData as GlobalData
 from Common import EdkLogger
 from Common.String import *
@@ -39,13 +39,14 @@ from Common.Misc import SaveFileOnChange
 from Common.Misc import ClearDuplicatedInf
 from Common.Misc import GuidStructureStringToGuidString
 from Common.Misc import CheckPcdDatum
+from Common.Misc import BuildOptionPcdValueFormat
 from Common.BuildVersion import gBUILD_VERSION
 from Common.MultipleWorkspace import MultipleWorkspace as mws
 
 ## Version and Copyright
 versionNumber = "1.0" + ' ' + gBUILD_VERSION
 __version__ = "%prog Version " + versionNumber
-__copyright__ = "Copyright (c) 2007 - 2016, Intel Corporation  All rights reserved."
+__copyright__ = "Copyright (c) 2007 - 2017, Intel Corporation  All rights reserved."
 
 ## Tool entrance method
 #
@@ -303,6 +304,25 @@ def main():
         """Modify images from build output if the feature of loading driver at fixed address is on."""
         if GenFdsGlobalVariable.FixedLoadAddress:
             GenFds.PreprocessImage(BuildWorkSpace, GenFdsGlobalVariable.ActivePlatform)
+
+        # Record the FV Region info that may specific in the FD
+        if FdfParserObj.Profile.FvDict and FdfParserObj.Profile.FdDict:
+            for Fv in FdfParserObj.Profile.FvDict:
+                FvObj = FdfParserObj.Profile.FvDict[Fv]
+                for Fd in FdfParserObj.Profile.FdDict:
+                    FdObj = FdfParserObj.Profile.FdDict[Fd]
+                    for RegionObj in FdObj.RegionList:
+                        if RegionObj.RegionType != 'FV':
+                            continue
+                        for RegionData in RegionObj.RegionDataList:
+                            if FvObj.UiFvName.upper() == RegionData.upper():
+                                if FvObj.FvRegionInFD:
+                                    if FvObj.FvRegionInFD != RegionObj.Size:
+                                        EdkLogger.error("GenFds", FORMAT_INVALID, "The FV %s's region is specified in multiple FD with different value." %FvObj.UiFvName)
+                                else:
+                                    FvObj.FvRegionInFD = RegionObj.Size
+                                    RegionObj.BlockInfoOfRegion(FdObj.BlockSizeList, FvObj)
+
         """Call GenFds"""
         GenFds.GenFd('', FdfParserObj, BuildWorkSpace, ArchList)
 
@@ -389,31 +409,6 @@ def CheckBuildOptionPcd():
 
             GlobalData.BuildOptionPcd[i] = (TokenSpaceGuidCName, TokenCName, NewValue)
 
-def BuildOptionPcdValueFormat(TokenSpaceGuidCName, TokenCName, PcdDatumType, Value):
-    if PcdDatumType == 'VOID*':
-        if Value.startswith('L'):
-            if not Value[1]:
-                EdkLogger.error('GenFds', OPTION_VALUE_INVALID, 'For Void* type PCD, when specify the Value in the command line, please use the following format: "string", L"string", B"{...}"')
-            Value = Value[0] + '"' + Value[1:] + '"'
-        elif Value.startswith('B'):
-            if not Value[1]:
-                EdkLogger.error('GenFds', OPTION_VALUE_INVALID, 'For Void* type PCD, when specify the Value in the command line, please use the following format: "string", L"string", B"{...}"')
-            Value = Value[1:]
-        else:
-            if not Value[0]:
-                EdkLogger.error('GenFds', OPTION_VALUE_INVALID, 'For Void* type PCD, when specify the Value in the command line, please use the following format: "string", L"string", B"{...}"')
-            Value = '"' + Value + '"'
-
-    IsValid, Cause = CheckPcdDatum(PcdDatumType, Value)
-    if not IsValid:
-        EdkLogger.error('build', FORMAT_INVALID, Cause, ExtraData="%s.%s" % (TokenSpaceGuidCName, TokenCName))
-    if PcdDatumType == 'BOOLEAN':
-        Value = Value.upper()
-        if Value == 'TRUE' or Value == '1':
-            Value = '1'
-        elif Value == 'FALSE' or Value == '0':
-            Value = '0'
-    return  Value
 
 ## FindExtendTool()
 #
@@ -424,11 +419,11 @@ def BuildOptionPcdValueFormat(TokenSpaceGuidCName, TokenCName, PcdDatumType, Val
 #  @param  NameGuid         The Guid name
 #
 def FindExtendTool(KeyStringList, CurrentArchList, NameGuid):
+    ToolDb = ToolDefClassObject.ToolDefDict(GenFdsGlobalVariable.ConfDir).ToolsDefTxtDatabase
     # if user not specify filter, try to deduce it from global data.
     if KeyStringList == None or KeyStringList == []:
         Target = GenFdsGlobalVariable.TargetName
         ToolChain = GenFdsGlobalVariable.ToolChainTag
-        ToolDb = ToolDefClassObject.ToolDefDict(GenFdsGlobalVariable.ConfDir).ToolsDefTxtDatabase
         if ToolChain not in ToolDb['TOOL_CHAIN_TAG']:
             EdkLogger.error("GenFds", GENFDS_ERROR, "Can not find external tool because tool tag %s is not defined in tools_def.txt!" % ToolChain)
         KeyStringList = [Target + '_' + ToolChain + '_' + CurrentArchList[0]]
@@ -443,6 +438,9 @@ def FindExtendTool(KeyStringList, CurrentArchList, NameGuid):
     ToolDefinition = ToolDefClassObject.ToolDefDict(GenFdsGlobalVariable.ConfDir).ToolsDefTxtDictionary
     ToolPathTmp = None
     ToolOption = None
+    ToolPathKey = None
+    ToolOptionKey = None
+    KeyList = None
     for ToolDef in ToolDefinition.items():
         if NameGuid == ToolDef[1]:
             KeyList = ToolDef[0].split('_')
@@ -452,23 +450,54 @@ def FindExtendTool(KeyStringList, CurrentArchList, NameGuid):
                   '_' + \
                   KeyList[2]
             if Key in KeyStringList and KeyList[4] == 'GUID':
-
-                ToolPath = ToolDefinition.get(Key + \
-                                               '_' + \
-                                               KeyList[3] + \
-                                               '_' + \
-                                               'PATH')
-
-                ToolOption = ToolDefinition.get(Key + \
-                                                '_' + \
-                                                KeyList[3] + \
-                                                '_' + \
-                                                'FLAGS')
+                ToolPathKey   = Key + '_' + KeyList[3] + '_PATH'
+                ToolOptionKey = Key + '_' + KeyList[3] + '_FLAGS'
+                ToolPath = ToolDefinition.get(ToolPathKey)
+                ToolOption = ToolDefinition.get(ToolOptionKey)
                 if ToolPathTmp == None:
                     ToolPathTmp = ToolPath
                 else:
                     if ToolPathTmp != ToolPath:
                         EdkLogger.error("GenFds", GENFDS_ERROR, "Don't know which tool to use, %s or %s ?" % (ToolPathTmp, ToolPath))
+
+    BuildOption = {}
+    for Arch in CurrentArchList:
+        Platform = GenFdsGlobalVariable.WorkSpace.BuildObject[GenFdsGlobalVariable.ActivePlatform, Arch, GenFdsGlobalVariable.TargetName, GenFdsGlobalVariable.ToolChainTag]
+        # key is (ToolChainFamily, ToolChain, CodeBase)
+        for item in Platform.BuildOptions:
+            if '_PATH' in item[1] or '_FLAGS' in item[1] or '_GUID' in item[1]:
+                if not item[0] or (item[0] and GenFdsGlobalVariable.ToolChainFamily== item[0]):
+                    if item[1] not in BuildOption:
+                        BuildOption[item[1]] = Platform.BuildOptions[item]
+        if BuildOption:
+            ToolList = [TAB_TOD_DEFINES_TARGET, TAB_TOD_DEFINES_TOOL_CHAIN_TAG, TAB_TOD_DEFINES_TARGET_ARCH]
+            for Index in range(2, -1, -1):
+                for Key in dict(BuildOption):
+                    List = Key.split('_')
+                    if List[Index] == '*':
+                        for String in ToolDb[ToolList[Index]]:
+                            if String in [Arch, GenFdsGlobalVariable.TargetName, GenFdsGlobalVariable.ToolChainTag]:
+                                List[Index] = String
+                                NewKey = '%s_%s_%s_%s_%s' % tuple(List)
+                                if NewKey not in BuildOption:
+                                    BuildOption[NewKey] = BuildOption[Key]
+                                    continue
+                                del BuildOption[Key]
+                    elif List[Index] not in ToolDb[ToolList[Index]]:
+                        del BuildOption[Key]
+    if BuildOption:
+        if not KeyList:
+            for Op in BuildOption:
+                if NameGuid == BuildOption[Op]:
+                    KeyList = Op.split('_')
+                    Key = KeyList[0] + '_' + KeyList[1] +'_' + KeyList[2]
+                    if Key in KeyStringList and KeyList[4] == 'GUID':
+                        ToolPathKey   = Key + '_' + KeyList[3] + '_PATH'
+                        ToolOptionKey = Key + '_' + KeyList[3] + '_FLAGS'
+        if ToolPathKey in BuildOption.keys():
+            ToolPathTmp = BuildOption.get(ToolPathKey)
+        if ToolOptionKey in BuildOption.keys():
+            ToolOption = BuildOption.get(ToolOptionKey)
 
     GenFdsGlobalVariable.GuidToolDefinition[NameGuid] = (ToolPathTmp, ToolOption)
     return ToolPathTmp, ToolOption

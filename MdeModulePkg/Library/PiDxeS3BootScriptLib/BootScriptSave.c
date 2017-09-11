@@ -1,7 +1,7 @@
 /** @file
   Save the S3 data to S3 boot script.
 
-  Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions
@@ -691,7 +691,7 @@ S3BootScriptGetBootTimeEntryAddAddress (
    // Here we do not count the reserved memory for runtime script table.
    PageNumber = (UINT16) (mS3BootScriptTablePtr->TableMemoryPageNumber - PcdGet16(PcdS3BootScriptRuntimeTableReservePageNumber));
    TableLength =  mS3BootScriptTablePtr->TableLength;
-   if ((UINTN) EFI_PAGES_TO_SIZE ((UINTN) PageNumber) < (UINTN) (TableLength + EntryLength + sizeof (EFI_BOOT_SCRIPT_TERMINATE))) {
+   if (EFI_PAGES_TO_SIZE ((UINTN) PageNumber) < (TableLength + EntryLength + sizeof (EFI_BOOT_SCRIPT_TERMINATE))) {
      //
      // The buffer is too small to hold the table, Reallocate the buffer
      //
@@ -752,7 +752,7 @@ S3BootScriptGetRuntimeEntryAddAddress (
    //
    // Check if the memory range reserved for S3 Boot Script table is large enough to hold the node.
    //
-   if ((UINTN) (mS3BootScriptTablePtr->TableLength + EntryLength + sizeof (EFI_BOOT_SCRIPT_TERMINATE)) <= (UINTN) EFI_PAGES_TO_SIZE ((UINTN) (mS3BootScriptTablePtr->TableMemoryPageNumber))) {
+   if ((mS3BootScriptTablePtr->TableLength + EntryLength + sizeof (EFI_BOOT_SCRIPT_TERMINATE)) <= EFI_PAGES_TO_SIZE ((UINTN) (mS3BootScriptTablePtr->TableMemoryPageNumber))) {
      NewEntryPtr = mS3BootScriptTablePtr->TableBase + mS3BootScriptTablePtr->TableLength;
      mS3BootScriptTablePtr->TableLength = mS3BootScriptTablePtr->TableLength + EntryLength;
      //
@@ -1672,7 +1672,7 @@ S3BootScriptSaveMemPoll (
   IN  VOID                              *BitMask,
   IN  VOID                              *BitValue,
   IN  UINTN                             Duration,
-  IN  UINTN                             LoopTimes
+  IN  UINT64                            LoopTimes
   )
 {
   UINT8                 Length;
@@ -2025,7 +2025,7 @@ S3BootScriptCalculateInsertAddress (
    // calculate the Position offset
    //
    if (Position != NULL) {
-     PositionOffset = (UINTN) ((UINT8 *)Position - S3TableBase);
+     PositionOffset = (UINTN)Position - (UINTN)S3TableBase;
 
      //
      // If the BeforeOrAfter is FALSE, that means to insert the node right after the node.

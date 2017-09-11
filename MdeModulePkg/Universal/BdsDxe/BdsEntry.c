@@ -5,7 +5,7 @@
   After DxeCore finish DXE phase, gEfiBdsArchProtocolGuid->BdsEntry will be invoked
   to enter BDS phase.
 
-Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2017, Intel Corporation. All rights reserved.<BR>
 (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 (C) Copyright 2015 Hewlett-Packard Development Company, L.P.<BR>
 This program and the accompanying materials
@@ -368,6 +368,11 @@ BootBootOptions (
   )
 {
   UINTN                              Index;
+
+  //
+  // Report Status Code to indicate BDS starts attempting booting from the UEFI BootOrder list.
+  //
+  REPORT_STATUS_CODE (EFI_PROGRESS_CODE, (EFI_SOFTWARE_DXE_BS_DRIVER | EFI_SW_DXE_BS_PC_ATTEMPT_BOOT_ORDER_EVENT));
 
   //
   // Attempt boot each boot option
@@ -874,6 +879,23 @@ BdsEntry (
     );
 
   //
+  // Initialize ConnectConIn event before calling platform code.
+  //
+  if (PcdGetBool (PcdConInConnectOnDemand)) {
+    Status = gBS->CreateEventEx (
+                    EVT_NOTIFY_SIGNAL,
+                    TPL_CALLBACK,
+                    BdsDxeOnConnectConInCallBack,
+                    NULL,
+                    &gConnectConInEventGuid,
+                    &gConnectConInEvent
+                    );
+    if (EFI_ERROR (Status)) {
+      gConnectConInEvent = NULL;
+    }
+  }
+
+  //
   // Do the platform init, can be customized by OEM/IBV
   // Possible things that can be done in PlatformBootManagerBeforeConsole:
   // > Update console variable: 1. include hot-plug devices; 2. Clear ConIn and add SOL for AMT
@@ -905,21 +927,9 @@ BdsEntry (
   if (PcdGetBool (PcdConInConnectOnDemand)) {
     EfiBootManagerConnectConsoleVariable (ConOut);
     EfiBootManagerConnectConsoleVariable (ErrOut);
-
     //
-    // Initialize ConnectConIn event
+    // Do not connect ConIn devices when lazy ConIn feature is ON.
     //
-    Status = gBS->CreateEventEx (
-                    EVT_NOTIFY_SIGNAL,
-                    TPL_CALLBACK,
-                    BdsDxeOnConnectConInCallBack,
-                    NULL,
-                    &gConnectConInEventGuid,
-                    &gConnectConInEvent
-                    );
-    if (EFI_ERROR (Status)) {
-      gConnectConInEvent = NULL;
-    }
   } else {
     EfiBootManagerConnectAllDefaultConsoles ();
   }

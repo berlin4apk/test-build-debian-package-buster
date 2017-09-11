@@ -16,6 +16,9 @@
 
 #include <Library/UefiLib.h>
 #include <Library/UefiBootServicesTableLib.h>
+#include <Library/DebugAgentLib.h>
+
+#include <Protocol/Timer.h>
 
 #define  AP_CHECK_INTERVAL     (EFI_TIMER_PERIOD_MILLISECONDS (100))
 #define  AP_SAFE_STACK_SIZE    128
@@ -28,6 +31,21 @@ volatile BOOLEAN mStopCheckAllApsStatus = TRUE;
 VOID             *mReservedApLoopFunc = NULL;
 UINTN            mReservedTopOfApStack;
 volatile UINT32  mNumberToFinish = 0;
+
+/**
+  Enable Debug Agent to support source debugging on AP function.
+
+**/
+VOID
+EnableDebugAgent (
+  VOID
+  )
+{
+  //
+  // Initialize Debug Agent to support source level debug in DXE phase
+  //
+  InitializeDebugAgent (DEBUG_AGENT_INIT_DXE_AP, NULL, NULL);
+}
 
 /**
   Get the pointer to CPU MP Data structure.
@@ -57,72 +75,41 @@ SaveCpuMpData (
 }
 
 /**
-  Allocate reset vector buffer.
+  Get available system memory below 1MB by specified size.
 
-  @param[in, out]  CpuMpData  The pointer to CPU MP Data structure.
+  @param[in] WakeupBufferSize   Wakeup buffer size required
+
+  @retval other   Return wakeup buffer address below 1MB.
+  @retval -1      Cannot find free memory below 1MB.
 **/
-VOID
-AllocateResetVector (
-  IN OUT CPU_MP_DATA          *CpuMpData
+UINTN
+GetWakeupBuffer (
+  IN UINTN                WakeupBufferSize
   )
 {
-  EFI_STATUS            Status;
-  UINTN                 ApResetVectorSize;
-  EFI_PHYSICAL_ADDRESS  StartAddress;
+  EFI_STATUS              Status;
+  EFI_PHYSICAL_ADDRESS    StartAddress;
 
-  if (CpuMpData->SaveRestoreFlag) {
-    BackupAndPrepareWakeupBuffer (CpuMpData);
-  } else {
-    ApResetVectorSize = CpuMpData->AddressMap.RendezvousFunnelSize +
-                        sizeof (MP_CPU_EXCHANGE_INFO);
-
-    StartAddress = BASE_1MB;
-    Status = gBS->AllocatePages (
-                    AllocateMaxAddress,
-                    EfiACPIMemoryNVS,
-                    EFI_SIZE_TO_PAGES (ApResetVectorSize),
-                    &StartAddress
-                    );
-    ASSERT_EFI_ERROR (Status);
-
-    CpuMpData->WakeupBuffer      = (UINTN) StartAddress;
-    CpuMpData->MpCpuExchangeInfo = (MP_CPU_EXCHANGE_INFO *) (UINTN)
-                  (CpuMpData->WakeupBuffer + CpuMpData->AddressMap.RendezvousFunnelSize);
-    //
-    // copy AP reset code in it
-    //
-    CopyMem (
-      (VOID *) CpuMpData->WakeupBuffer,
-      (VOID *) CpuMpData->AddressMap.RendezvousFunnelAddress,
-      CpuMpData->AddressMap.RendezvousFunnelSize
-      );
-  }
-}
-
-/**
-  Free AP reset vector buffer.
-
-  @param[in]  CpuMpData  The pointer to CPU MP Data structure.
-**/
-VOID
-FreeResetVector (
-  IN CPU_MP_DATA              *CpuMpData
-  )
-{
-  EFI_STATUS            Status;
-  UINTN                 ApResetVectorSize;
-
-  if (CpuMpData->SaveRestoreFlag) {
-    RestoreWakeupBuffer (CpuMpData);
-  } else {
-    ApResetVectorSize = CpuMpData->AddressMap.RendezvousFunnelSize +
-                        sizeof (MP_CPU_EXCHANGE_INFO);
+  StartAddress = BASE_1MB;
+  Status = gBS->AllocatePages (
+                  AllocateMaxAddress,
+                  EfiBootServicesData,
+                  EFI_SIZE_TO_PAGES (WakeupBufferSize),
+                  &StartAddress
+                  );
+  ASSERT_EFI_ERROR (Status);
+  if (!EFI_ERROR (Status)) {
     Status = gBS->FreePages(
-               (EFI_PHYSICAL_ADDRESS)CpuMpData->WakeupBuffer,
-               EFI_SIZE_TO_PAGES (ApResetVectorSize)
+               StartAddress,
+               EFI_SIZE_TO_PAGES (WakeupBufferSize)
                );
     ASSERT_EFI_ERROR (Status);
+    DEBUG ((DEBUG_INFO, "WakeupBufferStart = %x, WakeupBufferSize = %x\n",
+                        (UINTN) StartAddress, WakeupBufferSize));
+  } else {
+    StartAddress = (EFI_PHYSICAL_ADDRESS) -1;
   }
+  return (UINTN) StartAddress;
 }
 
 /**
@@ -281,7 +268,6 @@ MpInitChangeApLoopCallback (
   CPU_MP_DATA               *CpuMpData;
 
   CpuMpData = GetCpuMpData ();
-  CpuMpData->SaveRestoreFlag = TRUE;
   CpuMpData->PmCodeSegment = GetProtectedModeCS ();
   CpuMpData->ApLoopMode = PcdGet8 (PcdCpuApLoopMode);
   mNumberToFinish = CpuMpData->CpuCount - 1;
@@ -410,7 +396,7 @@ InitMpGlobalData (
                                       EFI_EVENT is defined in CreateEvent() in
                                       the Unified Extensible Firmware Interface
                                       Specification.
-  @param[in]  TimeoutInMicrosecsond   Indicates the time limit in microseconds for
+  @param[in]  TimeoutInMicroseconds   Indicates the time limit in microseconds for
                                       APs to return from Procedure, either for
                                       blocking or non-blocking mode. Zero means
                                       infinity.  If the timeout expires before
@@ -520,7 +506,7 @@ MpInitLibStartupAllAPs (
                                       EFI_EVENT is defined in CreateEvent() in
                                       the Unified Extensible Firmware Interface
                                       Specification.
-  @param[in]  TimeoutInMicrosecsond   Indicates the time limit in microseconds for
+  @param[in]  TimeoutInMicroseconds   Indicates the time limit in microseconds for
                                       this AP to finish this Procedure, either for
                                       blocking or non-blocking mode. Zero means
                                       infinity.  If the timeout expires before
@@ -629,29 +615,38 @@ MpInitLibSwitchBSP (
   IN BOOLEAN                   EnableOldBSP
   )
 {
-  EFI_STATUS            Status;
-  BOOLEAN               OldInterruptState;
+  EFI_STATUS                   Status;
+  EFI_TIMER_ARCH_PROTOCOL      *Timer;
+  UINT64                       TimerPeriod;
 
+  TimerPeriod = 0;
   //
-  // Before send both BSP and AP to a procedure to exchange their roles,
-  // interrupt must be disabled. This is because during the exchange role
-  // process, 2 CPU may use 1 stack. If interrupt happens, the stack will
-  // be corrupted, since interrupt return address will be pushed to stack
-  // by hardware.
+  // Locate Timer Arch Protocol
   //
-  OldInterruptState = SaveAndDisableInterrupts ();
+  Status = gBS->LocateProtocol (&gEfiTimerArchProtocolGuid, NULL, (VOID **) &Timer);
+  if (EFI_ERROR (Status)) {
+    Timer = NULL;
+  }
 
-  //
-  // Mask LINT0 & LINT1 for the old BSP
-  //
-  DisableLvtInterrupts ();
+  if (Timer != NULL) {
+    //
+    // Save current rate of DXE Timer
+    //
+    Timer->GetTimerPeriod (Timer, &TimerPeriod);
+    //
+    // Disable DXE Timer and drain pending interrupts
+    //
+    Timer->SetTimerPeriod (Timer, 0);
+  }
 
   Status = SwitchBSPWorker (ProcessorNumber, EnableOldBSP);
 
-  //
-  // Restore interrupt state.
-  //
-  SetInterruptState (OldInterruptState);
+  if (Timer != NULL) {
+    //
+    // Enable and restore rate of DXE Timer
+    //
+    Timer->SetTimerPeriod (Timer, TimerPeriod);
+  }
 
   return Status;
 }

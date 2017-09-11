@@ -1,7 +1,7 @@
 ## @file
 # Create makefile for MS nmake and GNU make
 #
-# Copyright (c) 2007 - 2016, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -386,7 +386,7 @@ ${END}
 #
 clean:
 \t${BEGIN}${clean_command}
-\t${END}
+\t${END}\t$(RM) AutoGenTimeStamp
 
 #
 # clean all generated files
@@ -395,6 +395,7 @@ cleanall:
 ${BEGIN}\t${cleanall_command}
 ${END}\t$(RM) *.pdb *.idb > NUL 2>&1
 \t$(RM) $(BIN_DIR)${separator}$(MODULE_NAME).efi
+\t$(RM) AutoGenTimeStamp
 
 #
 # clean all dependent libraries built
@@ -801,6 +802,9 @@ cleanlib:
             if not self.FileDependency[File]:
                 self.FileDependency[File] = ['$(FORCE_REBUILD)']
                 continue
+
+            self._AutoGenObject.AutoGenDepSet |= set(self.FileDependency[File])
+
             # skip non-C files
             if File.Ext not in [".c", ".C"] or File.Name == "AutoGen.c":
                 continue
@@ -1449,7 +1453,15 @@ class TopLevelMakefile(BuildFile):
         if GlobalData.BuildOptionPcd:
             for index, option in enumerate(GlobalData.gCommand):
                 if "--pcd" == option and GlobalData.gCommand[index+1]:
-                    ExtraOption += " --pcd " + GlobalData.gCommand[index+1]
+                    pcdName, pcdValue = GlobalData.gCommand[index+1].split('=')
+                    if pcdValue.startswith('H'):
+                        pcdValue = 'H' + '"' + pcdValue[1:] + '"'
+                        ExtraOption += " --pcd " + pcdName + '=' + pcdValue
+                    elif pcdValue.startswith('L'):
+                        pcdValue = 'L' + '"' + pcdValue[1:] + '"'
+                        ExtraOption += " --pcd " + pcdName + '=' + pcdValue
+                    else:
+                        ExtraOption += " --pcd " + GlobalData.gCommand[index+1]
 
         MakefileName = self._FILE_NAME_[self._FileType]
         SubBuildCommandList = []

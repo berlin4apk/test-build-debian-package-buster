@@ -1,6 +1,6 @@
 /** @file
 
-Copyright (c) 2005 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2005 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -550,6 +550,7 @@ Ip4InitProtocol (
   IpInstance->Signature = IP4_PROTOCOL_SIGNATURE;
   CopyMem (&IpInstance->Ip4Proto, &mEfiIp4ProtocolTemplete, sizeof (IpInstance->Ip4Proto));
   IpInstance->State     = IP4_STATE_UNCONFIGED;
+  IpInstance->InDestroy   = FALSE;
   IpInstance->Service   = IpSb;
 
   InitializeListHead (&IpInstance->Link);
@@ -810,66 +811,6 @@ Ip4CleanProtocol (
 
 
 /**
-  Validate that Ip/Netmask pair is OK to be used as station
-  address. Only continuous netmasks are supported. and check
-  that StationAddress is a unicast address on the newtwork.
-
-  @param[in]  Ip                 The IP address to validate.
-  @param[in]  Netmask            The netmaks of the IP.
-
-  @retval TRUE                   The Ip/Netmask pair is valid.
-  @retval FALSE                  The Ip/Netmask pair is invalid.
-
-**/
-BOOLEAN
-Ip4StationAddressValid (
-  IN IP4_ADDR               Ip,
-  IN IP4_ADDR               Netmask
-  )
-{
-  IP4_ADDR                  NetBrdcastMask;
-  INTN                      Len;
-  INTN                      Type;
-
-  //
-  // Only support the station address with 0.0.0.0/0 to enable DHCP client.
-  //
-  if (Netmask == IP4_ALLZERO_ADDRESS) {
-    return (BOOLEAN) (Ip == IP4_ALLZERO_ADDRESS);
-  }
-
-  //
-  // Only support the continuous net masks
-  //
-  if ((Len = NetGetMaskLength (Netmask)) == (IP4_MASK_MAX + 1)) {
-    return FALSE;
-  }
-
-  //
-  // Station address can't be class D or class E address
-  //
-  if ((Type = NetGetIpClass (Ip)) > IP4_ADDR_CLASSC) {
-    return FALSE;
-  }
-
-  //
-  // Station address can't be subnet broadcast/net broadcast address
-  //
-  if ((Ip == (Ip & Netmask)) || (Ip == (Ip | ~Netmask))) {
-    return FALSE;
-  }
-
-  NetBrdcastMask = gIp4AllMasks[MIN (Len, Type << 3)];
-
-  if (Ip == (Ip | ~NetBrdcastMask)) {
-    return FALSE;
-  }
-
-  return TRUE;
-}
-
-
-/**
   Assigns an IPv4 address and subnet mask to this EFI IPv4 Protocol driver instance.
 
   The Configure() function is used to set, change, or reset the operational
@@ -996,8 +937,7 @@ EfiIp4Configure (
     Status = Ip4CleanProtocol (IpInstance);
 
     //
-    // Don't change the state if it is DESTROY, consider the following
-    // valid sequence: Mnp is unloaded-->Ip Stopped-->Udp Stopped,
+    // Consider the following valid sequence: Mnp is unloaded-->Ip Stopped-->Udp Stopped,
     // Configure (ThisIp, NULL). If the state is changed to UNCONFIGED,
     // the unload fails miserably.
     //

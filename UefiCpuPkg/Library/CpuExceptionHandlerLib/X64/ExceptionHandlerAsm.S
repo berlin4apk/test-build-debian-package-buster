@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------ ;
-# Copyright (c) 2012 - 2014, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2012 - 2017, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -29,14 +29,15 @@ ASM_GLOBAL ASM_PFX(CommonExceptionHandler)
 .text
 
 #ifdef __APPLE__
-# macros are different between GNU and Xcode as. 
-.macro IDT_MACRO 
+# macros are different between GNU and Xcode as.
+.macro IDT_MACRO
   push     $0
 #else
 .macro IDT_MACRO arg
   push    \arg
 #endif
-  jmp    ASM_PFX(CommonInterruptEntry)
+  .byte   0xe9      # jmp     ASM_PFX(CommonInterruptEntry)
+  .long   ASM_PFX(CommonInterruptEntry) - . - 4
 .endm
 
 AsmIdtVectorBegin:
@@ -77,7 +78,7 @@ AsmIdtVectorEnd:
 HookAfterStubHeaderBegin:
     .byte   0x6a      # push
 PatchVectorNum:
-    .byte   0         # 0 will be fixed 
+    .byte   0         # 0 will be fixed
     .byte   0xe9      # jmp     ASM_PFX(HookAfterStubHeaderEnd)
 PatchFuncAddress:
      .set   HOOK_ADDRESS, ASM_PFX(HookAfterStubHeaderEnd) - . - 4
@@ -233,16 +234,16 @@ CommonInterruptEntry_al_0000:
     movq    %cr8, %rax
     pushq   %rax
     movq    %cr4, %rax
-    orq     $0x208, %rax 
-    movq    %rax, %cr4 
+    orq     $0x208, %rax
+    movq    %rax, %cr4
     pushq   %rax
-    mov     %cr3, %rax 
+    mov     %cr3, %rax
     pushq   %rax
-    mov     %cr2, %rax 
+    mov     %cr2, %rax
     pushq   %rax
     xorq    %rax, %rax
     pushq   %rax
-    mov     %cr0, %rax 
+    mov     %cr0, %rax
     pushq   %rax
 
 #; UINT64  Dr0, Dr1, Dr2, Dr3, Dr6, Dr7;
@@ -277,7 +278,7 @@ CommonInterruptEntry_al_0000:
     # Per X64 calling convention, allocate maximum parameter stack space
     # and make sure RSP is 16-byte aligned
     #
-    subq    $40, %rsp 
+    subq    $40, %rsp
     call    ASM_PFX(CommonExceptionHandler)
     addq    $40, %rsp
 

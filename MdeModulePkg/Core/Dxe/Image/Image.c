@@ -1,7 +1,7 @@
 /** @file
   Core image handling services to load and unload PeImage.
 
-Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -89,7 +89,8 @@ GLOBAL_REMOVE_IF_UNREFERENCED MACHINE_TYPE_INFO  mMachineTypeInfo[] = {
   {EFI_IMAGE_MACHINE_IA32,           L"IA32"},
   {EFI_IMAGE_MACHINE_IA64,           L"IA64"},
   {EFI_IMAGE_MACHINE_X64,            L"X64"},
-  {EFI_IMAGE_MACHINE_ARMTHUMB_MIXED, L"ARM"}
+  {EFI_IMAGE_MACHINE_ARMTHUMB_MIXED, L"ARM"},
+  {EFI_IMAGE_MACHINE_AARCH64,        L"AARCH64"}
 };
 
 UINT16 mDxeCoreImageMachineType = 0;
@@ -203,6 +204,8 @@ CoreInitializeImageServices (
                );
   }
 
+  ProtectUefiImage (&Image->Info, Image->LoadedImageDevicePath);
+
   return Status;
 }
 
@@ -311,8 +314,8 @@ CheckAndMarkFixLoadingMemoryUsageBitMap (
    //
    // Test if the memory is avalaible or not.
    // 
-   BaseOffsetPageNumber = (UINTN)EFI_SIZE_TO_PAGES((UINT32)(ImageBase - DxeCodeBase));
-   TopOffsetPageNumber  = (UINTN)EFI_SIZE_TO_PAGES((UINT32)(ImageBase + ImageSize - DxeCodeBase));
+   BaseOffsetPageNumber = EFI_SIZE_TO_PAGES((UINT32)(ImageBase - DxeCodeBase));
+   TopOffsetPageNumber  = EFI_SIZE_TO_PAGES((UINT32)(ImageBase + ImageSize - DxeCodeBase));
    for (Index = BaseOffsetPageNumber; Index < TopOffsetPageNumber; Index ++) {
      if ((mDxeCodeMemoryRangeUsageBitMap[Index / 64] & LShiftU64(1, (Index % 64))) != 0) {
        //
@@ -364,12 +367,10 @@ GetPeCoffImageFixLoadingAssignedAddress(
    //
    Handle = (IMAGE_FILE_HANDLE*)ImageContext->Handle;
    ImgHdr = (EFI_IMAGE_OPTIONAL_HEADER_UNION *)((CHAR8* )Handle->Source + ImageContext->PeCoffHeaderOffset);
-   SectionHeaderOffset = (UINTN)(
-                                 ImageContext->PeCoffHeaderOffset +
-                                 sizeof (UINT32) +
-                                 sizeof (EFI_IMAGE_FILE_HEADER) +
-                                 ImgHdr->Pe32.FileHeader.SizeOfOptionalHeader
-                                 );
+   SectionHeaderOffset = ImageContext->PeCoffHeaderOffset +
+                         sizeof (UINT32) +
+                         sizeof (EFI_IMAGE_FILE_HEADER) +
+                         ImgHdr->Pe32.FileHeader.SizeOfOptionalHeader;
    NumberOfSections = ImgHdr->Pe32.FileHeader.NumberOfSections;
 
    //
@@ -787,6 +788,8 @@ Done:
 
   if (DstBufAlocated) {
     CoreFreePages (Image->ImageContext.ImageAddress, Image->NumberOfPages);
+    Image->ImageContext.ImageAddress = 0;
+    Image->ImageBasePage = 0;
   }
 
   if (Image->ImageContext.FixupData != NULL) {
@@ -861,6 +864,8 @@ CoreUnloadAndCloseImage (
   if (Image->Started) {
     UnregisterMemoryProfileImage (Image);
   }
+
+  UnprotectUefiImage (&Image->Info, Image->LoadedImageDevicePath);
 
   if (Image->Ebc != NULL) {
     //
@@ -1341,6 +1346,7 @@ CoreLoadImageCommon (
       goto Done;
     }
   }
+  ProtectUefiImage (&Image->Info, Image->LoadedImageDevicePath);
 
   //
   // Success.  Return the image handle
@@ -1643,6 +1649,12 @@ CoreStartImage (
     //
     PERF_START (NULL, "StartImage:", NULL, Tick);
     PERF_END (NULL, "StartImage:", NULL, 0);
+
+    //
+    // Pop the current start image context
+    //
+    mCurrentImage = LastImage;
+
     return EFI_OUT_OF_RESOURCES;
   }
   Image->JumpContext = ALIGN_POINTER (Image->JumpBuffer, BASE_LIBRARY_JUMP_BUFFER_ALIGNMENT);
