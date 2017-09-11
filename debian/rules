@@ -111,25 +111,16 @@ override_dh_auto_clean:
 	rm -rf Conf/.cache Build .pc-post
 
 get-orig-source:
-	mkdir -p edk2-$(ver)
-	cp -a * edk2-$(ver) || true
-	rm -rf edk2-$(ver)/edk2-$(ver)
-	find edk2-$(ver) -name '*.efi' -print0 | xargs -0 rm -f
-	# Drop the non-free license text covering the removed Fat.efi binaries
-	rm -f edk2-$(ver)/FatBinPkg/License.txt
-	rm -rf edk2-$(ver)/BaseTools/Bin \
-		edk2-$(ver)/UefiCpuPkg/ResetVector/Vtf0/Bin/*.raw \
-		edk2-$(ver)/EdkCompatibilityPkg/Other \
-		edk2-$(ver)/AppPkg \
-		edk2-$(ver)/DuetPkg/BootSector/bin \
-		edk2-$(ver)/StdLib/LibC/Main/Ia32/ftol2.obj \
-		edk2-$(ver)/BeagleBoardPkg/Debugger_scripts/rvi_dummy.axf \
-		edk2-$(ver)/BaseTools/Source/Python/*/*.pyd \
-		edk2-$(ver)/BaseTools/Source/Python/UPT/Dll/sqlite3.dll \
-		edk2-$(ver)/Vlv2TbltDevicePkg/GenBiosId \
-		edk2-$(ver)/Vlv2TbltDevicePkg/*.exe \
-		edk2-$(ver)/ArmPkg/Library/GccLto/liblto-*.a \
-		edk2-$(ver)/debian
+	# Should be executed on a checkout of the upstream master branch,
+	# with the debian/ directory manually copied in.
+	git clone . edk2-$(ver)
+	rm -rf edk2-$(ver)/.git
+	ln -s ../debian edk2-$(ver)
+	# Remove known-binary files
+	cd edk2-$(ver) && python3 ./debian/remove-binaries.py
+	# Look for possible unknown binary files
+	cd edk2-$(ver) && python3 ./debian/find-binaries.py
+	rm edk2-$(ver)/debian
 	# openssl
 	wget $(OPENSSL_URL)
 	tar zxvf $(OPENSSL_SRC) -C edk2-$(ver)/CryptoPkg/Library/OpensslLib
