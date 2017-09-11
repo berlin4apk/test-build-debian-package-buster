@@ -1,3 +1,13 @@
+edk2 (0~20170911.5dfba97c-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+    - d/p/no-missing-braces.diff: Refresh.
+    - d/p/no-stack-protector-all-archs.diff: Refresh.
+    - d/p/no-pie-for-arm.diff: Drop; superseded by upstream commit
+      a6b53806.
+
+ -- dann frazier <dannf@debian.org>  Mon, 11 Sep 2017 17:47:21 -0600
+
 edk2 (0~20161202.7bbe0b3e-2) experimental; urgency=medium
 
   * debian/rules: Replace hardcoded "AARCH64" strings with $(EDK2_HOST_ARCH).
