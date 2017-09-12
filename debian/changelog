@@ -1,6 +1,7 @@
 edk2 (0~20170911.5dfba97c-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+    - Now builds with gcc-7. Closes: #853382.
     - d/p/no-missing-braces.diff: Refresh.
     - d/p/no-stack-protector-all-archs.diff: Refresh.
     - d/p/no-pie-for-arm.diff: Drop; superseded by upstream commit
