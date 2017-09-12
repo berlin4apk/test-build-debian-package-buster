@@ -7,6 +7,8 @@ edk2 (0~20170911.5dfba97c-1) UNRELEASED; urgency=medium
       a6b53806.
     - OpenSSL: Switch to the new openssl-1.1-based system, which no
       longer requires patching.
+    - d/p/demote-maybe-uninitialized-to-warning.patch: Workaround compiler
+      error until upstream code is fixed.
   * Unset environment variables that are used internally by edk2.
   * Avoid the need for "post-patches" by explicitly setting the
     ACTIVE_PLATFORM and TARGET_ARCH variables on the build commandline

@@ -1,0 +1,29 @@
+Author: dann frazier <dannf@debian.org>
+Description: Demote maybe-uninitialized errors to warnings
+ MdeModulePkg/Universal/Disk/UdfDxe/FileSystemOperations.c fails to build w/
+ -Werror=maybe-uninitialized. This was already reported upstream:
+   https://lists.01.org/pipermail/edk2-devel/2017-September/014538.html
+ For now, let's workaround it by demoting the error to a warning.
+Last-Updated: 2017-09-12
+Index: edk2/BaseTools/Conf/tools_def.template
+===================================================================
+--- edk2.orig/BaseTools/Conf/tools_def.template
++++ edk2/BaseTools/Conf/tools_def.template
+@@ -4376,7 +4376,7 @@ DEFINE GCC_IPF_RC_FLAGS            = -I
+ DEFINE GCC_ARM_RC_FLAGS            = -I binary -O elf32-littlearm     -B arm     --rename-section .data=.hii
+ DEFINE GCC_AARCH64_RC_FLAGS        = -I binary -O elf64-littleaarch64 -B aarch64 --rename-section .data=.hii
+ 
+-DEFINE GCC44_ALL_CC_FLAGS            = -g -fshort-wchar -fno-builtin -fno-strict-aliasing -Wall -Werror -Wno-array-bounds -Wno-missing-braces -ffunction-sections -fdata-sections -fno-stack-protector -include AutoGen.h -fno-common -DSTRING_ARRAY_NAME=$(BASE_NAME)Strings
++DEFINE GCC44_ALL_CC_FLAGS            = -g -fshort-wchar -fno-builtin -fno-strict-aliasing -Wall -Werror -Wno-array-bounds -Wno-missing-braces -Wno-maybe-uninitialized -ffunction-sections -fdata-sections -fno-stack-protector -include AutoGen.h -fno-common -DSTRING_ARRAY_NAME=$(BASE_NAME)Strings
+ DEFINE GCC44_IA32_CC_FLAGS           = DEF(GCC44_ALL_CC_FLAGS) -m32 -march=i586 -malign-double -fno-stack-protector -D EFI32 -fno-asynchronous-unwind-tables
+ DEFINE GCC44_X64_CC_FLAGS            = DEF(GCC44_ALL_CC_FLAGS) -m64 -fno-stack-protector "-DEFIAPI=__attribute__((ms_abi))" -maccumulate-outgoing-args -mno-red-zone -Wno-address -mcmodel=small -fpie -fno-asynchronous-unwind-tables
+ DEFINE GCC44_IA32_X64_DLINK_COMMON   = -nostdlib -Wl,-n,-q,--gc-sections -z common-page-size=0x20
+@@ -4407,7 +4407,7 @@ DEFINE GCC46_X64_DLINK_FLAGS         = D
+ DEFINE GCC46_X64_DLINK2_FLAGS        = DEF(GCC45_X64_DLINK2_FLAGS)
+ DEFINE GCC46_ASM_FLAGS               = DEF(GCC45_ASM_FLAGS)
+ DEFINE GCC46_ARM_ASM_FLAGS           = $(ARCHASM_FLAGS) $(PLATFORM_FLAGS) DEF(GCC_ASM_FLAGS) -mlittle-endian
+-DEFINE GCC46_ARM_CC_FLAGS            = $(ARCHCC_FLAGS) $(PLATFORM_FLAGS) DEF(GCC_ARM_CC_FLAGS) -fstack-protector -mword-relocations
++DEFINE GCC46_ARM_CC_FLAGS            = $(ARCHCC_FLAGS) $(PLATFORM_FLAGS) DEF(GCC_ARM_CC_FLAGS) -fstack-protector -mword-relocations -Wno-maybe-uninitialized
+ DEFINE GCC46_ARM_CC_XIPFLAGS         = -D__ARM_FEATURE_UNALIGNED=0
+ DEFINE GCC46_ARM_DLINK_FLAGS         = DEF(GCC_ARM_DLINK_FLAGS) -Wl,--oformat=elf32-littlearm
+ DEFINE GCC46_ARM_DLINK2_FLAGS        = DEF(GCC_DLINK2_FLAGS_COMMON) -Wl,--defsym=PECOFF_HEADER_SIZE=0x220
