@@ -7,6 +7,7 @@ edk2 (0~20170911.5dfba97c-1) UNRELEASED; urgency=medium
       a6b53806.
     - OpenSSL: Switch to the new openssl-1.1-based system, which no
       longer requires patching.
+  * Unset environment variables that are used internally by edk2.
 
  -- dann frazier <dannf@debian.org>  Mon, 11 Sep 2017 17:47:21 -0600
 

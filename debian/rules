@@ -38,6 +38,14 @@ ifeq ($(DEB_HOST_ARCH),i386)
 	EDK2_HOST_ARCH=IA32
 endif
 
+# Clear variables used internally by the edk2 build system
+undefine WORKSPACE
+undefine ECP_SOURCE
+undefine EDK_SOURCE
+undefine EFI_SOURCE
+undefine EDK_TOOLS_PATH
+undefine CONF_PATH
+
 ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
 
 %:
