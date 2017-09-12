@@ -3,7 +3,7 @@
 SHELL=/bin/bash
 
 # various bits that have to be pulled in to create the full source tarball
-OPENSSL_VER= 1.0.2j
+OPENSSL_VER= 1.1.0e
 OPENSSL_SRC= openssl-$(OPENSSL_VER).tar.gz
 OPENSSL_URL= http://www.openssl.org/source/$(OPENSSL_SRC)
 SHELL_SRC  = https://efi-shell.svn.sourceforge.net/svnroot/efi-shell/trunk/Shell
@@ -52,7 +52,6 @@ setup-build:
 	# single shell invocation
 	. ./edksetup.sh
 	QUILT_PC=.pc-post QUILT_PATCHES=debian/post-patches quilt push -a || [ $$? = 2 ]
-	cd CryptoPkg/Library/OpensslLib/ && ./Install.sh
 
 build-ovmf: EDK2_ARCH_DIR=X64
 build-ovmf: setup-build
@@ -124,8 +123,8 @@ get-orig-source:
 	# openssl
 	wget $(OPENSSL_URL)
 	tar zxvf $(OPENSSL_SRC) -C edk2-$(ver)/CryptoPkg/Library/OpensslLib
-	cd edk2-$(ver)/CryptoPkg/Library/OpensslLib/$$(basename $(OPENSSL_SRC) .tar.gz) && \
-		patch -p1 < ../EDKII_openssl-$(OPENSSL_VER).patch
+	ln -s openssl-$(OPENSSL_VER) \
+		edk2-$(ver)/CryptoPkg/Library/OpensslLib/openssl
 	# efi shell
 	svn export -r$(SHELL_REV) $(SHELL_SRC) edk2-$(ver)/Shell
 	cd edk2-$(ver)/Shell && patch -p1 < ../EdkShellPkg/ShellR$(SHELL_REV).patch 
