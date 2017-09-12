@@ -59,24 +59,24 @@ setup-build:
 	# and it's excessively awkward to do all the subsequent work in a
 	# single shell invocation
 	. ./edksetup.sh
-	QUILT_PC=.pc-post QUILT_PATCHES=debian/post-patches quilt push -a || [ $$? = 2 ]
 
 build-ovmf: EDK2_ARCH_DIR=X64
+build-ovmf: EDK2_HOST_ARCH=X64
 build-ovmf: setup-build
 ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 	cd UefiCpuPkg/ResetVector/Vtf0 && python Build.py
 	mkdir -p EdkShellBinPkg/FullShell/$(EDK2_ARCH_DIR) \
 	         FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
 	set -e; . ./edksetup.sh; \
-		build -p EdkShellPkg/EdkShellPkg.dsc -m Shell/ShellFull.inf \
+		build -a $(EDK2_HOST_ARCH) -p EdkShellPkg/EdkShellPkg.dsc -m Shell/ShellFull.inf \
 			-b RELEASE -t $(EDK2_TOOLCHAIN); \
 		cp -a Build/EdkShellPkg/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_ARCH_DIR)/ShellFull.efi \
 			EdkShellBinPkg/FullShell/$(EDK2_ARCH_DIR)/Shell_Full.efi; \
-		build -p FatPkg/FatPkg.dsc -m FatPkg/EnhancedFatDxe/Fat.inf \
+		build -a $(EDK2_HOST_ARCH) -p FatPkg/FatPkg.dsc -m FatPkg/EnhancedFatDxe/Fat.inf \
 			-b RELEASE -t $(EDK2_TOOLCHAIN); \
 		cp -a Build/Fat/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_ARCH_DIR)/Fat.efi \
 			FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)/Fat.efi; \
-		build -DSECURE_BOOT_ENABLE=TRUE -DFD_SIZE_2MB \
+		build -a $(EDK2_HOST_ARCH) -p OvmfPkg/OvmfPkgX64.dsc -DSECURE_BOOT_ENABLE=TRUE -DFD_SIZE_2MB \
 			-b RELEASE -t $(EDK2_TOOLCHAIN)
 endif
 
@@ -114,7 +114,6 @@ override_dh_auto_clean:
 		. ./edksetup.sh; build clean; \
 		make -C BaseTools clean; \
 	fi
-	QUILT_PC=.pc-post QUILT_PATCHES=debian/post-patches quilt pop -a || [ $$? = 2 ]
 	rm -rf Conf/.cache Build .pc-post
 
 get-orig-source:

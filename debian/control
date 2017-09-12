@@ -3,7 +3,7 @@ Section: misc
 Priority: extra
 Maintainer: Debian QEMU Team <pkg-qemu-devel@lists.alioth.debian.org>
 Uploaders: Steve Langasek <vorlon@debian.org>, Serge Hallyn <serge.hallyn@ubuntu.com>, dann frazier <dannf@debian.org>
-Build-Depends: debhelper (>= 8), uuid-dev, quilt, iasl, gcc-multilib [i386], nasm, python, gcc-aarch64-linux-gnu, gcc-arm-linux-gnueabihf
+Build-Depends: debhelper (>= 8), uuid-dev, iasl, gcc-multilib [i386], nasm, python, gcc-aarch64-linux-gnu, gcc-arm-linux-gnueabihf
 Standards-Version: 3.9.8
 Homepage: http://www.tianocore.org
 Vcs-Git: git://git.debian.org/git/pkg-qemu/edk2.git

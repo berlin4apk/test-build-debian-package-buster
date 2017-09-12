@@ -8,6 +8,9 @@ edk2 (0~20170911.5dfba97c-1) UNRELEASED; urgency=medium
     - OpenSSL: Switch to the new openssl-1.1-based system, which no
       longer requires patching.
   * Unset environment variables that are used internally by edk2.
+  * Avoid the need for "post-patches" by explicitly setting the
+    ACTIVE_PLATFORM and TARGET_ARCH variables on the build commandline
+    for ovmf, like we already do for qemu-efi-{arm,aarch64}.
 
  -- dann frazier <dannf@debian.org>  Mon, 11 Sep 2017 17:47:21 -0600
 
