@@ -4,6 +4,7 @@ edk2 (0~20171010.234dbcef-1) UNRELEASED; urgency=medium
     - d/p/demote-maybe-uninitialized-to-warning.patch: Drop; issue resolved
       upstream.
   * Bump Standards-Version from 3.9.8 to 4.1.1.
+  * Bump debhelper compatibility level to 10.
 
  -- dann frazier <dannf@debian.org>  Tue, 10 Oct 2017 10:33:46 -0600
 
