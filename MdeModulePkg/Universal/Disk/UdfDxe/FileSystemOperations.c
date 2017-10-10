@@ -14,6 +14,23 @@
 
 #include "Udf.h"
 
+//
+// Vendor-Defined Device Path GUID for UDF file system
+//
+EFI_GUID gUdfDevPathGuid = EFI_UDF_DEVICE_PATH_GUID;
+
+/**
+  Find the anchor volume descriptor pointer.
+
+  @param[in]  BlockIo             BlockIo interface.
+  @param[in]  DiskIo              DiskIo interface.
+  @param[out] AnchorPoint         Anchor volume descriptor pointer.
+
+  @retval EFI_SUCCESS             Anchor volume descriptor pointer found.
+  @retval EFI_VOLUME_CORRUPTED    The file system structures are corrupted.
+  @retval other                   Anchor volume descriptor pointer not found.
+
+**/
 EFI_STATUS
 FindAnchorVolumeDescriptorPointer (
   IN   EFI_BLOCK_IO_PROTOCOL                 *BlockIo,
@@ -21,11 +38,19 @@ FindAnchorVolumeDescriptorPointer (
   OUT  UDF_ANCHOR_VOLUME_DESCRIPTOR_POINTER  *AnchorPoint
   )
 {
-  EFI_STATUS  Status;
-  UINT32      BlockSize = BlockIo->Media->BlockSize;
-  EFI_LBA     EndLBA = BlockIo->Media->LastBlock;
-  EFI_LBA     DescriptorLBAs[] = { 256, EndLBA - 256, EndLBA, 512 };
-  UINTN       Index;
+  EFI_STATUS          Status;
+  UINT32              BlockSize;
+  EFI_LBA             EndLBA;
+  EFI_LBA             DescriptorLBAs[4];
+  UINTN               Index;
+  UDF_DESCRIPTOR_TAG  *DescriptorTag;
+
+  BlockSize = BlockIo->Media->BlockSize;
+  EndLBA = BlockIo->Media->LastBlock;
+  DescriptorLBAs[0] = 256;
+  DescriptorLBAs[1] = EndLBA - 256;
+  DescriptorLBAs[2] = EndLBA;
+  DescriptorLBAs[3] = 512;
 
   for (Index = 0; Index < ARRAY_SIZE (DescriptorLBAs); Index++) {
     Status = DiskIo->ReadDisk (
@@ -38,10 +63,13 @@ FindAnchorVolumeDescriptorPointer (
     if (EFI_ERROR (Status)) {
       return Status;
     }
+
+    DescriptorTag = &AnchorPoint->DescriptorTag;
+
     //
     // Check if read LBA has a valid AVDP descriptor.
     //
-    if (IS_AVDP (AnchorPoint)) {
+    if (DescriptorTag->TagIdentifier == UdfAnchorVolumeDescriptorPointer) {
       return EFI_SUCCESS;
     }
   }
@@ -51,6 +79,22 @@ FindAnchorVolumeDescriptorPointer (
   return EFI_VOLUME_CORRUPTED;
 }
 
+/**
+  Save the content of Logical Volume Descriptors and Partitions Descriptors in
+  memory.
+
+  @param[in]  BlockIo             BlockIo interface.
+  @param[in]  DiskIo              DiskIo interface.
+  @param[in]  AnchorPoint         Anchor volume descriptor pointer.
+  @param[out] Volume              UDF volume information structure.
+
+  @retval EFI_SUCCESS             The descriptors were saved.
+  @retval EFI_OUT_OF_RESOURCES    The descriptors were not saved due to lack of
+                                  resources.
+  @retval other                   The descriptors were not saved due to
+                                  ReadDisk error.
+
+**/
 EFI_STATUS
 StartMainVolumeDescriptorSequence (
   IN   EFI_BLOCK_IO_PROTOCOL                 *BlockIo,
@@ -59,156 +103,112 @@ StartMainVolumeDescriptorSequence (
   OUT  UDF_VOLUME_INFO                       *Volume
   )
 {
-  EFI_STATUS                     Status;
-  UINT32                         BlockSize;
-  UDF_EXTENT_AD                  *ExtentAd;
-  UINT64                         StartingLsn;
-  UINT64                         EndingLsn;
-  VOID                           *Buffer;
-  UDF_LOGICAL_VOLUME_DESCRIPTOR  *LogicalVolDesc;
-  UDF_PARTITION_DESCRIPTOR       *PartitionDesc;
-  UINTN                          Index;
-  UINT32                         LogicalBlockSize;
+  EFI_STATUS            Status;
+  UINT32                BlockSize;
+  UDF_EXTENT_AD         *ExtentAd;
+  EFI_LBA               SeqStartBlock;
+  EFI_LBA               SeqEndBlock;
+  BOOLEAN               StopSequence;
+  VOID                  *Buffer;
+  UDF_DESCRIPTOR_TAG    *DescriptorTag;
+  UINT32                LogicalBlockSize;
+
+  BlockSize = BlockIo->Media->BlockSize;
+  ExtentAd = &AnchorPoint->MainVolumeDescriptorSequenceExtent;
 
   //
-  // We've already found an ADVP on the volume. It contains the extent
-  // (MainVolumeDescriptorSequenceExtent) where the Main Volume Descriptor
-  // Sequence starts. Therefore, we'll look for Logical Volume Descriptors and
-  // Partitions Descriptors and save them in memory, accordingly.
+  // Allocate buffer for reading disk blocks
   //
-  // Note also that each descriptor will be aligned on a block size (BlockSize)
-  // boundary, so we need to read one block at a time.
-  //
-  BlockSize    = BlockIo->Media->BlockSize;
-  ExtentAd     = &AnchorPoint->MainVolumeDescriptorSequenceExtent;
-  StartingLsn  = (UINT64)ExtentAd->ExtentLocation;
-  EndingLsn    = StartingLsn + DivU64x32 (
-                                     (UINT64)ExtentAd->ExtentLength,
-                                     BlockSize
-                                     );
-
-  Volume->LogicalVolDescs =
-    (UDF_LOGICAL_VOLUME_DESCRIPTOR **)AllocateZeroPool (ExtentAd->ExtentLength);
-  if (Volume->LogicalVolDescs == NULL) {
+  Buffer = AllocateZeroPool ((UINTN)BlockSize);
+  if (Buffer == NULL) {
     return EFI_OUT_OF_RESOURCES;
   }
 
-  Volume->PartitionDescs =
-    (UDF_PARTITION_DESCRIPTOR **)AllocateZeroPool (ExtentAd->ExtentLength);
-  if (Volume->PartitionDescs == NULL) {
-    Status = EFI_OUT_OF_RESOURCES;
-    goto Error_Alloc_Pds;
-  }
-
-  Buffer = AllocateZeroPool (BlockSize);
-  if (Buffer == NULL) {
-    Status = EFI_OUT_OF_RESOURCES;
-    goto Error_Alloc_Buf;
-  }
-
-  Volume->LogicalVolDescsNo  = 0;
-  Volume->PartitionDescsNo   = 0;
-
-  while (StartingLsn <= EndingLsn) {
-    Status = DiskIo->ReadDisk (
-      DiskIo,
+  //
+  // The logical partition created by Partition driver is relative to the main
+  // VDS extent location, so we start the Main Volume Descriptor Sequence at
+  // LBA 0.
+  //
+  // We don't need to check again if we have valid Volume Descriptors here since
+  // Partition driver already did.
+  //
+  SeqStartBlock = 0;
+  SeqEndBlock = SeqStartBlock + DivU64x32 ((UINT64)ExtentAd->ExtentLength,
+                                           BlockSize);
+  StopSequence = FALSE;
+  for (; SeqStartBlock < SeqEndBlock && !StopSequence; SeqStartBlock++) {
+    //
+    // Read disk block
+    //
+    Status = BlockIo->ReadBlocks (
+      BlockIo,
       BlockIo->Media->MediaId,
-      MultU64x32 (StartingLsn, BlockSize),
+      SeqStartBlock,
       BlockSize,
       Buffer
       );
     if (EFI_ERROR (Status)) {
-      goto Error_Read_Disk_Blk;
+      goto Out_Free;
     }
 
-    if (IS_TD (Buffer)) {
+    DescriptorTag = Buffer;
+
+    switch (DescriptorTag->TagIdentifier) {
+    case UdfPartitionDescriptor:
       //
-      // Found a Terminating Descriptor. Stop the sequence then.
+      // Save Partition Descriptor
       //
+      CopyMem (&Volume->PartitionDesc, Buffer, sizeof (Volume->PartitionDesc));
       break;
+
+    case UdfLogicalVolumeDescriptor:
+      //
+      // Save Logical Volume Descriptor
+      //
+      CopyMem (&Volume->LogicalVolDesc, Buffer, sizeof (Volume->LogicalVolDesc));
+      break;
+
+    case UdfTerminatingDescriptor:
+      StopSequence = TRUE;
+      break;
+
+    default:
+      ;
     }
-
-    if (IS_LVD (Buffer)) {
-      //
-      // Found a Logical Volume Descriptor.
-      //
-      LogicalVolDesc =
-        (UDF_LOGICAL_VOLUME_DESCRIPTOR *)
-        AllocateZeroPool (sizeof (UDF_LOGICAL_VOLUME_DESCRIPTOR));
-      if (LogicalVolDesc == NULL) {
-        Status = EFI_OUT_OF_RESOURCES;
-        goto Error_Alloc_Lvd;
-      }
-
-      CopyMem ((VOID *)LogicalVolDesc, Buffer,
-               sizeof (UDF_LOGICAL_VOLUME_DESCRIPTOR));
-      Volume->LogicalVolDescs[Volume->LogicalVolDescsNo++] = LogicalVolDesc;
-    } else if (IS_PD (Buffer)) {
-      //
-      // Found a Partition Descriptor.
-      //
-      PartitionDesc =
-        (UDF_PARTITION_DESCRIPTOR *)
-        AllocateZeroPool (sizeof (UDF_PARTITION_DESCRIPTOR));
-      if (PartitionDesc == NULL) {
-        Status = EFI_OUT_OF_RESOURCES;
-        goto Error_Alloc_Pd;
-      }
-
-      CopyMem ((VOID *)PartitionDesc, Buffer,
-               sizeof (UDF_PARTITION_DESCRIPTOR));
-      Volume->PartitionDescs[Volume->PartitionDescsNo++] = PartitionDesc;
-    }
-
-    StartingLsn++;
   }
 
   //
-  // When an UDF volume (revision 2.00 or higher) contains a File Entry rather
-  // than an Extended File Entry (which is not recommended as per spec), we need
-  // to make sure the size of a FE will be _at least_ 2048
-  // (UDF_LOGICAL_SECTOR_SIZE) bytes long to keep backward compatibility.
+  // Determine FE (File Entry) size
   //
-  LogicalBlockSize = LV_BLOCK_SIZE (Volume, UDF_DEFAULT_LV_NUM);
+  LogicalBlockSize = Volume->LogicalVolDesc.LogicalBlockSize;
   if (LogicalBlockSize >= UDF_LOGICAL_SECTOR_SIZE) {
-    Volume->FileEntrySize = LogicalBlockSize;
+    Volume->FileEntrySize = (UINTN)LogicalBlockSize;
   } else {
     Volume->FileEntrySize = UDF_LOGICAL_SECTOR_SIZE;
   }
 
+  Status = EFI_SUCCESS;
+
+Out_Free:
+  //
+  // Free block read buffer
+  //
   FreePool (Buffer);
-
-  return EFI_SUCCESS;
-
-Error_Alloc_Pd:
-Error_Alloc_Lvd:
-  for (Index = 0; Index < Volume->PartitionDescsNo; Index++) {
-    FreePool ((VOID *)Volume->PartitionDescs[Index]);
-  }
-
-  for (Index = 0; Index < Volume->LogicalVolDescsNo; Index++) {
-    FreePool ((VOID *)Volume->LogicalVolDescs[Index]);
-  }
-
-Error_Read_Disk_Blk:
-  FreePool (Buffer);
-
-Error_Alloc_Buf:
-  FreePool ((VOID *)Volume->PartitionDescs);
-  Volume->PartitionDescs = NULL;
-
-Error_Alloc_Pds:
-  FreePool ((VOID *)Volume->LogicalVolDescs);
-  Volume->LogicalVolDescs = NULL;
 
   return Status;
 }
 
-//
-// Return a Partition Descriptor given a Long Allocation Descriptor. This is
-// necessary to calculate the right extent (LongAd) offset which is added up
-// with partition's starting location.
-//
+/**
+  Return a Partition Descriptor given a Long Allocation Descriptor. This is
+  necessary to calculate the right extent (LongAd) offset which is added up
+  with partition's starting location.
+
+  @param[in]  Volume              Volume information pointer.
+  @param[in]  LongAd              Long Allocation Descriptor pointer.
+
+  @return A pointer to a Partition Descriptor.
+
+**/
 UDF_PARTITION_DESCRIPTOR *
 GetPdFromLongAd (
   IN UDF_VOLUME_INFO                 *Volume,
@@ -216,56 +216,67 @@ GetPdFromLongAd (
   )
 {
   UDF_LOGICAL_VOLUME_DESCRIPTOR  *LogicalVolDesc;
-  UINTN                          Index;
-  UDF_PARTITION_DESCRIPTOR       *PartitionDesc;
   UINT16                         PartitionNum;
 
-  LogicalVolDesc = Volume->LogicalVolDescs[UDF_DEFAULT_LV_NUM];
+  LogicalVolDesc = &Volume->LogicalVolDesc;
 
-  switch (LV_UDF_REVISION (LogicalVolDesc)) {
+  switch (LogicalVolDesc->DomainIdentifier.Suffix.Domain.UdfRevision) {
   case 0x0102:
+  case 0x0150:
+  case 0x0200:
+  case 0x0201:
+  case 0x0250:
+  case 0x0260:
     //
-    // As per UDF 1.02 specification:
+    // UDF 1.02 specification:
     //
     // There shall be exactly one prevailing Logical Volume Descriptor recorded
     // per Volume Set. The Partition Maps field shall contain only Type 1
     // Partition Maps.
     //
+    // UDF 1.50 through 2.60 specs say:
+    //
+    // For the purpose of interchange partition maps shall be limited to
+    // Partition Map type 1, except type 2 maps as described in the document.
+    //
+    // NOTE: Only one Type 1 (Physical) Partition is supported. It has been
+    // checked already in Partition driver for existence of a single Type 1
+    // Partition map, so we don't have to double check here.
+    //
+    // Partition reference number can also be retrieved from
+    // LongAd->ExtentLocation.PartitionReferenceNumber, however the spec says
+    // it may be 0, so let's not rely on it.
+    //
     PartitionNum = *(UINT16 *)((UINTN)&LogicalVolDesc->PartitionMaps[4]);
     break;
-  case 0x0150:
-    //
-    // Ensure Type 1 Partition map. Other types aren't supported in this
-    // implementation.
-    //
-    if (LogicalVolDesc->PartitionMaps[0] != 1 ||
-        LogicalVolDesc->PartitionMaps[1] != 6) {
-      return NULL;
-    }
-    PartitionNum = *(UINT16 *)((UINTN)&LogicalVolDesc->PartitionMaps[4]);
-    break;
-  case 0x0260:
-    //
-    // Fall through.
-    //
+
   default:
-    PartitionNum = LongAd->ExtentLocation.PartitionReferenceNumber;
-    break;
+    //
+    // Unsupported UDF revision
+    //
+    return NULL;
   }
 
-  for (Index = 0; Index < Volume->PartitionDescsNo; Index++) {
-    PartitionDesc = Volume->PartitionDescs[Index];
-    if (PartitionDesc->PartitionNumber == PartitionNum) {
-      return PartitionDesc;
-    }
+  //
+  // Check if partition number matches Partition Descriptor found in Main Volume
+  // Descriptor Sequence.
+  //
+  if (Volume->PartitionDesc.PartitionNumber == PartitionNum) {
+    return &Volume->PartitionDesc;
   }
 
   return NULL;
 }
 
-//
-// Return logical sector number of a given Long Allocation Descriptor.
-//
+/**
+  Return logical sector number of a given Long Allocation Descriptor.
+
+  @param[in]  Volume              Volume information pointer.
+  @param[in]  LongAd              Long Allocation Descriptor pointer.
+
+  @return The logical sector number of a given Long Allocation Descriptor.
+
+**/
 UINT64
 GetLongAdLsn (
   IN UDF_VOLUME_INFO                 *Volume,
@@ -277,137 +288,104 @@ GetLongAdLsn (
   PartitionDesc = GetPdFromLongAd (Volume, LongAd);
   ASSERT (PartitionDesc != NULL);
 
-  return (UINT64)PartitionDesc->PartitionStartingLocation +
-                 LongAd->ExtentLocation.LogicalBlockNumber;
+  return (UINT64)PartitionDesc->PartitionStartingLocation -
+    Volume->MainVdsStartLocation +
+    LongAd->ExtentLocation.LogicalBlockNumber;
 }
 
-//
-// Return logical sector number of a given Short Allocation Descriptor.
-//
+/**
+  Return logical sector number of a given Short Allocation Descriptor.
+
+  @param[in]  Volume              Volume pointer.
+  @param[in]  PartitionDesc       Partition Descriptor pointer.
+  @param[in]  ShortAd             Short Allocation Descriptor pointer.
+
+  @return The logical sector number of a given Short Allocation Descriptor.
+
+**/
 UINT64
 GetShortAdLsn (
+  IN UDF_VOLUME_INFO                  *Volume,
   IN UDF_PARTITION_DESCRIPTOR         *PartitionDesc,
   IN UDF_SHORT_ALLOCATION_DESCRIPTOR  *ShortAd
   )
 {
-  return (UINT64)PartitionDesc->PartitionStartingLocation +
-    ShortAd->ExtentPosition;
+  return (UINT64)PartitionDesc->PartitionStartingLocation -
+    Volume->MainVdsStartLocation + ShortAd->ExtentPosition;
 }
 
-//
-// Find File Set Descriptor of a given Logical Volume Descriptor.
-//
-// The found FSD will contain the extent (LogicalVolumeContentsUse) where our
-// root directory is.
-//
+/**
+  Find File Set Descriptor of a given Logical Volume Descriptor.
+
+  The found FSD will contain the extent (LogicalVolumeContentsUse) where our
+  root directory is.
+
+  @param[in]  BlockIo             BlockIo interface.
+  @param[in]  DiskIo              DiskIo interface.
+  @param[in]  Volume              Volume information pointer.
+
+  @retval EFI_SUCCESS             File Set Descriptor pointer found.
+  @retval EFI_VOLUME_CORRUPTED    The file system structures are corrupted.
+  @retval other                   File Set Descriptor pointer not found.
+
+**/
 EFI_STATUS
 FindFileSetDescriptor (
   IN   EFI_BLOCK_IO_PROTOCOL    *BlockIo,
   IN   EFI_DISK_IO_PROTOCOL     *DiskIo,
-  IN   UDF_VOLUME_INFO          *Volume,
-  IN   UINTN                    LogicalVolDescNum,
-  OUT  UDF_FILE_SET_DESCRIPTOR  *FileSetDesc
+  IN   UDF_VOLUME_INFO          *Volume
   )
 {
   EFI_STATUS                     Status;
   UINT64                         Lsn;
   UDF_LOGICAL_VOLUME_DESCRIPTOR  *LogicalVolDesc;
+  UDF_DESCRIPTOR_TAG             *DescriptorTag;
 
-  LogicalVolDesc = Volume->LogicalVolDescs[LogicalVolDescNum];
+  LogicalVolDesc = &Volume->LogicalVolDesc;
   Lsn = GetLongAdLsn (Volume, &LogicalVolDesc->LogicalVolumeContentsUse);
 
   //
-  // Read extent (Long Ad).
+  // As per UDF 2.60 specification:
+  //
+  // There shall be exactly one File Set Descriptor recorded per Logical
+  // Volume.
+  //
+  // Read disk block
   //
   Status = DiskIo->ReadDisk (
     DiskIo,
     BlockIo->Media->MediaId,
     MultU64x32 (Lsn, LogicalVolDesc->LogicalBlockSize),
-    sizeof (UDF_FILE_SET_DESCRIPTOR),
-    (VOID *)FileSetDesc
+    sizeof (Volume->FileSetDesc),
+    &Volume->FileSetDesc
     );
   if (EFI_ERROR (Status)) {
     return Status;
   }
 
+  DescriptorTag = &Volume->FileSetDesc.DescriptorTag;
+
   //
-  // Check if the read extent contains a valid FSD's tag identifier.
+  // Check if read block is a File Set Descriptor
   //
-  if (!IS_FSD (FileSetDesc)) {
+  if (DescriptorTag->TagIdentifier != UdfFileSetDescriptor) {
     return EFI_VOLUME_CORRUPTED;
   }
 
   return EFI_SUCCESS;
 }
 
-//
-// Get all File Set Descriptors for each Logical Volume Descriptor.
-//
-EFI_STATUS
-GetFileSetDescriptors (
-  IN      EFI_BLOCK_IO_PROTOCOL  *BlockIo,
-  IN      EFI_DISK_IO_PROTOCOL   *DiskIo,
-  IN OUT  UDF_VOLUME_INFO        *Volume
-  )
-{
-  EFI_STATUS               Status;
-  UINTN                    Index;
-  UDF_FILE_SET_DESCRIPTOR  *FileSetDesc;
-  UINTN                    Count;
+/**
+  Read Volume and File Structure on an UDF file system.
 
-  Volume->FileSetDescs =
-    (UDF_FILE_SET_DESCRIPTOR **)AllocateZeroPool (
-      Volume->LogicalVolDescsNo * sizeof (UDF_FILE_SET_DESCRIPTOR));
-  if (Volume->FileSetDescs == NULL) {
-    return EFI_OUT_OF_RESOURCES;
-  }
+  @param[in]   BlockIo            BlockIo interface.
+  @param[in]   DiskIo             DiskIo interface.
+  @param[out]  Volume             Volume information pointer.
 
-  for (Index = 0; Index < Volume->LogicalVolDescsNo; Index++) {
-    FileSetDesc = AllocateZeroPool (sizeof (UDF_FILE_SET_DESCRIPTOR));
-    if (FileSetDesc == NULL) {
-      Status = EFI_OUT_OF_RESOURCES;
-      goto Error_Alloc_Fsd;
-    }
+  @retval EFI_SUCCESS             Volume and File Structure were read.
+  @retval other                   Volume and File Structure were not read.
 
-    //
-    // Find a FSD for this LVD.
-    //
-    Status = FindFileSetDescriptor (
-      BlockIo,
-      DiskIo,
-      Volume,
-      Index,
-      FileSetDesc
-      );
-    if (EFI_ERROR (Status)) {
-      goto Error_Find_Fsd;
-    }
-
-    //
-    // Got one. Save it.
-    //
-    Volume->FileSetDescs[Index] = FileSetDesc;
-  }
-
-  Volume->FileSetDescsNo = Volume->LogicalVolDescsNo;
-  return EFI_SUCCESS;
-
-Error_Find_Fsd:
-  Count = Index + 1;
-  for (Index = 0; Index < Count; Index++) {
-    FreePool ((VOID *)Volume->FileSetDescs[Index]);
-  }
-
-  FreePool ((VOID *)Volume->FileSetDescs);
-  Volume->FileSetDescs = NULL;
-
-Error_Alloc_Fsd:
-  return Status;
-}
-
-//
-// Read Volume and File Structure on an UDF file system.
-//
+**/
 EFI_STATUS
 ReadVolumeFileStructure (
   IN   EFI_BLOCK_IO_PROTOCOL  *BlockIo,
@@ -417,9 +395,10 @@ ReadVolumeFileStructure (
 {
   EFI_STATUS                            Status;
   UDF_ANCHOR_VOLUME_DESCRIPTOR_POINTER  AnchorPoint;
+  UDF_EXTENT_AD                         *ExtentAd;
 
   //
-  // Find an AVDP.
+  // Find Anchor Volume Descriptor Pointer
   //
   Status = FindAnchorVolumeDescriptorPointer (
     BlockIo,
@@ -431,7 +410,14 @@ ReadVolumeFileStructure (
   }
 
   //
-  // AVDP has been found. Start MVDS.
+  // Save Main VDS start block number
+  //
+  ExtentAd = &AnchorPoint.MainVolumeDescriptorSequenceExtent;
+
+  Volume->MainVdsStartLocation = (UINT64)ExtentAd->ExtentLocation;
+
+  //
+  // Start Main Volume Descriptor Sequence.
   //
   Status = StartMainVolumeDescriptorSequence (
     BlockIo,
@@ -446,9 +432,14 @@ ReadVolumeFileStructure (
   return Status;
 }
 
-//
-// Calculate length of a given File Identifier Descriptor.
-//
+/**
+  Calculate length of a given File Identifier Descriptor.
+
+  @param[in]  FileIdentifierDesc  File Identifier Descriptor pointer.
+
+  @return The length of a given File Identifier Descriptor.
+
+**/
 UINT64
 GetFidDescriptorLength (
   IN UDF_FILE_IDENTIFIER_DESCRIPTOR  *FileIdentifierDesc
@@ -461,9 +452,13 @@ GetFidDescriptorLength (
              );
 }
 
-//
-// Duplicate a given File Identifier Descriptor.
-//
+/**
+  Duplicate a given File Identifier Descriptor.
+
+  @param[in]  FileIdentifierDesc     File Identifier Descriptor pointer.
+  @param[out] NewFileIdentifierDesc  The duplicated File Identifier Descriptor.
+
+**/
 VOID
 DuplicateFid (
   IN   UDF_FILE_IDENTIFIER_DESCRIPTOR  *FileIdentifierDesc,
@@ -472,12 +467,20 @@ DuplicateFid (
 {
   *NewFileIdentifierDesc =
     (UDF_FILE_IDENTIFIER_DESCRIPTOR *)AllocateCopyPool (
-      GetFidDescriptorLength (FileIdentifierDesc), FileIdentifierDesc);
+      (UINTN) GetFidDescriptorLength (FileIdentifierDesc), FileIdentifierDesc);
+
+  ASSERT (*NewFileIdentifierDesc != NULL);
 }
 
-//
-// Duplicate either a given File Entry or a given Extended File Entry.
-//
+/**
+  Duplicate either a given File Entry or a given Extended File Entry.
+
+  @param[in]  BlockIo             BlockIo interface.
+  @param[in]  Volume              Volume information pointer.
+  @param[in]  FileEntry           (Extended) File Entry pointer.
+  @param[out] NewFileEntry        The duplicated (Extended) File Entry.
+
+**/
 VOID
 DuplicateFe (
   IN   EFI_BLOCK_IO_PROTOCOL  *BlockIo,
@@ -487,17 +490,25 @@ DuplicateFe (
   )
 {
   *NewFileEntry = AllocateCopyPool (Volume->FileEntrySize, FileEntry);
+
+  ASSERT (*NewFileEntry != NULL);
 }
 
-//
-// Get raw data + length of a given File Entry or Extended File Entry.
-//
-// The file's recorded data can contain either real file content (inline) or
-// a sequence of extents (or Allocation Descriptors) which tells where file's
-// content is stored in.
-//
-// NOTE: The FE/EFE can be thought it was an inode.
-//
+/**
+  Get raw data + length of a given File Entry or Extended File Entry.
+
+  The file's recorded data can contain either real file content (inline) or
+  a sequence of extents (or Allocation Descriptors) which tells where file's
+  content is stored in.
+
+  NOTE: The FE/EFE can be thought it was an inode.
+
+  @param[in]  FileEntryData       (Extended) File Entry pointer.
+  @param[out] Data                Buffer contains the raw data of a given
+                                  (Extended) File Entry.
+  @param[out] Length              Length of the data in Buffer.
+
+**/
 VOID
 GetFileEntryData (
   IN   VOID    *FileEntryData,
@@ -505,16 +516,19 @@ GetFileEntryData (
   OUT  UINT64  *Length
   )
 {
+  UDF_DESCRIPTOR_TAG       *DescriptorTag;
   UDF_EXTENDED_FILE_ENTRY  *ExtendedFileEntry;
   UDF_FILE_ENTRY           *FileEntry;
 
-  if (IS_EFE (FileEntryData)) {
+  DescriptorTag = FileEntryData;
+
+  if (DescriptorTag->TagIdentifier == UdfExtendedFileEntry) {
     ExtendedFileEntry = (UDF_EXTENDED_FILE_ENTRY *)FileEntryData;
 
     *Length  = ExtendedFileEntry->InformationLength;
     *Data    = (VOID *)((UINT8 *)ExtendedFileEntry->Data +
                         ExtendedFileEntry->LengthOfExtendedAttributes);
-  } else if (IS_FE (FileEntryData)) {
+  } else if (DescriptorTag->TagIdentifier == UdfFileEntry) {
     FileEntry = (UDF_FILE_ENTRY *)FileEntryData;
 
     *Length  = FileEntry->InformationLength;
@@ -523,9 +537,15 @@ GetFileEntryData (
   }
 }
 
-//
-// Get Allocation Descriptors' data information from a given FE/EFE.
-//
+/**
+  Get Allocation Descriptors' data information from a given FE/EFE.
+
+  @param[in]  FileEntryData       (Extended) File Entry pointer.
+  @param[out] AdsData             Buffer contains the Allocation Descriptors'
+                                  data from a given FE/EFE.
+  @param[out] Length              Length of the data in AdsData.
+
+**/
 VOID
 GetAdsInformation (
   IN   VOID    *FileEntryData,
@@ -533,16 +553,19 @@ GetAdsInformation (
   OUT  UINT64  *Length
   )
 {
+  UDF_DESCRIPTOR_TAG       *DescriptorTag;
   UDF_EXTENDED_FILE_ENTRY  *ExtendedFileEntry;
   UDF_FILE_ENTRY           *FileEntry;
 
-  if (IS_EFE (FileEntryData)) {
+  DescriptorTag = FileEntryData;
+
+  if (DescriptorTag->TagIdentifier == UdfExtendedFileEntry) {
     ExtendedFileEntry = (UDF_EXTENDED_FILE_ENTRY *)FileEntryData;
 
     *Length = ExtendedFileEntry->LengthOfAllocationDescriptors;
     *AdsData = (VOID *)((UINT8 *)ExtendedFileEntry->Data +
                         ExtendedFileEntry->LengthOfExtendedAttributes);
-  } else if (IS_FE (FileEntryData)) {
+  } else if (DescriptorTag->TagIdentifier == UdfFileEntry) {
     FileEntry = (UDF_FILE_ENTRY *)FileEntryData;
 
     *Length = FileEntry->LengthOfAllocationDescriptors;
@@ -551,9 +574,18 @@ GetAdsInformation (
   }
 }
 
-//
-// Read next Long Allocation Descriptor from a given file's data.
-//
+/**
+  Read next Long Allocation Descriptor from a given file's data.
+
+  @param[in]     Data             File's data pointer.
+  @param[in,out] Offset           Starting offset of the File's data to read.
+  @param[in]     Length           Length of the data to read.
+  @param[out]    FoundLongAd      Long Allocation Descriptor pointer.
+
+  @retval EFI_SUCCESS             A Long Allocation Descriptor was found.
+  @retval EFI_DEVICE_ERROR        No more Long Allocation Descriptors.
+
+**/
 EFI_STATUS
 GetLongAdFromAds (
   IN      VOID                            *Data,
@@ -580,9 +612,9 @@ GetLongAdFromAds (
     // If it's either an indirect AD (Extended Alllocation Descriptor) or an
     // allocated AD, then return it.
     //
-    ExtentFlags = GET_EXTENT_FLAGS (LONG_ADS_SEQUENCE, LongAd);
-    if (ExtentFlags == EXTENT_IS_NEXT_EXTENT ||
-        ExtentFlags == EXTENT_RECORDED_AND_ALLOCATED) {
+    ExtentFlags = GET_EXTENT_FLAGS (LongAdsSequence, LongAd);
+    if (ExtentFlags == ExtentIsNextExtent ||
+        ExtentFlags == ExtentRecordedAndAllocated) {
       break;
     }
 
@@ -590,7 +622,7 @@ GetLongAdFromAds (
     // This AD is either not recorded but allocated, or not recorded and not
     // allocated. Skip it.
     //
-    *Offset += AD_LENGTH (LONG_ADS_SEQUENCE);
+    *Offset += AD_LENGTH (LongAdsSequence);
   }
 
   *FoundLongAd = LongAd;
@@ -598,9 +630,18 @@ GetLongAdFromAds (
   return EFI_SUCCESS;
 }
 
-//
-// Read next Short Allocation Descriptor from a given file's data.
-//
+/**
+  Read next Short Allocation Descriptor from a given file's data.
+
+  @param[in]     Data             File's data pointer.
+  @param[in,out] Offset           Starting offset of the File's data to read.
+  @param[in]     Length           Length of the data to read.
+  @param[out]    FoundShortAd     Short Allocation Descriptor pointer.
+
+  @retval EFI_SUCCESS             A Short Allocation Descriptor was found.
+  @retval EFI_DEVICE_ERROR        No more Short Allocation Descriptors.
+
+**/
 EFI_STATUS
 GetShortAdFromAds (
   IN      VOID                             *Data,
@@ -627,9 +668,9 @@ GetShortAdFromAds (
     // If it's either an indirect AD (Extended Alllocation Descriptor) or an
     // allocated AD, then return it.
     //
-    ExtentFlags = GET_EXTENT_FLAGS (SHORT_ADS_SEQUENCE, ShortAd);
-    if (ExtentFlags == EXTENT_IS_NEXT_EXTENT ||
-        ExtentFlags == EXTENT_RECORDED_AND_ALLOCATED) {
+    ExtentFlags = GET_EXTENT_FLAGS (ShortAdsSequence, ShortAd);
+    if (ExtentFlags == ExtentIsNextExtent ||
+        ExtentFlags == ExtentRecordedAndAllocated) {
       break;
     }
 
@@ -637,7 +678,7 @@ GetShortAdFromAds (
     // This AD is either not recorded but allocated, or not recorded and not
     // allocated. Skip it.
     //
-    *Offset += AD_LENGTH (SHORT_ADS_SEQUENCE);
+    *Offset += AD_LENGTH (ShortAdsSequence);
   }
 
   *FoundShortAd = ShortAd;
@@ -645,10 +686,21 @@ GetShortAdFromAds (
   return EFI_SUCCESS;
 }
 
-//
-// Get either a Short Allocation Descriptor or a Long Allocation Descriptor from
-// file's data.
-//
+/**
+  Get either a Short Allocation Descriptor or a Long Allocation Descriptor from
+  file's data.
+
+  @param[in]     RecordingFlags   Flag to indicate the type of descriptor.
+  @param[in]     Data             File's data pointer.
+  @param[in,out] Offset           Starting offset of the File's data to read.
+  @param[in]     Length           Length of the data to read.
+  @param[out]    FoundAd          Allocation Descriptor pointer.
+
+  @retval EFI_SUCCESS             A Short Allocation Descriptor was found.
+  @retval EFI_DEVICE_ERROR        No more Allocation Descriptors.
+                                  Invalid type of descriptor was given.
+
+**/
 EFI_STATUS
 GetAllocationDescriptor (
   IN      UDF_FE_RECORDING_FLAGS  RecordingFlags,
@@ -658,14 +710,14 @@ GetAllocationDescriptor (
   OUT     VOID                    **FoundAd
   )
 {
-  if (RecordingFlags == LONG_ADS_SEQUENCE) {
+  if (RecordingFlags == LongAdsSequence) {
     return GetLongAdFromAds (
       Data,
       Offset,
       Length,
       (UDF_LONG_ALLOCATION_DESCRIPTOR **)FoundAd
       );
-  } else if (RecordingFlags == SHORT_ADS_SEQUENCE) {
+  } else if (RecordingFlags == ShortAdsSequence) {
     return GetShortAdFromAds (
       Data,
       Offset,
@@ -677,9 +729,17 @@ GetAllocationDescriptor (
   return EFI_DEVICE_ERROR;
 }
 
-//
-// Return logical sector number of either Short or Long Allocation Descriptor.
-//
+/**
+  Return logical sector number of either Short or Long Allocation Descriptor.
+
+  @param[in]  RecordingFlags      Flag to indicate the type of descriptor.
+  @param[in]  Volume              Volume information pointer.
+  @param[in]  ParentIcb           Long Allocation Descriptor pointer.
+  @param[in]  Ad                  Allocation Descriptor pointer.
+
+  @return The logical sector number of the given Allocation Descriptor.
+
+**/
 UINT64
 GetAllocationDescriptorLsn (
   IN UDF_FE_RECORDING_FLAGS          RecordingFlags,
@@ -688,11 +748,17 @@ GetAllocationDescriptorLsn (
   IN VOID                            *Ad
   )
 {
-  if (RecordingFlags == LONG_ADS_SEQUENCE) {
+  UDF_PARTITION_DESCRIPTOR *PartitionDesc;
+
+  if (RecordingFlags == LongAdsSequence) {
     return GetLongAdLsn (Volume, (UDF_LONG_ALLOCATION_DESCRIPTOR *)Ad);
-  } else if (RecordingFlags == SHORT_ADS_SEQUENCE) {
+  } else if (RecordingFlags == ShortAdsSequence) {
+    PartitionDesc = GetPdFromLongAd (Volume, ParentIcb);
+    ASSERT (PartitionDesc != NULL);
+
     return GetShortAdLsn (
-      GetPdFromLongAd (Volume, ParentIcb),
+      Volume,
+      PartitionDesc,
       (UDF_SHORT_ALLOCATION_DESCRIPTOR *)Ad
       );
   }
@@ -700,9 +766,27 @@ GetAllocationDescriptorLsn (
   return 0;
 }
 
-//
-// Return offset + length of a given indirect Allocation Descriptor (AED).
-//
+/**
+  Return offset + length of a given indirect Allocation Descriptor (AED).
+
+  @param[in]  BlockIo             BlockIo interface.
+  @param[in]  DiskIo              DiskIo interface.
+  @param[in]  Volume              Volume information pointer.
+  @param[in]  ParentIcb           Long Allocation Descriptor pointer.
+  @param[in]  RecordingFlags      Flag to indicate the type of descriptor.
+  @param[in]  Ad                  Allocation Descriptor pointer.
+  @param[out] Offset              Offset of a given indirect Allocation
+                                  Descriptor.
+  @param[out] Length              Length of a given indirect Allocation
+                                  Descriptor.
+
+  @retval EFI_SUCCESS             The offset and length were returned.
+  @retval EFI_OUT_OF_RESOURCES    The offset and length were not returned due
+                                  to lack of resources.
+  @retval EFI_VOLUME_CORRUPTED    The file system structures are corrupted.
+  @retval other                   The offset and length were not returned.
+
+**/
 EFI_STATUS
 GetAedAdsOffset (
   IN   EFI_BLOCK_IO_PROTOCOL           *BlockIo,
@@ -721,6 +805,7 @@ GetAedAdsOffset (
   VOID                              *Data;
   UINT32                            LogicalBlockSize;
   UDF_ALLOCATION_EXTENT_DESCRIPTOR  *AllocExtDesc;
+  UDF_DESCRIPTOR_TAG                *DescriptorTag;
 
   ExtentLength  = GET_EXTENT_LENGTH (RecordingFlags, Ad);
   Lsn           = GetAllocationDescriptorLsn (RecordingFlags,
@@ -733,7 +818,7 @@ GetAedAdsOffset (
     return EFI_OUT_OF_RESOURCES;
   }
 
-  LogicalBlockSize = LV_BLOCK_SIZE (Volume, UDF_DEFAULT_LV_NUM);
+  LogicalBlockSize = Volume->LogicalVolDesc.LogicalBlockSize;
 
   //
   // Read extent.
@@ -749,11 +834,14 @@ GetAedAdsOffset (
     goto Exit;
   }
 
+  AllocExtDesc = (UDF_ALLOCATION_EXTENT_DESCRIPTOR *)Data;
+
+  DescriptorTag = &AllocExtDesc->DescriptorTag;
+
   //
   // Check if read extent contains a valid tag identifier for AED.
   //
-  AllocExtDesc = (UDF_ALLOCATION_EXTENT_DESCRIPTOR *)Data;
-  if (!IS_AED (AllocExtDesc)) {
+  if (DescriptorTag->TagIdentifier != UdfAllocationExtentDescriptor) {
     Status = EFI_VOLUME_CORRUPTED;
     goto Exit;
   }
@@ -771,9 +859,25 @@ Exit:
   return Status;
 }
 
-//
-// Read Allocation Extent Descriptor into memory.
-//
+/**
+  Read Allocation Extent Descriptor into memory.
+
+  @param[in]  BlockIo             BlockIo interface.
+  @param[in]  DiskIo              DiskIo interface.
+  @param[in]  Volume              Volume information pointer.
+  @param[in]  ParentIcb           Long Allocation Descriptor pointer.
+  @param[in]  RecordingFlags      Flag to indicate the type of descriptor.
+  @param[in]  Ad                  Allocation Descriptor pointer.
+  @param[out] Data                Buffer that contains the Allocation Extent
+                                  Descriptor.
+  @param[out] Length              Length of Data.
+
+  @retval EFI_SUCCESS             The Allocation Extent Descriptor was read.
+  @retval EFI_OUT_OF_RESOURCES    The Allocation Extent Descriptor was not read
+                                  due to lack of resources.
+  @retval other                   Fail to read the disk.
+
+**/
 EFI_STATUS
 GetAedAdsData (
   IN   EFI_BLOCK_IO_PROTOCOL           *BlockIo,
@@ -809,7 +913,7 @@ GetAedAdsData (
   //
   // Allocate buffer to read in AED's data.
   //
-  *Data = AllocatePool (*Length);
+  *Data = AllocatePool ((UINTN) (*Length));
   if (*Data == NULL) {
     return EFI_OUT_OF_RESOURCES;
   }
@@ -818,14 +922,24 @@ GetAedAdsData (
     DiskIo,
     BlockIo->Media->MediaId,
     Offset,
-    *Length,
+    (UINTN) (*Length),
     *Data
     );
 }
 
-//
-// Function used to serialise reads of Allocation Descriptors.
-//
+/**
+  Function used to serialise reads of Allocation Descriptors.
+
+  @param[in]      RecordingFlags  Flag to indicate the type of descriptor.
+  @param[in]      Ad              Allocation Descriptor pointer.
+  @param[in, out] Buffer          Buffer to hold the next Allocation Descriptor.
+  @param[in]      Length          Length of Buffer.
+
+  @retval EFI_SUCCESS             Buffer was grown to hold the next Allocation
+                                  Descriptor.
+  @retval EFI_OUT_OF_RESOURCES    Buffer was not grown due to lack of resources.
+
+**/
 EFI_STATUS
 GrowUpBufferToNextAd (
   IN      UDF_FE_RECORDING_FLAGS  RecordingFlags,
@@ -844,7 +958,7 @@ GrowUpBufferToNextAd (
       return EFI_OUT_OF_RESOURCES;
     }
   } else {
-    *Buffer = ReallocatePool (Length, Length + ExtentLength, *Buffer);
+    *Buffer = ReallocatePool ((UINTN) Length, (UINTN) (Length + ExtentLength), *Buffer);
     if (*Buffer == NULL) {
       return EFI_OUT_OF_RESOURCES;
     }
@@ -853,9 +967,26 @@ GrowUpBufferToNextAd (
   return EFI_SUCCESS;
 }
 
-//
-// Read data or size of either a File Entry or an Extended File Entry.
-//
+/**
+  Read data or size of either a File Entry or an Extended File Entry.
+
+  @param[in]      BlockIo         BlockIo interface.
+  @param[in]      DiskIo          DiskIo interface.
+  @param[in]      Volume          Volume information pointer.
+  @param[in]      ParentIcb       Long Allocation Descriptor pointer.
+  @param[in]      FileEntryData   FE/EFE structure pointer.
+  @param[in, out] ReadFileInfo    Read file information pointer.
+
+  @retval EFI_SUCCESS             Data or size of a FE/EFE was read.
+  @retval EFI_OUT_OF_RESOURCES    Data or size of a FE/EFE was not read due to
+                                  lack of resources.
+  @retval EFI_INVALID_PARAMETER   The read file flag given in ReadFileInfo is
+                                  invalid.
+  @retval EFI_UNSUPPORTED         The FE recording flag given in FileEntryData
+                                  is not supported.
+  @retval other                   Data or size of a FE/EFE was not read.
+
+**/
 EFI_STATUS
 ReadFile (
   IN      EFI_BLOCK_IO_PROTOCOL           *BlockIo,
@@ -883,12 +1014,21 @@ ReadFile (
   UINT32                  ExtentLength;
   UDF_FE_RECORDING_FLAGS  RecordingFlags;
 
-  LogicalBlockSize  = LV_BLOCK_SIZE (Volume, UDF_DEFAULT_LV_NUM);
+  LogicalBlockSize  = Volume->LogicalVolDesc.LogicalBlockSize;
   DoFreeAed         = FALSE;
 
+  //
+  // set BytesLeft to suppress incorrect compiler/analyzer warnings
+  //
+  BytesLeft = 0;
+  DataOffset = 0;
+  FilePosition = 0;
+  FinishedSeeking = FALSE;
+  Data = NULL;
+
   switch (ReadFileInfo->Flags) {
-  case READ_FILE_GET_FILESIZE:
-  case READ_FILE_ALLOCATE_AND_READ:
+  case ReadFileGetFileSize:
+  case ReadFileAllocateAndRead:
     //
     // Initialise ReadFileInfo structure for either getting file size, or
     // reading file's recorded data.
@@ -896,7 +1036,7 @@ ReadFile (
     ReadFileInfo->ReadLength = 0;
     ReadFileInfo->FileData = NULL;
     break;
-  case READ_FILE_SEEK_AND_READ:
+  case ReadFileSeekAndRead:
     //
     // About to seek a file and/or read its data.
     //
@@ -921,19 +1061,19 @@ ReadFile (
 
   RecordingFlags = GET_FE_RECORDING_FLAGS (FileEntryData);
   switch (RecordingFlags) {
-  case INLINE_DATA:
+  case InlineData:
     //
     // There are no extents for this FE/EFE. All data is inline.
     //
     GetFileEntryData (FileEntryData, &Data, &Length);
 
-    if (ReadFileInfo->Flags == READ_FILE_GET_FILESIZE) {
+    if (ReadFileInfo->Flags == ReadFileGetFileSize) {
       ReadFileInfo->ReadLength = Length;
-    } else if (ReadFileInfo->Flags == READ_FILE_ALLOCATE_AND_READ) {
+    } else if (ReadFileInfo->Flags == ReadFileAllocateAndRead) {
       //
       // Allocate buffer for starting read data.
       //
-      ReadFileInfo->FileData = AllocatePool (Length);
+      ReadFileInfo->FileData = AllocatePool ((UINTN) Length);
       if (ReadFileInfo->FileData == NULL) {
         return EFI_OUT_OF_RESOURCES;
       }
@@ -941,9 +1081,9 @@ ReadFile (
       //
       // Read all inline data into ReadFileInfo->FileData
       //
-      CopyMem (ReadFileInfo->FileData, Data, Length);
+      CopyMem (ReadFileInfo->FileData, Data, (UINTN) Length);
       ReadFileInfo->ReadLength = Length;
-    } else if (ReadFileInfo->Flags == READ_FILE_SEEK_AND_READ) {
+    } else if (ReadFileInfo->Flags == ReadFileSeekAndRead) {
       //
       // If FilePosition is non-zero, seek file to FilePosition, read
       // FileDataSize bytes and then updates FilePosition.
@@ -951,15 +1091,20 @@ ReadFile (
       CopyMem (
         ReadFileInfo->FileData,
         (VOID *)((UINT8 *)Data + ReadFileInfo->FilePosition),
-        ReadFileInfo->FileDataSize
+        (UINTN) ReadFileInfo->FileDataSize
         );
 
       ReadFileInfo->FilePosition += ReadFileInfo->FileDataSize;
+    } else {
+      ASSERT (FALSE);
+      return EFI_INVALID_PARAMETER;
     }
 
+    Status = EFI_SUCCESS;
     break;
-  case LONG_ADS_SEQUENCE:
-  case SHORT_ADS_SEQUENCE:
+
+  case LongAdsSequence:
+  case ShortAdsSequence:
     //
     // This FE/EFE contains a run of Allocation Descriptors. Get data + size
     // for start reading them out.
@@ -987,7 +1132,7 @@ ReadFile (
       // Check if AD is an indirect AD. If so, read Allocation Extent
       // Descriptor and its extents (ADs).
       //
-      if (GET_EXTENT_FLAGS (RecordingFlags, Ad) == EXTENT_IS_NEXT_EXTENT) {
+      if (GET_EXTENT_FLAGS (RecordingFlags, Ad) == ExtentIsNextExtent) {
         if (!DoFreeAed) {
           DoFreeAed = TRUE;
         } else {
@@ -1007,6 +1152,7 @@ ReadFile (
         if (EFI_ERROR (Status)) {
           goto Error_Get_Aed;
         }
+        ASSERT (Data != NULL);
 
         AdOffset = 0;
         continue;
@@ -1020,10 +1166,10 @@ ReadFile (
                                         Ad);
 
       switch (ReadFileInfo->Flags) {
-      case READ_FILE_GET_FILESIZE:
+      case ReadFileGetFileSize:
         ReadFileInfo->ReadLength += ExtentLength;
         break;
-      case READ_FILE_ALLOCATE_AND_READ:
+      case ReadFileAllocateAndRead:
         //
         // Increase FileData (if necessary) to read next extent.
         //
@@ -1054,7 +1200,7 @@ ReadFile (
 
         ReadFileInfo->ReadLength += ExtentLength;
         break;
-      case READ_FILE_SEEK_AND_READ:
+      case ReadFileSeekAndRead:
         //
         // Seek file first before reading in its data.
         //
@@ -1070,9 +1216,6 @@ ReadFile (
 
         if (FilePosition + ExtentLength > ReadFileInfo->FilePosition) {
           Offset = ReadFileInfo->FilePosition - FilePosition;
-          if (Offset < 0) {
-            Offset = -(Offset);
-          }
         } else {
           Offset = 0;
         }
@@ -1099,7 +1242,7 @@ ReadFile (
           DiskIo,
           BlockIo->Media->MediaId,
           Offset + MultU64x32 (Lsn, LogicalBlockSize),
-          DataLength,
+          (UINTN) DataLength,
           (VOID *)((UINT8 *)ReadFileInfo->FileData +
                    DataOffset)
           );
@@ -1133,9 +1276,17 @@ ReadFile (
     }
 
     break;
-  case EXTENDED_ADS_SEQUENCE:
+  case ExtendedAdsSequence:
      // FIXME: Not supported. Got no volume with it, yet.
     ASSERT (FALSE);
+    Status = EFI_UNSUPPORTED;
+    break;
+
+  default:
+    //
+    // A flag value reserved by the ECMA-167 standard (3rd Edition - June
+    // 1997); 14.6 ICB Tag; 14.6.8 Flags (RBP 18); was found.
+    //
     Status = EFI_UNSUPPORTED;
     break;
   }
@@ -1149,7 +1300,7 @@ Done:
 
 Error_Read_Disk_Blk:
 Error_Alloc_Buffer_To_Next_Ad:
-  if (ReadFileInfo->Flags != READ_FILE_SEEK_AND_READ) {
+  if (ReadFileInfo->Flags != ReadFileSeekAndRead) {
     FreePool (ReadFileInfo->FileData);
   }
 
@@ -1161,9 +1312,22 @@ Error_Get_Aed:
   return Status;
 }
 
-//
-// Find a file by its filename from a given Parent file.
-//
+/**
+  Find a file by its filename from a given Parent file.
+
+  @param[in]  BlockIo             BlockIo interface.
+  @param[in]  DiskIo              DiskIo interface.
+  @param[in]  Volume              Volume information pointer.
+  @param[in]  FileName            File name string.
+  @param[in]  Parent              Parent directory file.
+  @param[in]  Icb                 Long Allocation Descriptor pointer.
+  @param[out] File                Found file.
+
+  @retval EFI_SUCCESS             The file was found.
+  @retval EFI_INVALID_PARAMETER   One or more input parameters are invalid.
+  @retval EFI_NOT_FOUND           The file was not found.
+
+**/
 EFI_STATUS
 InternalFindFile (
   IN   EFI_BLOCK_IO_PROTOCOL           *BlockIo,
@@ -1183,9 +1347,16 @@ InternalFindFile (
   VOID                            *CompareFileEntry;
 
   //
+  // Check if both Parent->FileIdentifierDesc and Icb are NULL.
+  //
+  if ((Parent->FileIdentifierDesc == NULL) && (Icb == NULL)) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  //
   // Check if parent file is really directory.
   //
-  if (!IS_FE_DIRECTORY (Parent->FileEntry)) {
+  if (FE_ICB_FILE_TYPE (Parent->FileEntry) != UdfFileEntryDirectory) {
     return EFI_NOT_FOUND;
   }
 
@@ -1194,6 +1365,10 @@ InternalFindFile (
   // FE/EFE and FID descriptors.
   //
   if (StrCmp (FileName, L".") == 0) {
+    if (Parent->FileIdentifierDesc == NULL) {
+      return EFI_INVALID_PARAMETER;
+    }
+
     DuplicateFe (BlockIo, Volume, Parent->FileEntry, &File->FileEntry);
     DuplicateFid (Parent->FileIdentifierDesc, &File->FileIdentifierDesc);
 
@@ -1211,7 +1386,7 @@ InternalFindFile (
       BlockIo,
       DiskIo,
       Volume,
-      Parent->FileIdentifierDesc ?
+      (Parent->FileIdentifierDesc != NULL) ?
       &Parent->FileIdentifierDesc->Icb :
       Icb,
       Parent->FileEntry,
@@ -1226,7 +1401,7 @@ InternalFindFile (
       break;
     }
 
-    if (IS_FID_PARENT_FILE (FileIdentifierDesc)) {
+    if (FileIdentifierDesc->FileCharacteristics & PARENT_FILE) {
       //
       // This FID contains the location (FE/EFE) of the parent directory of this
       // directory (Parent), and if FileName is either ".." or "\\", then it's
@@ -1329,6 +1504,9 @@ ReadUdfVolumeInformation (
 {
   EFI_STATUS Status;
 
+  //
+  // Read all necessary UDF volume information and keep it private to the driver
+  //
   Status = ReadVolumeFileStructure (
     BlockIo,
     DiskIo,
@@ -1338,13 +1516,12 @@ ReadUdfVolumeInformation (
     return Status;
   }
 
-  Status = GetFileSetDescriptors (
-    BlockIo,
-    DiskIo,
-    Volume
-    );
+  //
+  // Find File Set Descriptor
+  //
+  Status = FindFileSetDescriptor (BlockIo, DiskIo, Volume);
   if (EFI_ERROR (Status)) {
-    CleanupVolumeInformation (Volume);
+    return Status;
   }
 
   return Status;
@@ -1381,7 +1558,7 @@ FindRootDirectory (
     BlockIo,
     DiskIo,
     Volume,
-    &Volume->FileSetDescs[0]->RootDirectoryIcb,
+    &Volume->FileSetDesc.RootDirectoryIcb,
     &File->FileEntry
     );
   if (EFI_ERROR (Status)) {
@@ -1398,7 +1575,7 @@ FindRootDirectory (
     L"\\",
     NULL,
     &Parent,
-    &Volume->FileSetDescs[0]->RootDirectoryIcb,
+    &Volume->FileSetDesc.RootDirectoryIcb,
     File
     );
   if (EFI_ERROR (Status)) {
@@ -1434,12 +1611,13 @@ FindFileEntry (
   OUT  VOID                            **FileEntry
   )
 {
-  EFI_STATUS  Status;
-  UINT64      Lsn;
-  UINT32      LogicalBlockSize;
+  EFI_STATUS          Status;
+  UINT64              Lsn;
+  UINT32              LogicalBlockSize;
+  UDF_DESCRIPTOR_TAG  *DescriptorTag;
 
   Lsn               = GetLongAdLsn (Volume, Icb);
-  LogicalBlockSize  = LV_BLOCK_SIZE (Volume, UDF_DEFAULT_LV_NUM);
+  LogicalBlockSize  = Volume->LogicalVolDesc.LogicalBlockSize;
 
   *FileEntry = AllocateZeroPool (Volume->FileEntrySize);
   if (*FileEntry == NULL) {
@@ -1460,11 +1638,14 @@ FindFileEntry (
     goto Error_Read_Disk_Blk;
   }
 
+  DescriptorTag = *FileEntry;
+
   //
   // Check if the read extent contains a valid Tag Identifier for the expected
   // FE/EFE.
   //
-  if (!IS_FE (*FileEntry) && !IS_EFE (*FileEntry)) {
+  if (DescriptorTag->TagIdentifier != UdfFileEntry &&
+      DescriptorTag->TagIdentifier != UdfExtendedFileEntry) {
     Status = EFI_VOLUME_CORRUPTED;
     goto Error_Invalid_Fe;
   }
@@ -1487,13 +1668,14 @@ Error_Read_Disk_Blk:
   @param[in]   FilePath  File's absolute path.
   @param[in]   Root      Root directory file.
   @param[in]   Parent    Parent directory file.
+  @param[in]   Icb       ICB of Parent.
   @param[out]  File      Found file.
 
-  @retval EFI_SUCCESS          @p FilePath was found.
+  @retval EFI_SUCCESS          FilePath was found.
   @retval EFI_NO_MEDIA         The device has no media.
   @retval EFI_DEVICE_ERROR     The device reported an error.
   @retval EFI_VOLUME_CORRUPTED The file system structures are corrupted.
-  @retval EFI_OUT_OF_RESOURCES The @p FilePath file was not found due to lack of
+  @retval EFI_OUT_OF_RESOURCES The FilePath file was not found due to lack of
                                resources.
 
 **/
@@ -1573,7 +1755,7 @@ FindFile (
     // If the found file is a symlink, then find its respective FE/EFE and
     // FID descriptors.
     //
-    if (IS_FE_SYMLINK (File->FileEntry)) {
+    if (FE_ICB_FILE_TYPE (File->FileEntry) == UdfFileEntrySymlink) {
       FreePool ((VOID *)File->FileIdentifierDesc);
 
       FileEntry = File->FileEntry;
@@ -1614,7 +1796,7 @@ FindFile (
   @param[in]      Volume         UDF volume information structure.
   @param[in]      ParentIcb      ICB of the parent file.
   @param[in]      FileEntryData  FE/EFE of the parent file.
-  @param[in out]  ReadDirInfo    Next read directory listing structure
+  @param[in, out] ReadDirInfo    Next read directory listing structure
                                  information.
   @param[out]     FoundFid       File Identifier Descriptor pointer.
 
@@ -1647,7 +1829,7 @@ ReadDirectoryEntry (
     // The directory's recorded data has not been read yet. So let's cache it
     // into memory and the next calls won't need to read it again.
     //
-    ReadFileInfo.Flags = READ_FILE_ALLOCATE_AND_READ;
+    ReadFileInfo.Flags = ReadFileAllocateAndRead;
 
     Status = ReadFile (
       BlockIo,
@@ -1687,7 +1869,7 @@ ReadDirectoryEntry (
     // Update FidOffset to point to next FID.
     //
     ReadDirInfo->FidOffset += GetFidDescriptorLength (FileIdentifierDesc);
-  } while (IS_FID_DELETED_FILE (FileIdentifierDesc));
+  } while (FileIdentifierDesc->FileCharacteristics & DELETED_FILE);
 
   DuplicateFid (FileIdentifierDesc, FoundFid);
 
@@ -1738,7 +1920,7 @@ GetFileNameFromFid (
     }
 
     if (Index < Length) {
-      *FileName |= OstaCompressed[Index];
+      *FileName |= (CHAR16)(OstaCompressed[Index]);
     }
 
     FileName++;
@@ -1786,7 +1968,7 @@ ResolveSymlink (
   UDF_PATH_COMPONENT  *PathComp;
   UINT8               PathCompLength;
   CHAR16              FileName[UDF_FILENAME_LENGTH];
-  CHAR16              *C;
+  CHAR16              *Char;
   UINTN               Index;
   UINT8               CompressionId;
   UDF_FILE_INFO       PreviousFile;
@@ -1797,7 +1979,7 @@ ResolveSymlink (
   // all its data here -- usually the data will be inline with the FE/EFE for
   // lower filenames.
   //
-  ReadFileInfo.Flags = READ_FILE_ALLOCATE_AND_READ;
+  ReadFileInfo.Flags = ReadFileAllocateAndRead;
 
   Status = ReadFile (
     BlockIo,
@@ -1863,24 +2045,24 @@ ResolveSymlink (
         return EFI_VOLUME_CORRUPTED;
       }
 
-      C = FileName;
+      Char = FileName;
       for (Index = 1; Index < PathCompLength; Index++) {
         if (CompressionId == 16) {
-          *C = *(UINT8 *)((UINT8 *)PathComp->ComponentIdentifier +
+          *Char = *(UINT8 *)((UINT8 *)PathComp->ComponentIdentifier +
                           Index) << 8;
           Index++;
         } else {
-          *C = 0;
+          *Char = 0;
         }
 
         if (Index < Length) {
-          *C |= *(UINT8 *)((UINT8 *)PathComp->ComponentIdentifier + Index);
+          *Char |= (CHAR16)(*(UINT8 *)((UINT8 *)PathComp->ComponentIdentifier + Index));
         }
 
-        C++;
+        Char++;
       }
 
-      *C = L'\0';
+      *Char = L'\0';
       break;
     }
 
@@ -1933,43 +2115,6 @@ Error_Find_File:
 }
 
 /**
-  Clean up in-memory UDF volume information.
-
-  @param[in] Volume Volume information pointer.
-
-**/
-VOID
-CleanupVolumeInformation (
-  IN UDF_VOLUME_INFO *Volume
-  )
-{
-  UINTN Index;
-
-  if (Volume->LogicalVolDescs != NULL) {
-    for (Index = 0; Index < Volume->LogicalVolDescsNo; Index++) {
-      FreePool ((VOID *)Volume->LogicalVolDescs[Index]);
-    }
-    FreePool ((VOID *)Volume->LogicalVolDescs);
-  }
-
-  if (Volume->PartitionDescs != NULL) {
-    for (Index = 0; Index < Volume->PartitionDescsNo; Index++) {
-      FreePool ((VOID *)Volume->PartitionDescs[Index]);
-    }
-    FreePool ((VOID *)Volume->PartitionDescs);
-  }
-
-  if (Volume->FileSetDescs != NULL) {
-    for (Index = 0; Index < Volume->FileSetDescsNo; Index++) {
-      FreePool ((VOID *)Volume->FileSetDescs[Index]);
-    }
-    FreePool ((VOID *)Volume->FileSetDescs);
-  }
-
-  ZeroMem ((VOID *)Volume, sizeof (UDF_VOLUME_INFO));
-}
-
-/**
   Clean up in-memory UDF file information.
 
   @param[in] File File information pointer.
@@ -1999,7 +2144,7 @@ CleanupFileInformation (
   @param[in]   File     File information structure.
   @param[out]  Size     Size of the file.
 
-  @retval EFI_SUCCESS          File size calculated and set in @p Size.
+  @retval EFI_SUCCESS          File size calculated and set in Size.
   @retval EFI_UNSUPPORTED      Extended Allocation Descriptors not supported.
   @retval EFI_NO_MEDIA         The device has no media.
   @retval EFI_DEVICE_ERROR     The device reported an error.
@@ -2020,7 +2165,7 @@ GetFileSize (
   EFI_STATUS          Status;
   UDF_READ_FILE_INFO  ReadFileInfo;
 
-  ReadFileInfo.Flags = READ_FILE_GET_FILESIZE;
+  ReadFileInfo.Flags = ReadFileGetFileSize;
 
   Status = ReadFile (
     BlockIo,
@@ -2045,7 +2190,7 @@ GetFileSize (
   @param[in]      File        File pointer.
   @param[in]      FileSize    Size of the file.
   @param[in]      FileName    Filename of the file.
-  @param[in out]  BufferSize  Size of the returned file infomation.
+  @param[in, out] BufferSize  Size of the returned file infomation.
   @param[out]     Buffer      Data of the returned file information.
 
   @retval EFI_SUCCESS          File information set.
@@ -2069,11 +2214,12 @@ SetFileInfo (
   EFI_FILE_INFO            *FileInfo;
   UDF_FILE_ENTRY           *FileEntry;
   UDF_EXTENDED_FILE_ENTRY  *ExtendedFileEntry;
+  UDF_DESCRIPTOR_TAG       *DescriptorTag;
 
   //
   // Calculate the needed size for the EFI_FILE_INFO structure.
   //
-  FileInfoLength = sizeof (EFI_FILE_INFO) + (FileName ?
+  FileInfoLength = sizeof (EFI_FILE_INFO) + ((FileName != NULL) ?
                                              StrSize (FileName) :
                                              sizeof (CHAR16));
   if (*BufferSize < FileInfoLength) {
@@ -2103,7 +2249,9 @@ SetFileInfo (
     FileInfo->Attribute |= EFI_FILE_HIDDEN;
   }
 
-  if (IS_FE (File->FileEntry)) {
+  DescriptorTag = File->FileEntry;
+
+  if (DescriptorTag->TagIdentifier == UdfFileEntry) {
     FileEntry = (UDF_FILE_ENTRY *)File->FileEntry;
 
     //
@@ -2139,7 +2287,7 @@ SetFileInfo (
                                    FileEntry->AccessTime.Second;
     FileInfo->LastAccessTime.Nanosecond  =
                                    FileEntry->AccessTime.HundredsOfMicroseconds;
-  } else if (IS_EFE (File->FileEntry)) {
+  } else if (DescriptorTag->TagIdentifier == UdfExtendedFileEntry) {
     ExtendedFileEntry = (UDF_EXTENDED_FILE_ENTRY *)File->FileEntry;
 
     //
@@ -2223,91 +2371,103 @@ GetVolumeSize (
   OUT  UINT64                 *FreeSpaceSize
   )
 {
-  UDF_EXTENT_AD                 ExtentAd;
-  UINT32                        LogicalBlockSize;
-  UINT64                        Lsn;
-  EFI_STATUS                    Status;
-  UDF_LOGICAL_VOLUME_INTEGRITY  *LogicalVolInt;
-  UINTN                         Index;
-  UINTN                         Length;
-  UINT32                        LsnsNo;
+  EFI_STATUS                     Status;
+  UDF_LOGICAL_VOLUME_DESCRIPTOR  *LogicalVolDesc;
+  UDF_EXTENT_AD                  *ExtentAd;
+  UINT64                         Lsn;
+  UINT32                         LogicalBlockSize;
+  UDF_LOGICAL_VOLUME_INTEGRITY   *LogicalVolInt;
+  UDF_DESCRIPTOR_TAG             *DescriptorTag;
+  UINTN                          Index;
+  UINTN                          Length;
+  UINT32                         LsnsNo;
 
-  *VolumeSize     = 0;
-  *FreeSpaceSize  = 0;
+  LogicalVolDesc = &Volume->LogicalVolDesc;
 
-  for (Index = 0; Index < Volume->LogicalVolDescsNo; Index++) {
-    CopyMem ((VOID *)&ExtentAd,
-             (VOID *)&Volume->LogicalVolDescs[Index]->IntegritySequenceExtent,
-             sizeof (UDF_EXTENT_AD));
-    if (ExtentAd.ExtentLength == 0) {
-      continue;
-    }
+  ExtentAd = &LogicalVolDesc->IntegritySequenceExtent;
 
-    LogicalBlockSize = LV_BLOCK_SIZE (Volume, Index);
-
-  Read_Next_Sequence:
-    LogicalVolInt = (UDF_LOGICAL_VOLUME_INTEGRITY *)
-      AllocatePool (ExtentAd.ExtentLength);
-    if (LogicalVolInt == NULL) {
-      return EFI_OUT_OF_RESOURCES;
-    }
-
-    Lsn = (UINT64)ExtentAd.ExtentLocation;
-
-    Status = DiskIo->ReadDisk (
-      DiskIo,
-      BlockIo->Media->MediaId,
-      MultU64x32 (Lsn, LogicalBlockSize),
-      ExtentAd.ExtentLength,
-      (VOID *)LogicalVolInt
-      );
-    if (EFI_ERROR (Status)) {
-      FreePool ((VOID *)LogicalVolInt);
-      return Status;
-    }
-
-    if (!IS_LVID (LogicalVolInt)) {
-      FreePool ((VOID *)LogicalVolInt);
-      return EFI_VOLUME_CORRUPTED;
-    }
-
-    Length = LogicalVolInt->NumberOfPartitions;
-    for (Index = 0; Index < Length; Index += sizeof (UINT32)) {
-      LsnsNo = *(UINT32 *)((UINT8 *)LogicalVolInt->Data + Index);
-      if (LsnsNo == 0xFFFFFFFFUL) {
-        //
-        // Size not specified.
-        //
-        continue;
-      }
-
-      *FreeSpaceSize += MultU64x32 ((UINT64)LsnsNo, LogicalBlockSize);
-    }
-
-    Length = (LogicalVolInt->NumberOfPartitions * sizeof (UINT32)) << 1;
-    for (; Index < Length; Index += sizeof (UINT32)) {
-      LsnsNo = *(UINT32 *)((UINT8 *)LogicalVolInt->Data + Index);
-      if (LsnsNo == 0xFFFFFFFFUL) {
-        //
-        // Size not specified.
-        //
-        continue;
-      }
-
-      *VolumeSize += MultU64x32 ((UINT64)LsnsNo, LogicalBlockSize);
-    }
-
-    CopyMem ((VOID *)&ExtentAd,(VOID *)&LogicalVolInt->NextIntegrityExtent,
-             sizeof (UDF_EXTENT_AD));
-    if (ExtentAd.ExtentLength > 0) {
-      FreePool ((VOID *)LogicalVolInt);
-      goto Read_Next_Sequence;
-    }
-
-    FreePool ((VOID *)LogicalVolInt);
+  if (ExtentAd->ExtentLength == 0) {
+    return EFI_VOLUME_CORRUPTED;
   }
 
-  return EFI_SUCCESS;
+  LogicalVolInt = AllocatePool (ExtentAd->ExtentLength);
+  if (LogicalVolInt == NULL) {
+    return EFI_OUT_OF_RESOURCES;
+  }
+
+  //
+  // Get location of Logical Volume Integrity Descriptor
+  //
+  Lsn = (UINT64)ExtentAd->ExtentLocation - Volume->MainVdsStartLocation;
+
+  LogicalBlockSize = LogicalVolDesc->LogicalBlockSize;
+
+  //
+  // Read disk block
+  //
+  Status = DiskIo->ReadDisk (
+    DiskIo,
+    BlockIo->Media->MediaId,
+    MultU64x32 (Lsn, LogicalBlockSize),
+    ExtentAd->ExtentLength,
+    LogicalVolInt
+    );
+  if (EFI_ERROR (Status)) {
+    goto Out_Free;
+  }
+
+  DescriptorTag = &LogicalVolInt->DescriptorTag;
+
+  //
+  // Check if read block is a Logical Volume Integrity Descriptor
+  //
+  if (DescriptorTag->TagIdentifier != UdfLogicalVolumeIntegrityDescriptor) {
+    Status = EFI_VOLUME_CORRUPTED;
+    goto Out_Free;
+  }
+
+  *VolumeSize = 0;
+  *FreeSpaceSize = 0;
+
+  Length = LogicalVolInt->NumberOfPartitions;
+  for (Index = 0; Index < Length; Index += sizeof (UINT32)) {
+    LsnsNo = *(UINT32 *)((UINT8 *)LogicalVolInt->Data + Index);
+    //
+    // Check if size is not specified
+    //
+    if (LsnsNo == 0xFFFFFFFFUL) {
+      continue;
+    }
+    //
+    // Accumulate free space size
+    //
+    *FreeSpaceSize += MultU64x32 ((UINT64)LsnsNo, LogicalBlockSize);
+  }
+
+  Length = LogicalVolInt->NumberOfPartitions * sizeof (UINT32) * 2;
+  for (; Index < Length; Index += sizeof (UINT32)) {
+    LsnsNo = *(UINT32 *)((UINT8 *)LogicalVolInt->Data + Index);
+    //
+    // Check if size is not specified
+    //
+    if (LsnsNo == 0xFFFFFFFFUL) {
+      continue;
+    }
+    //
+    // Accumulate used volume space
+    //
+    *VolumeSize += MultU64x32 ((UINT64)LsnsNo, LogicalBlockSize);
+  }
+
+  Status = EFI_SUCCESS;
+
+Out_Free:
+  //
+  // Free Logical Volume Integrity Descriptor
+  //
+  FreePool (LogicalVolInt);
+
+  return Status;
 }
 
 /**
@@ -2318,9 +2478,9 @@ GetVolumeSize (
   @param[in]      Volume        UDF volume information structure.
   @param[in]      File          File information structure.
   @param[in]      FileSize      Size of the file.
-  @param[in out]  FilePosition  File position.
-  @param[in out]  Buffer        File data.
-  @param[in out]  BufferSize    Read size.
+  @param[in, out] FilePosition  File position.
+  @param[in, out] Buffer        File data.
+  @param[in, out] BufferSize    Read size.
 
   @retval EFI_SUCCESS          File seeked and read.
   @retval EFI_UNSUPPORTED      Extended Allocation Descriptors not supported.
@@ -2346,7 +2506,7 @@ ReadFileData (
   EFI_STATUS          Status;
   UDF_READ_FILE_INFO  ReadFileInfo;
 
-  ReadFileInfo.Flags         = READ_FILE_SEEK_AND_READ;
+  ReadFileInfo.Flags         = ReadFileSeekAndRead;
   ReadFileInfo.FilePosition  = *FilePosition;
   ReadFileInfo.FileData      = Buffer;
   ReadFileInfo.FileDataSize  = *BufferSize;
@@ -2391,7 +2551,6 @@ SupportUdfFileSystem (
   EFI_DEVICE_PATH_PROTOCOL  *DevicePathNode;
   EFI_DEVICE_PATH_PROTOCOL  *LastDevicePathNode;
   EFI_GUID                  *VendorDefinedGuid;
-  EFI_GUID                  UdfDevPathGuid = EFI_UDF_DEVICE_PATH_GUID;
 
   //
   // Open Device Path protocol on ControllerHandle
@@ -2428,7 +2587,7 @@ SupportUdfFileSystem (
       DevicePathSubType (LastDevicePathNode) == MEDIA_VENDOR_DP) {
     VendorDefinedGuid = (EFI_GUID *)((UINTN)LastDevicePathNode +
                                      OFFSET_OF (VENDOR_DEVICE_PATH, Guid));
-    if (CompareGuid (VendorDefinedGuid, &UdfDevPathGuid)) {
+    if (CompareGuid (VendorDefinedGuid, &gUdfDevPathGuid)) {
       Status = EFI_SUCCESS;
     }
   }
