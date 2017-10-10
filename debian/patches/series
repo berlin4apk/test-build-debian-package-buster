@@ -2,4 +2,3 @@ shell-efiapi.patch
 no-missing-braces.diff
 no-stack-protector-all-archs.diff
 shell-proper-valist.patch
-demote-maybe-uninitialized-to-warning.patch

@@ -1,6 +1,8 @@
 edk2 (0~20171010.234dbcef-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+    - d/p/demote-maybe-uninitialized-to-warning.patch: Drop; issue resolved
+      upstream.
 
  -- dann frazier <dannf@debian.org>  Tue, 10 Oct 2017 10:33:46 -0600
 
