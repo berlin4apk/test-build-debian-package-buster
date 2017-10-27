@@ -542,7 +542,7 @@ VOID
 EFIAPI
 ApWakeupFunction (
   IN MP_CPU_EXCHANGE_INFO      *ExchangeInfo,
-  IN UINTN                     NumApsExecuting
+  IN UINTN                     ApIndex
   )
 {
   CPU_MP_DATA                *CpuMpData;
@@ -574,7 +574,7 @@ ApWakeupFunction (
       // Add CPU number
       //
       InterlockedIncrement ((UINT32 *) &CpuMpData->CpuCount);
-      ProcessorNumber = NumApsExecuting;
+      ProcessorNumber = ApIndex;
       //
       // This is first time AP wakeup, get BIST information from AP stack
       //
@@ -662,6 +662,7 @@ ApWakeupFunction (
     // AP finished executing C code
     //
     InterlockedIncrement ((UINT32 *) &CpuMpData->FinishedCount);
+    InterlockedDecrement ((UINT32 *) &CpuMpData->MpCpuExchangeInfo->NumApsExecuting);
 
     //
     // Place AP is specified loop mode
@@ -764,6 +765,7 @@ FillExchangeInfoData (
   ExchangeInfo->Cr3             = AsmReadCr3 ();
 
   ExchangeInfo->CFunction       = (UINTN) ApWakeupFunction;
+  ExchangeInfo->ApIndex         = 0;
   ExchangeInfo->NumApsExecuting = 0;
   ExchangeInfo->InitFlag        = (UINTN) CpuMpData->InitFlag;
   ExchangeInfo->CpuInfo         = (CPU_INFO_IN_HOB *) (UINTN) CpuMpData->CpuInfoInHob;
@@ -934,13 +936,24 @@ WakeUpAP (
     }
     if (CpuMpData->InitFlag == ApInitConfig) {
       //
-      // Wait for all potential APs waken up in one specified period
+      // Here support two methods to collect AP count through adjust
+      // PcdCpuApInitTimeOutInMicroSeconds values.
+      //
+      // one way is set a value to just let the first AP to start the
+      // initialization, then through the later while loop to wait all Aps
+      // finsh the initialization.
+      // The other way is set a value to let all APs finished the initialzation.
+      // In this case, the later while loop is useless.
       //
       TimedWaitForApFinish (
         CpuMpData,
         PcdGet32 (PcdCpuMaxLogicalProcessorNumber) - 1,
         PcdGet32 (PcdCpuApInitTimeOutInMicroSeconds)
         );
+
+      while (CpuMpData->MpCpuExchangeInfo->NumApsExecuting != 0) {
+        CpuPause();
+      }
     } else {
       //
       // Wait all APs waken up if this is not the 1st broadcast of SIPI
@@ -1458,6 +1471,8 @@ MpInitLibInitialize (
   CpuMpData->SwitchBspFlag    = FALSE;
   CpuMpData->CpuData          = (CPU_AP_DATA *) (CpuMpData + 1);
   CpuMpData->CpuInfoInHob     = (UINT64) (UINTN) (CpuMpData->CpuData + MaxLogicalProcessorNumber);
+  CpuMpData->MicrocodePatchAddress    = PcdGet64 (PcdCpuMicrocodePatchAddress);
+  CpuMpData->MicrocodePatchRegionSize = PcdGet64 (PcdCpuMicrocodePatchRegionSize);
   InitializeSpinLock(&CpuMpData->MpLock);
   //
   // Save BSP's Control registers to APs
