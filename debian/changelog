@@ -1,3 +1,10 @@
+edk2 (0~20171027.76fd5a66-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+    - Fix Win10 guests booting from IDE drives. LP: #1725560.
+
+ -- dann frazier <dannf@debian.org>  Fri, 27 Oct 2017 16:06:42 -0600
+
 edk2 (0~20171010.234dbcef-1) unstable; urgency=medium
 
   * New upstream release.
