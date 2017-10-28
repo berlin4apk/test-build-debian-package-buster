@@ -3,3 +3,4 @@ no-missing-braces.diff
 no-stack-protector-all-archs.diff
 shell-proper-valist.patch
 demote-maybe-uninitialized-to-warning.patch
+MdeModulePkg-AtaAtapiPassThru-disable-only-BM-DMA-at.patch

@@ -1,0 +1,59 @@
+Author: Laszlo Ersek <lersek@redhat.com>
+Description: MdeModulePkg/AtaAtapiPassThru: disable only BM-DMA at ExitBootServices()
+ Clearing I/O port decoding in the PCI command register at
+ ExitBootServices() breaks IDE boot in Windows, on QEMU's "pc" (i440fx)
+ machine type. (AHCI boot on "q35" is unaffected.) Windows seems repeatedly
+ stuck, apparently waiting for a timeout of sorts.
+ .
+ This is arguably a Windows bug; a native OS driver should not expect the
+ firmware to leave the PCI command register in any particular state.
+ .
+ Strictly speaking, we only need to disable BM-DMA at ExitBootServices(),
+ in order to abort pending transfers to/from RAM, which is soon to be owned
+ by the OS. BM-DMA is also the only bit that's explicitly named by the UEFI
+ Driver Writers' Guide, for clearing at ExitBootServices().
+ .
+ I've verified that clearing only BM-DMA fixes the issue (boot time) on
+ i440fx, and does not regress q35/AHCI.
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/1725560
+---
+diff --git a/MdeModulePkg/Bus/Ata/AtaAtapiPassThru/AtaAtapiPassThru.c b/MdeModulePkg/Bus/Ata/AtaAtapiPassThru/AtaAtapiPassThru.c
+index 09064dda18..e10e0d4e65 100644
+--- a/MdeModulePkg/Bus/Ata/AtaAtapiPassThru/AtaAtapiPassThru.c
++++ b/MdeModulePkg/Bus/Ata/AtaAtapiPassThru/AtaAtapiPassThru.c
+@@ -480,8 +480,7 @@ InitializeAtaAtapiPassThru (
+ }
+ 
+ /**
+-  Disable the device (especially Bus Master DMA) when exiting the boot
+-  services.
++  Disable Bus Master DMA on the device when exiting the boot services.
+ 
+   @param[in] Event    Event for which this notification function is being
+                       called.
+@@ -506,7 +505,7 @@ AtaPassThruExitBootServices (
+   PciIo->Attributes (
+            PciIo,
+            EfiPciIoAttributeOperationDisable,
+-           Instance->EnabledPciAttributes,
++           Instance->EnabledPciAttributes & EFI_PCI_IO_ATTRIBUTE_BUS_MASTER,
+            NULL
+            );
+ }
+diff --git a/MdeModulePkg/Bus/Ata/AtaAtapiPassThru/AtaAtapiPassThru.h b/MdeModulePkg/Bus/Ata/AtaAtapiPassThru/AtaAtapiPassThru.h
+index 8d6eac706c..92c5bf2001 100644
+--- a/MdeModulePkg/Bus/Ata/AtaAtapiPassThru/AtaAtapiPassThru.h
++++ b/MdeModulePkg/Bus/Ata/AtaAtapiPassThru/AtaAtapiPassThru.h
+@@ -123,8 +123,7 @@ typedef struct {
+   LIST_ENTRY                        NonBlockingTaskList;
+ 
+   //
+-  // For disabling the device (especially Bus Master DMA) at
+-  // ExitBootServices().
++  // For disabling Bus Master DMA on the device at ExitBootServices().
+   //
+   EFI_EVENT                         ExitBootEvent;
+ } ATA_ATAPI_PASS_THRU_INSTANCE;
+-- 
+2.15.0.rc2
+
