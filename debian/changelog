@@ -1,4 +1,4 @@
-edk2 (0~20170911.5dfba97c-1ubuntu0.1) UNRELEASED; urgency=medium
+edk2 (0~20170911.5dfba97c-1ubuntu0.1) artful; urgency=medium
 
   * d/p/MdeModulePkg-AtaAtapiPassThru-disable-only-BM-DMA-at.patch:
     Fix Win10 guests booting from IDE drives. LP: #1725560.
