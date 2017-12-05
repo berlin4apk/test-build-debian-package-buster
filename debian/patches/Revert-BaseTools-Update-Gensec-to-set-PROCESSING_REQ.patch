@@ -1,0 +1,167 @@
+Author: dann frazier <dannf@debian.org>
+Description: Revert "BaseTools: Update Gensec to set PROCESSING_REQUIRED value"
+ This reverts commit b37b108d92aa08cc7eed5f52feea53b0e7563068.
+ .
+ Causes a build failure:
+   gcc  -c -MD -fshort-wchar -fno-strict-aliasing -Wall -Werror -Wno-deprecated-declarations -Wno-unused-result -nostdlib -c -g  -I .. -I ../Include/Common -I ../Include/ -I ../Include/IndustryStandard -I ../Common/ -I .. -I . -I ../Include/X64/  -O2 GenSec.c -o GenSec.o
+  In file included from ../Include/Common/UefiBaseTypes.h:19:0,
+                   from GenSec.c:20:
+  GenSec.c: In function ‘main’:
+  ../Include/Common/BaseTypes.h:178:38: error: overflow in implicit constant conversion [-Werror=overflow]
+   #define ENCODE_ERROR(a)              (MAX_BIT | (a))
+                                        ^
+  ../Include/Common/BaseTypes.h:204:38: note: in expansion of macro ‘ENCODE_ERROR’
+   #define RETURN_ABORTED               ENCODE_ERROR (21)
+                                        ^~~~~~~~~~~~
+  ../Include/Common/UefiBaseTypes.h:119:35: note: in expansion of macro ‘RETURN_ABORTED’
+   #define EFI_ABORTED               RETURN_ABORTED
+                                     ^~~~~~~~~~~~~~
+  GenSec.c:1329:16: note: in expansion of macro ‘EFI_ABORTED’
+           return EFI_ABORTED;
+                  ^~~~~~~~~~~
+  ../Include/Common/BaseTypes.h:178:38: error: overflow in implicit constant conversion [-Werror=overflow]
+   #define ENCODE_ERROR(a)              (MAX_BIT | (a))
+                                        ^
+  ../Include/Common/BaseTypes.h:204:38: note: in expansion of macro ‘ENCODE_ERROR’
+   #define RETURN_ABORTED               ENCODE_ERROR (21)
+                                        ^~~~~~~~~~~~
+  ../Include/Common/UefiBaseTypes.h:119:35: note: in expansion of macro ‘RETURN_ABORTED’
+   #define EFI_ABORTED               RETURN_ABORTED
+                                     ^~~~~~~~~~~~~~
+  GenSec.c:1343:16: note: in expansion of macro ‘EFI_ABORTED’
+           return EFI_ABORTED;
+                  ^~~~~~~~~~~
+  GenSec.c:1354:21: error: pointer targets in passing argument 1 of ‘strcasecmp’ differ in signedness [-Werror=pointer-sign]
+           if (stricmp(DummyFileBuffer, InFileBuffer + (InFileSize - DummyFileSize)) == 0){
+                       ^~~~~~~~~~~~~~~
+  In file included from GenSec.c:17:0:
+  /usr/include/string.h:533:12: note: expected ‘const char *’ but argument is of type ‘UINT8 * {aka unsigned char *}’
+   extern int strcasecmp (const char *__s1, const char *__s2)
+              ^~~~~~~~~~
+  GenSec.c:1354:38: error: pointer targets in passing argument 2 of ‘strcasecmp’ differ in signedness [-Werror=pointer-sign]
+           if (stricmp(DummyFileBuffer, InFileBuffer + (InFileSize - DummyFileSize)) == 0){
+                                        ^~~~~~~~~~~~
+  In file included from GenSec.c:17:0:
+  /usr/include/string.h:533:12: note: expected ‘const char *’ but argument is of type ‘UINT8 * {aka unsigned char *}’
+   extern int strcasecmp (const char *__s1, const char *__s2)
+              ^~~~~~~~~~
+  cc1: all warnings being treated as errors
+  ../Makefiles/footer.makefile:27: recipe for target 'GenSec.o' failed
+Last-Updated: 2017-12-05
+---
+diff --git a/BaseTools/Source/C/GenSec/GenSec.c b/BaseTools/Source/C/GenSec/GenSec.c
+index 2b2def1261..d9cdc1f631 100644
+--- a/BaseTools/Source/C/GenSec/GenSec.c
++++ b/BaseTools/Source/C/GenSec/GenSec.c
+@@ -187,9 +187,6 @@ Returns:
+                         SectionAlign points to section alignment, which support\n\
+                         the alignment scope 1~16M. It is specified in same\n\
+                         order that the section file is input.\n");
+-  fprintf (stdout, "  --dummy dummyfile\n\
+-                        compare dummpyfile with input_file to decide whether\n\
+-                        need to set PROCESSING_REQUIRED attribute.\n");
+   fprintf (stdout, "  -v, --verbose         Turn on verbose output with informational messages.\n");
+   fprintf (stdout, "  -q, --quiet           Disable all messages except key message and fatal error\n");
+   fprintf (stdout, "  -d, --debug level     Enable debug messages, at input debug level.\n");
+@@ -1031,13 +1028,6 @@ Returns:
+   UINT32                    *InputFileAlign;
+   UINT32                    InputFileAlignNum;
+   EFI_COMMON_SECTION_HEADER *SectionHeader;
+-  CHAR8                     *DummyFileName;
+-  FILE                      *DummyFile;
+-  UINTN                     DummyFileSize;
+-  UINT8                     *DummyFileBuffer;
+-  FILE                      *InFile;
+-  UINT8                     *InFileBuffer;
+-  UINTN                     InFileSize;
+ 
+   InputFileAlign        = NULL;
+   InputFileAlignNum     = 0;
+@@ -1059,13 +1049,6 @@ Returns:
+   SectGuidHeaderLength  = 0;
+   VersionSect           = NULL;
+   UiSect                = NULL;
+-  DummyFileSize         = 0;
+-  DummyFileName         = NULL;
+-  DummyFile             = NULL;
+-  DummyFileBuffer       = NULL;
+-  InFile                = NULL;
+-  InFileSize            = 0;
+-  InFileBuffer          = NULL;
+   
+   SetUtilityName (UTILITY_NAME);
+   
+@@ -1136,16 +1119,6 @@ Returns:
+       argv += 2;
+       continue;
+     }
+-    if (stricmp (argv[0], "--dummy") == 0) {
+-      DummyFileName = argv[1];
+-      if (DummyFileName == NULL) {
+-        Error (NULL, 0, 1003, "Invalid option value", "Dummy file can't be NULL");
+-        goto Finish;
+-      }
+-      argc -= 2;
+-      argv += 2;
+-      continue;
+-    }
+ 
+     if ((stricmp (argv[0], "-r") == 0) || (stricmp (argv[0], "--attributes") == 0)) {
+       if (argv[1] == NULL) {
+@@ -1319,53 +1292,6 @@ Returns:
+ 
+   VerboseMsg ("%s tool start.", UTILITY_NAME);
+ 
+-  if (DummyFileName != NULL) {
+-      //
+-      // Open file and read contents
+-      //
+-      DummyFile = fopen (LongFilePath (DummyFileName), "rb");
+-      if (DummyFile == NULL) {
+-        Error (NULL, 0, 0001, "Error opening file", DummyFileName);
+-        return EFI_ABORTED;
+-      }
+-
+-      fseek (DummyFile, 0, SEEK_END);
+-      DummyFileSize = ftell (DummyFile);
+-      fseek (DummyFile, 0, SEEK_SET);
+-      DummyFileBuffer = (UINT8 *) malloc (DummyFileSize);
+-      fread(DummyFileBuffer, 1, DummyFileSize, DummyFile);
+-      fclose(DummyFile);
+-      DebugMsg (NULL, 0, 9, "Dummy files", "the dummy file name is %s and the size is %u bytes", DummyFileName, (unsigned) DummyFileSize);
+-
+-      InFile = fopen(LongFilePath(InputFileName[0]), "rb");
+-      if (InFile == NULL) {
+-        Error (NULL, 0, 0001, "Error opening file", InputFileName[0]);
+-        return EFI_ABORTED;
+-      }
+-
+-      fseek (InFile, 0, SEEK_END);
+-      InFileSize = ftell (InFile);
+-      fseek (InFile, 0, SEEK_SET);
+-      InFileBuffer = (UINT8 *) malloc (InFileSize);
+-      fread(InFileBuffer, 1, InFileSize, InFile);
+-      fclose(InFile);
+-      DebugMsg (NULL, 0, 9, "Input files", "the input file name is %s and the size is %u bytes", InputFileName[0], (unsigned) InFileSize);
+-      if (InFileSize > DummyFileSize){
+-        if (stricmp(DummyFileBuffer, InFileBuffer + (InFileSize - DummyFileSize)) == 0){
+-          SectGuidHeaderLength = InFileSize - DummyFileSize;
+-        }
+-      }
+-      if (SectGuidHeaderLength == 0) {
+-        SectGuidAttribute |= EFI_GUIDED_SECTION_PROCESSING_REQUIRED;
+-      }
+-      if (DummyFileBuffer != NULL) {
+-        free (DummyFileBuffer);
+-      }
+-      if (InFileBuffer != NULL) {
+-        free (InFileBuffer);
+-      }
+-    }
+-
+   //
+   // Parse all command line parameters to get the corresponding section type.
+   //
+-- 
+2.15.1
+

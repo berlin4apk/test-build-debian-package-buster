@@ -3,6 +3,8 @@ edk2 (0~20171205.a9212288-1) UNRELEASED; urgency=medium
   * New upstream release.
     - Fix Windows Server 2012 BSOD during installation. Closes: #881219.
     - Bump openssl up to latest upstream version, 1.1.0g.
+  * d/p/Revert-BaseTools-Update-Gensec-to-set-PROCESSING_REQ.patch: Add;
+    fixes FTBFS.
 
  -- dann frazier <dannf@debian.org>  Tue, 05 Dec 2017 14:23:33 -0700
 
