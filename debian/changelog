@@ -1,6 +1,7 @@
 edk2 (0~20171205.a9212288-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+    - Fix Windows Server 2012 BSOD during installation. Closes: #881219.
 
  -- dann frazier <dannf@debian.org>  Tue, 05 Dec 2017 14:23:33 -0700
 
