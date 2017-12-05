@@ -1,6 +1,6 @@
 Source: edk2
 Section: misc
-Priority: extra
+Priority: optional
 Maintainer: Debian QEMU Team <pkg-qemu-devel@lists.alioth.debian.org>
 Uploaders: Steve Langasek <vorlon@debian.org>, Serge Hallyn <serge.hallyn@ubuntu.com>, dann frazier <dannf@debian.org>
 Build-Depends: debhelper (>= 10), uuid-dev, iasl, gcc-multilib [i386], nasm, python, gcc-aarch64-linux-gnu, gcc-arm-linux-gnueabihf

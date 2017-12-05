@@ -5,6 +5,7 @@ edk2 (0~20171205.a9212288-1) UNRELEASED; urgency=medium
     - Bump openssl up to latest upstream version, 1.1.0g.
   * d/p/Revert-BaseTools-Update-Gensec-to-set-PROCESSING_REQ.patch: Add;
     fixes FTBFS.
+  * Change package priorities from extra (now deprecated) to optional.
 
  -- dann frazier <dannf@debian.org>  Tue, 05 Dec 2017 14:23:33 -0700
 
