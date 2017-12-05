@@ -3,7 +3,7 @@
 SHELL=/bin/bash
 
 # various bits that have to be pulled in to create the full source tarball
-OPENSSL_VER= 1.1.0f
+OPENSSL_VER= 1.1.0g
 OPENSSL_SRC= openssl-$(OPENSSL_VER).tar.gz
 OPENSSL_URL= http://www.openssl.org/source/$(OPENSSL_SRC)
 SHELL_SRC  = https://efi-shell.svn.sourceforge.net/svnroot/efi-shell/trunk/Shell
