@@ -40,6 +40,8 @@
   SmramProfileRecord.c
   MemoryAttributesTable.c
   SmiHandlerProfile.c
+  HeapGuard.c
+  HeapGuard.h
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -89,6 +91,8 @@
   gEfiSmmGpiDispatch2ProtocolGuid               ## SOMETIMES_CONSUMES
   gEfiSmmIoTrapDispatch2ProtocolGuid            ## SOMETIMES_CONSUMES
   gEfiSmmUsbDispatch2ProtocolGuid               ## SOMETIMES_CONSUMES
+  gEfiSmmCpuProtocolGuid                        ## SOMETIMES_CONSUMES
+  gEdkiiSmmMemoryAttributeProtocolGuid          ## CONSUMES
 
 [Pcd]
   gEfiMdeModulePkgTokenSpaceGuid.PcdLoadFixAddressSmmCodePageNumber     ## SOMETIMES_CONSUMES
@@ -97,6 +101,9 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdMemoryProfilePropertyMask           ## CONSUMES
   gEfiMdeModulePkgTokenSpaceGuid.PcdMemoryProfileDriverPath             ## CONSUMES
   gEfiMdeModulePkgTokenSpaceGuid.PcdSmiHandlerProfilePropertyMask       ## CONSUMES
+  gEfiMdeModulePkgTokenSpaceGuid.PcdHeapGuardPageType                   ## CONSUMES
+  gEfiMdeModulePkgTokenSpaceGuid.PcdHeapGuardPoolType                   ## CONSUMES
+  gEfiMdeModulePkgTokenSpaceGuid.PcdHeapGuardPropertyMask               ## CONSUMES
 
 [Guids]
   gAprioriGuid                                  ## SOMETIMES_CONSUMES   ## File

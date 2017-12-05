@@ -831,8 +831,11 @@ InitializeDxeNxMemoryProtectionPolicy (
   } while (Status == EFI_BUFFER_TOO_SMALL);
   ASSERT_EFI_ERROR (Status);
 
-  DEBUG((DEBUG_ERROR, "%a: applying strict permissions to active memory regions\n",
-    __FUNCTION__));
+  DEBUG ((
+    DEBUG_INFO,
+    "%a: applying strict permissions to active memory regions\n",
+    __FUNCTION__
+    ));
 
   MergeMemoryMapForProtectionPolicy (MemoryMap, &MemoryMapSize, DescriptorSize);
 
@@ -856,9 +859,11 @@ InitializeDxeNxMemoryProtectionPolicy (
   // accessible, but have not been added to the UEFI memory map (yet).
   //
   if (GetPermissionAttributeForMemoryType (EfiConventionalMemory) != 0) {
-    DEBUG((DEBUG_ERROR,
+    DEBUG ((
+      DEBUG_INFO,
       "%a: applying strict permissions to inactive memory regions\n",
-      __FUNCTION__));
+      __FUNCTION__
+      ));
 
     CoreAcquireGcdMemoryLock ();
 
@@ -1065,12 +1070,15 @@ CoreInitializeMemoryProtection (
   // - code regions should have no EFI_MEMORY_XP attribute
   // - EfiConventionalMemory and EfiBootServicesData should use the
   //   same attribute
+  // - heap guard should not be enabled for the same type of memory
   //
   ASSERT ((GetPermissionAttributeForMemoryType (EfiBootServicesCode) & EFI_MEMORY_XP) == 0);
   ASSERT ((GetPermissionAttributeForMemoryType (EfiRuntimeServicesCode) & EFI_MEMORY_XP) == 0);
   ASSERT ((GetPermissionAttributeForMemoryType (EfiLoaderCode) & EFI_MEMORY_XP) == 0);
   ASSERT (GetPermissionAttributeForMemoryType (EfiBootServicesData) ==
           GetPermissionAttributeForMemoryType (EfiConventionalMemory));
+  ASSERT ((PcdGet64 (PcdDxeNxMemoryProtectionPolicy) & PcdGet64 (PcdHeapGuardPoolType)) == 0);
+  ASSERT ((PcdGet64 (PcdDxeNxMemoryProtectionPolicy) & PcdGet64 (PcdHeapGuardPageType)) == 0);
 
   if (mImageProtectionPolicy != 0 || PcdGet64 (PcdDxeNxMemoryProtectionPolicy) != 0) {
     Status = CoreCreateEvent (

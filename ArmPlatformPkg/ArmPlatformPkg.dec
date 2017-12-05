@@ -31,6 +31,9 @@
 [Includes.common]
   Include                        # Root include for the package
 
+[LibraryClasses]
+  PL011UartLib|Include/Library/PL011UartLib.h
+
 [Guids.common]
   gArmPlatformTokenSpaceGuid   = { 0x9c0aaed4, 0x74c5, 0x4043, { 0xb4, 0x17, 0xa3, 0x22, 0x38, 0x14, 0xce, 0x76 } }
   #
@@ -45,7 +48,6 @@
   gArmPlatformTokenSpaceGuid.PcdNorFlashRemapping|FALSE|BOOLEAN|0x00000012
 
   gArmPlatformTokenSpaceGuid.PcdStandalone|TRUE|BOOLEAN|0x00000001
-  gArmPlatformTokenSpaceGuid.PcdSystemMemoryInitializeInSec|FALSE|BOOLEAN|0x00000002
   gArmPlatformTokenSpaceGuid.PcdSendSgiToBringUpSecondaryCores|FALSE|BOOLEAN|0x00000004
 
   gArmPlatformTokenSpaceGuid.PcdNorFlashCheckBlockLocked|FALSE|BOOLEAN|0x0000003C
