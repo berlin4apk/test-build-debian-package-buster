@@ -1,3 +1,9 @@
+edk2 (0~20171205.a9212288-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- dann frazier <dannf@debian.org>  Tue, 05 Dec 2017 14:23:33 -0700
+
 edk2 (0~20171027.76fd5a66-1) unstable; urgency=medium
 
   * New upstream release.
