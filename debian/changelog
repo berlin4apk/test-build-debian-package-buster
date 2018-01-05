@@ -1,3 +1,12 @@
+edk2 (0~20180105.0bc94c74-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+    - d/p/Revert-BaseTools-Update-Gensec-to-set-PROCESSING_REQ.patch: Drop;
+      superseded by upstream fix:
+       1e6e6e18 BaseTools: Fix GenSec GCC make failure
+
+ -- dann frazier <dannf@debian.org>  Fri, 05 Jan 2018 11:36:44 -0700
+
 edk2 (0~20171205.a9212288-1) unstable; urgency=medium
 
   * New upstream release.
