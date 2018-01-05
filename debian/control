@@ -7,7 +7,7 @@ Build-Depends: debhelper (>= 10), uuid-dev, iasl, gcc-multilib [i386], nasm, pyt
 Standards-Version: 4.1.3
 Homepage: http://www.tianocore.org
 Vcs-Git: git://git.debian.org/git/pkg-qemu/edk2.git
-Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-qemu/edk2.git
+Vcs-Browser: https://anonscm.debian.org/gitweb/?p=pkg-qemu/edk2.git
 XS-Build-Indep-Architecture: amd64
 
 Package: ovmf
