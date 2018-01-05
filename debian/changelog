@@ -1,4 +1,4 @@
-edk2 (0~20180105.0bc94c74-1) UNRELEASED; urgency=medium
+edk2 (0~20180105.0bc94c74-1) unstable; urgency=medium
 
   * New upstream release.
     - d/p/Revert-BaseTools-Update-Gensec-to-set-PROCESSING_REQ.patch: Drop;
@@ -7,7 +7,7 @@ edk2 (0~20180105.0bc94c74-1) UNRELEASED; urgency=medium
   * Bump Standards-Version from 4.1.1 to 4.1.3.
     - Use https instead of http in Vcs-Browser URL.
 
- -- dann frazier <dannf@debian.org>  Fri, 05 Jan 2018 11:36:44 -0700
+ -- dann frazier <dannf@debian.org>  Fri, 05 Jan 2018 12:33:43 -0700
 
 edk2 (0~20171205.a9212288-1) unstable; urgency=medium
 
