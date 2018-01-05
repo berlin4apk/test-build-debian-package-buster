@@ -1,7 +1,7 @@
 /** @file
   Intel VTd driver.
 
-  Copyright (c) 2017, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2017 - 2018, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -11,16 +11,6 @@
   WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 **/
-
-#include <PiDxe.h>
-
-#include <Protocol/IoMmu.h>
-#include <Protocol/PciIo.h>
-
-#include <Library/IoLib.h>
-#include <Library/BaseLib.h>
-#include <Library/DebugLib.h>
-#include <Library/UefiBootServicesTableLib.h>
 
 #include "DmaProtection.h"
 
@@ -87,7 +77,7 @@ IoMmuUnmap (
 
   @retval EFI_SUCCESS           The requested memory pages were allocated.
   @retval EFI_UNSUPPORTED       Attributes is unsupported. The only legal attribute bits are
-                                MEMORY_WRITE_COMBINE and MEMORY_CACHED.
+                                MEMORY_WRITE_COMBINE, MEMORY_CACHED and DUAL_ADDRESS_CYCLE.
   @retval EFI_INVALID_PARAMETER One or more parameters are invalid.
   @retval EFI_OUT_OF_RESOURCES  The memory pages could not be allocated.
 
@@ -241,6 +231,14 @@ VTdSetAttribute (
   DEBUG ((DEBUG_VERBOSE, "PCI(S%x.B%x.D%x.F%x) ", Segment, SourceId.Bits.Bus, SourceId.Bits.Device, SourceId.Bits.Function));
   DEBUG ((DEBUG_VERBOSE, "(0x%lx~0x%lx) - %lx\n", DeviceAddress, Length, IoMmuAccess));
 
+  if (mAcpiDmarTable == NULL) {
+    //
+    // Record the entry to driver global variable.
+    // As such once VTd is activated, the setting can be adopted.
+    //
+    return RequestAccessAttribute (Segment, SourceId, DeviceAddress, Length, IoMmuAccess);
+  }
+
   PERF_CODE (
     AsciiSPrint (PerfToken, sizeof(PerfToken), "S%04xB%02xD%02xF%01x", Segment, SourceId.Bits.Bus, SourceId.Bits.Device, SourceId.Bits.Function);
     Identifier = (Segment << 16) | SourceId.Uint16;
@@ -306,18 +304,22 @@ IoMmuSetAttribute (
   EFI_STATUS            Status;
   EFI_PHYSICAL_ADDRESS  DeviceAddress;
   UINTN                 NumberOfPages;
+  EFI_TPL               OriginalTpl;
+
+  OriginalTpl = gBS->RaiseTPL (VTD_TPL_LEVEL);
 
   Status = GetDeviceInfoFromMapping (Mapping, &DeviceAddress, &NumberOfPages);
-  if (EFI_ERROR(Status)) {
-    return Status;
+  if (!EFI_ERROR(Status)) {
+    Status = VTdSetAttribute (
+               This,
+               DeviceHandle,
+               DeviceAddress,
+               EFI_PAGES_TO_SIZE(NumberOfPages),
+               IoMmuAccess
+               );
   }
-  Status = VTdSetAttribute (
-             This,
-             DeviceHandle,
-             DeviceAddress,
-             EFI_PAGES_TO_SIZE(NumberOfPages),
-             IoMmuAccess
-             );
+
+  gBS->RestoreTPL (OriginalTpl);
 
   return Status;
 }

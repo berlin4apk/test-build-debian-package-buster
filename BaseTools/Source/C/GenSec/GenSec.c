@@ -1326,32 +1326,48 @@ Returns:
       DummyFile = fopen (LongFilePath (DummyFileName), "rb");
       if (DummyFile == NULL) {
         Error (NULL, 0, 0001, "Error opening file", DummyFileName);
-        return EFI_ABORTED;
+        goto Finish;
       }
 
       fseek (DummyFile, 0, SEEK_END);
       DummyFileSize = ftell (DummyFile);
       fseek (DummyFile, 0, SEEK_SET);
       DummyFileBuffer = (UINT8 *) malloc (DummyFileSize);
+      if (DummyFileBuffer == NULL) {
+        fclose(DummyFile);
+        Error (NULL, 0, 4001, "Resource", "memory cannot be allcoated");
+        goto Finish;
+      }
+
       fread(DummyFileBuffer, 1, DummyFileSize, DummyFile);
       fclose(DummyFile);
       DebugMsg (NULL, 0, 9, "Dummy files", "the dummy file name is %s and the size is %u bytes", DummyFileName, (unsigned) DummyFileSize);
 
+      if (InputFileName == NULL) {
+        Error (NULL, 0, 4001, "Resource", "memory cannot be allcoated");
+        goto Finish;
+      }
       InFile = fopen(LongFilePath(InputFileName[0]), "rb");
       if (InFile == NULL) {
         Error (NULL, 0, 0001, "Error opening file", InputFileName[0]);
-        return EFI_ABORTED;
+        goto Finish;
       }
 
       fseek (InFile, 0, SEEK_END);
       InFileSize = ftell (InFile);
       fseek (InFile, 0, SEEK_SET);
       InFileBuffer = (UINT8 *) malloc (InFileSize);
+      if (InFileBuffer == NULL) {
+        fclose(InFile);
+        Error (NULL, 0, 4001, "Resource", "memory cannot be allcoated");
+        goto Finish;
+      }
+
       fread(InFileBuffer, 1, InFileSize, InFile);
       fclose(InFile);
       DebugMsg (NULL, 0, 9, "Input files", "the input file name is %s and the size is %u bytes", InputFileName[0], (unsigned) InFileSize);
       if (InFileSize > DummyFileSize){
-        if (stricmp(DummyFileBuffer, InFileBuffer + (InFileSize - DummyFileSize)) == 0){
+        if (stricmp((CHAR8 *)DummyFileBuffer, (CHAR8 *)(InFileBuffer + (InFileSize - DummyFileSize))) == 0){
           SectGuidHeaderLength = InFileSize - DummyFileSize;
         }
       }
@@ -1670,7 +1686,11 @@ Finish:
   if (OutFile != NULL) {
     fclose (OutFile);
   }
-  
+
+  if (DummyFileBuffer != NULL) {
+    free (DummyFileBuffer);
+  }
+
   VerboseMsg ("%s tool done with return code is 0x%x.", UTILITY_NAME, GetUtilityStatus ());
 
   return GetUtilityStatus ();
