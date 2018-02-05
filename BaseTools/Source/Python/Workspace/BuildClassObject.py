@@ -67,7 +67,7 @@ class PcdClassObject(object):
         self.DscDefaultValue = None
         if IsDsc:
             self.DscDefaultValue = Value
-        
+
     ## Convert the class to a string
     #
     #  Convert each member of the class to string
@@ -109,9 +109,13 @@ class PcdClassObject(object):
         return hash((self.TokenCName, self.TokenSpaceGuidCName))
 
 class StructurePcd(PcdClassObject):
-    def __init__(self, StructuredPcdIncludeFile="", Packages=None, Name=None, Guid=None, Type=None, DatumType=None, Value=None, Token=None, MaxDatumSize=None, SkuInfoList={}, IsOverrided=False, GuidValue=None, validateranges=[], validlists=[], expressions=[],default_store = TAB_DEFAULT_STORES_DEFAULT):
+    def __init__(self, StructuredPcdIncludeFile=None, Packages=None, Name=None, Guid=None, Type=None, DatumType=None, Value=None, Token=None, MaxDatumSize=None, SkuInfoList=None, IsOverrided=False, GuidValue=None, validateranges=None, validlists=None, expressions=None,default_store = TAB_DEFAULT_STORES_DEFAULT):
+        if SkuInfoList is None: SkuInfoList={}
+        if validateranges is None: validateranges=[]
+        if validlists is None: validlists=[]
+        if expressions is None : expressions=[]
         super(StructurePcd, self).__init__(Name, Guid, Type, DatumType, Value, Token, MaxDatumSize, SkuInfoList, IsOverrided, GuidValue, validateranges, validlists, expressions)
-        self.StructuredPcdIncludeFile = StructuredPcdIncludeFile
+        self.StructuredPcdIncludeFile = [] if StructuredPcdIncludeFile is None else StructuredPcdIncludeFile
         self.PackageDecs = Packages
         self.DefaultStoreName = [default_store]
         self.DefaultValues = collections.OrderedDict({})
@@ -119,6 +123,8 @@ class StructurePcd(PcdClassObject):
         self.SkuOverrideValues = collections.OrderedDict({})
         self.FlexibleFieldName = None
         self.StructName = None
+        self.PcdDefineLineNo = 0
+        self.PkgPath = ""
     def __repr__(self):
         return self.TypeName
 
@@ -171,6 +177,8 @@ class StructurePcd(PcdClassObject):
             self.SkuOverrideValues = PcdObject.SkuOverrideValues if PcdObject.SkuOverrideValues else self.SkuOverrideValues
             self.FlexibleFieldName = PcdObject.FlexibleFieldName if PcdObject.FlexibleFieldName else self.FlexibleFieldName
             self.StructName = PcdObject.DatumType if PcdObject.DatumType else self.StructName
+            self.PcdDefineLineNo = PcdObject.PcdDefineLineNo if PcdObject.PcdDefineLineNo else self.PcdDefineLineNo
+            self.PkgPath = PcdObject.PkgPath if PcdObject.PkgPath else self.PkgPath
 
 ## LibraryClassObject
 #
@@ -437,4 +445,3 @@ class PlatformBuildClassObject(object):
     #
     def __hash__(self):
         return hash(self.MetaFile)
-

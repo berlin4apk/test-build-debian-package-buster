@@ -1,7 +1,7 @@
 ## @file
 # Common routines used by all tools
 #
-# Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2018, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -1572,6 +1572,8 @@ def ParseFieldValue (Value):
     if Value.startswith("L'") and Value.endswith("'"):
         # Unicode Character Constant
         List = list(Value[2:-1])
+        if len(List) == 0:
+            raise BadExpression('Length %s is %s' % (Value, len(List)))
         List.reverse()
         Value = 0
         for Char in List:
@@ -1580,6 +1582,8 @@ def ParseFieldValue (Value):
     if Value.startswith("'") and Value.endswith("'"):
         # Character constant
         List = list(Value[1:-1])
+        if len(List) == 0:
+            raise BadExpression('Length %s is %s' % (Value, len(List)))
         List.reverse()
         Value = 0
         for Char in List:
@@ -1818,10 +1822,10 @@ def CheckPcdDatum(Type, Value):
     if Type == "VOID*":
         ValueRe = re.compile(r'\s*L?\".*\"\s*$')
         if not (((Value.startswith('L"') or Value.startswith('"')) and Value.endswith('"'))
-                or (Value.startswith('{') and Value.endswith('}'))
+                or (Value.startswith('{') and Value.endswith('}')) or (Value.startswith("L'") or Value.startswith("'") and Value.endswith("'"))
                ):
             return False, "Invalid value [%s] of type [%s]; must be in the form of {...} for array"\
-                          ", or \"...\" for string, or L\"...\" for unicode string" % (Value, Type)
+                          ", \"...\" or \'...\' for string, L\"...\" or L\'...\' for unicode string" % (Value, Type)
         elif ValueRe.match(Value):
             # Check the chars in UnicodeString or CString is printable
             if Value.startswith("L"):
@@ -2251,6 +2255,8 @@ class SkuClass():
         return self.__SkuInherit.get(skuname,"DEFAULT")
 
     def GetSkuChain(self,sku):
+        if sku == "DEFAULT":
+            return ["DEFAULT"]
         skulist = [sku]
         nextsku = sku
         while 1:
@@ -2346,7 +2352,7 @@ def PackRegistryFormatGuid(Guid):
                 )
 
 def BuildOptionPcdValueFormat(TokenSpaceGuidCName, TokenCName, PcdDatumType, Value):
-    if PcdDatumType == 'VOID*':
+    if PcdDatumType not in [TAB_UINT8, TAB_UINT16, TAB_UINT32, TAB_UINT64,'BOOLEAN']:
         if Value.startswith('L'):
             if not Value[1]:
                 EdkLogger.error("build", FORMAT_INVALID, 'For Void* type PCD, when specify the Value in the command line, please use the following format: "string", L"string", H"{...}"')

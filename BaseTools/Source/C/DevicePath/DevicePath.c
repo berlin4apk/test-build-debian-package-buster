@@ -1,7 +1,7 @@
 /** @file
   Definition for Device Path Tool.
 
-Copyright (c) 2017, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2017 - 2018, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -183,6 +183,11 @@ int main(int argc, CHAR8 *argv[])
   }
   Ascii2UnicodeString(Str, Str16);
   DevicePath = UefiDevicePathLibConvertTextToDevicePath(Str16);
+  if (DevicePath == NULL) {
+    fprintf(stderr, "Convert fail, Cannot convert text to a device path");
+    free(Str16);
+    return STATUS_ERROR;
+  }
   while (!((DevicePath->Type == END_DEVICE_PATH_TYPE) && (DevicePath->SubType == END_ENTIRE_DEVICE_PATH_SUBTYPE)) )
   {
     PrintMem (DevicePath, DevicePath->Length[0] | DevicePath->Length[1] << 8);
@@ -190,5 +195,6 @@ int main(int argc, CHAR8 *argv[])
   }
   PrintMem (DevicePath, DevicePath->Length[0] | DevicePath->Length[1] << 8);
   putchar('\n');
+  free(Str16);
   return STATUS_SUCCESS;
 }

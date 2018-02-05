@@ -855,9 +855,17 @@ EfiPxeBcMtftp (
       (Filename == NULL) ||
       (BufferSize == NULL) ||
       (ServerIp == NULL) ||
-      ((BufferPtr == NULL) && DontUseBuffer) ||
       ((BlockSize != NULL) && (*BlockSize < PXE_MTFTP_DEFAULT_BLOCK_SIZE))) {
     return EFI_INVALID_PARAMETER;
+  }
+
+  if (Operation == EFI_PXE_BASE_CODE_TFTP_READ_FILE ||
+      Operation == EFI_PXE_BASE_CODE_TFTP_READ_DIRECTORY ||
+      Operation == EFI_PXE_BASE_CODE_MTFTP_READ_FILE ||
+      Operation == EFI_PXE_BASE_CODE_MTFTP_READ_DIRECTORY) {
+    if (BufferPtr == NULL && !DontUseBuffer) {
+      return EFI_INVALID_PARAMETER;
+    }
   }
 
   Config    = NULL;
@@ -1941,6 +1949,7 @@ EfiPxeBcSetParameters (
 
   if (NewSendGUID != NULL) {
     if (*NewSendGUID && EFI_ERROR (NetLibGetSystemGuid (&SystemGuid))) {
+      DEBUG ((EFI_D_WARN, "PXE: Failed to read system GUID from the smbios table!\n"));
       return EFI_INVALID_PARAMETER;
     }
     Mode->SendGUID = *NewSendGUID;

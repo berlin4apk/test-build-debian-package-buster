@@ -114,6 +114,40 @@ GetWakeupBuffer (
 }
 
 /**
+  Get available EfiBootServicesCode memory below 4GB by specified size.
+
+  This buffer is required to safely transfer AP from real address mode to
+  protected mode or long mode, due to the fact that the buffer returned by
+  GetWakeupBuffer() may be marked as non-executable.
+
+  @param[in] BufferSize   Wakeup transition buffer size.
+
+  @retval other   Return wakeup transition buffer address below 4GB.
+  @retval 0       Cannot find free memory below 4GB.
+**/
+UINTN
+GetModeTransitionBuffer (
+  IN UINTN                BufferSize
+  )
+{
+  EFI_STATUS              Status;
+  EFI_PHYSICAL_ADDRESS    StartAddress;
+
+  StartAddress = BASE_4GB - 1;
+  Status = gBS->AllocatePages (
+                  AllocateMaxAddress,
+                  EfiBootServicesCode,
+                  EFI_SIZE_TO_PAGES (BufferSize),
+                  &StartAddress
+                  );
+  if (EFI_ERROR (Status)) {
+    StartAddress = 0;
+  }
+
+  return (UINTN)StartAddress;
+}
+
+/**
   Checks APs status and updates APs status if needed.
 
 **/
@@ -295,6 +329,7 @@ InitMpGlobalData (
   UINTN                               Index;
   EFI_GCD_MEMORY_SPACE_DESCRIPTOR     MemDesc;
   UINTN                               StackBase;
+  CPU_INFO_IN_HOB                     *CpuInfoInHob;
 
   SaveCpuMpData (CpuMpData);
 
@@ -314,8 +349,21 @@ InitMpGlobalData (
       ASSERT (FALSE);
     }
 
+    //
+    // DXE will reuse stack allocated for APs at PEI phase if it's available.
+    // Let's check it here.
+    //
+    // Note: BSP's stack guard is set at DxeIpl phase. But for the sake of
+    // BSP/AP exchange, stack guard for ApTopOfStack of cpu 0 will still be
+    // set here.
+    //
+    CpuInfoInHob = (CPU_INFO_IN_HOB *)(UINTN)CpuMpData->CpuInfoInHob;
     for (Index = 0; Index < CpuMpData->CpuCount; ++Index) {
-      StackBase = CpuMpData->Buffer + Index * CpuMpData->CpuApStackSize;
+      if (CpuInfoInHob != NULL && CpuInfoInHob[Index].ApTopOfStack != 0) {
+        StackBase = (UINTN)CpuInfoInHob[Index].ApTopOfStack - CpuMpData->CpuApStackSize;
+      } else {
+        StackBase = CpuMpData->Buffer + Index * CpuMpData->CpuApStackSize;
+      }
 
       Status = gDS->GetMemorySpaceDescriptor (StackBase, &MemDesc);
       ASSERT_EFI_ERROR (Status);
@@ -326,6 +374,9 @@ InitMpGlobalData (
                       MemDesc.Attributes | EFI_MEMORY_RP
                       );
       ASSERT_EFI_ERROR (Status);
+
+      DEBUG ((DEBUG_INFO, "Stack Guard set at %lx [cpu%lu]!\n",
+              (UINT64)StackBase, (UINT64)Index));
     }
   }
 

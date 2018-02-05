@@ -376,13 +376,15 @@ class DecBuildData(PackageBuildClassObject):
             struct_pcd = StructurePcd()
             for item,LineNo in s_pcd_set[pcdname]:
                 if "<HeaderFiles>" in item.TokenCName:
-                    struct_pcd.StructuredPcdIncludeFile = item.DefaultValue
+                    struct_pcd.StructuredPcdIncludeFile.append(item.DefaultValue)
                 elif "<Packages>" in item.TokenCName:
                     dep_pkgs.append(item.DefaultValue)
                 elif item.DatumType == item.TokenCName:
                     struct_pcd.copy(item)
                     struct_pcd.TokenValue = struct_pcd.TokenValue.strip("{").strip()
                     struct_pcd.TokenSpaceGuidCName, struct_pcd.TokenCName = pcdname.split(".")
+                    struct_pcd.PcdDefineLineNo = LineNo
+                    struct_pcd.PkgPath = self.MetaFile.File
                 else:
                     struct_pcd.AddDefaultValue(item.TokenCName, item.DefaultValue,self.MetaFile.File,LineNo)
 

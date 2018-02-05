@@ -1,7 +1,7 @@
 ## @file
 # This file is used to parse meta files
 #
-# Copyright (c) 2008 - 2017, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2008 - 2018, Intel Corporation. All rights reserved.<BR>
 # (C) Copyright 2015-2016 Hewlett Packard Enterprise Development LP<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
@@ -1098,14 +1098,14 @@ class DscParser(MetaFileParser):
     def _SkuIdParser(self):
         TokenList = GetSplitValueList(self._CurrentLine, TAB_VALUE_SPLIT)
         if len(TokenList) not in (2,3):
-            EdkLogger.error('Parser', FORMAT_INVALID, "Correct format is '<Integer>|<UiName>[|<UiName>]'",
+            EdkLogger.error('Parser', FORMAT_INVALID, "Correct format is '<Number>|<UiName>[|<UiName>]'",
                             ExtraData=self._CurrentLine, File=self.MetaFile, Line=self._LineIndex + 1)
         self._ValueList[0:len(TokenList)] = TokenList
     @ParseMacro
     def _DefaultStoresParser(self):
         TokenList = GetSplitValueList(self._CurrentLine, TAB_VALUE_SPLIT)
         if len(TokenList) != 2:
-            EdkLogger.error('Parser', FORMAT_INVALID, "Correct format is '<Integer>|<UiName>'",
+            EdkLogger.error('Parser', FORMAT_INVALID, "Correct format is '<Number>|<UiName>'",
                             ExtraData=self._CurrentLine, File=self.MetaFile, Line=self._LineIndex + 1)
         self._ValueList[0:len(TokenList)] = TokenList
 
@@ -1593,6 +1593,8 @@ class DscParser(MetaFileParser):
                 ValList[Index] = ValueExpression(PcdValue, self._Macros)(True)
             except WrnExpression, Value:
                 ValList[Index] = Value.result
+            except:
+                pass
 
         if ValList[Index] == 'True':
             ValList[Index] = '1'
@@ -1891,22 +1893,24 @@ class DecParser(MetaFileParser):
             if "|" not in self._CurrentLine:
                 if "<HeaderFiles>" == self._CurrentLine:
                     self._include_flag = True
+                    self._package_flag = False
                     self._ValueList = None
                     return
                 if "<Packages>" == self._CurrentLine:
                     self._package_flag = True
                     self._ValueList = None
+                    self._include_flag = False
                     return
 
                 if self._include_flag:
                     self._ValueList[1] = "<HeaderFiles>_" + md5.new(self._CurrentLine).hexdigest()
                     self._ValueList[2] = self._CurrentLine
-                    self._include_flag = False
                 if self._package_flag and "}" != self._CurrentLine:
                     self._ValueList[1] = "<Packages>_" + md5.new(self._CurrentLine).hexdigest()
                     self._ValueList[2] = self._CurrentLine
                 if self._CurrentLine == "}":
                     self._package_flag = False
+                    self._include_flag = False
                     self._ValueList = None
                     return
             else:
@@ -1915,6 +1919,9 @@ class DecParser(MetaFileParser):
                 if len(PcdNames) == 2:
                     self._CurrentStructurePcdName = ""
                 else:
+                    if self._CurrentStructurePcdName != TAB_SPLIT.join(PcdNames[:2]):
+                        EdkLogger.error('Parser', FORMAT_INVALID, "Pcd Name does not match: %s and %s " % (self._CurrentStructurePcdName , TAB_SPLIT.join(PcdNames[:2])),
+                                File=self.MetaFile, Line=self._LineIndex + 1)
                     self._ValueList[1] = TAB_SPLIT.join(PcdNames[2:])
                     self._ValueList[2] = PcdTockens[1]
         if not self._CurrentStructurePcdName:
@@ -1986,14 +1993,6 @@ class DecParser(MetaFileParser):
 
             PcdValue = ValueList[0]
             if PcdValue:
-                try:
-                    ValueList[0] = ValueExpression(PcdValue, self._AllPcdDict)(True)
-                except WrnExpression, Value:
-                    ValueList[0] = Value.result
-                except BadExpression, Value:
-                    EdkLogger.error('Parser', FORMAT_INVALID, Value, File=self.MetaFile, Line=self._LineIndex + 1)
-
-            if ValueList[0]:
                 try:
                     ValueList[0] = ValueExpressionEx(ValueList[0], ValueList[1], self._GuidDict)(True)
                 except BadExpression, Value:
