@@ -130,7 +130,8 @@ get-orig-source:
 	# openssl
 	wget $(OPENSSL_URL)
 	tar zxvf $(OPENSSL_SRC) -C edk2-$(ver)/CryptoPkg/Library/OpensslLib
-	ln -s openssl-$(OPENSSL_VER) \
+	rm -rf edk2-$(ver)/CryptoPkg/Library/OpensslLib/openssl && \
+		ln -s openssl-$(OPENSSL_VER) \
 		edk2-$(ver)/CryptoPkg/Library/OpensslLib/openssl
 	# efi shell
 	svn export -r$(SHELL_REV) $(SHELL_SRC) edk2-$(ver)/Shell
