@@ -1,8 +1,8 @@
-edk2 (0~20180205.c0d9813c-1) UNRELEASED; urgency=medium
+edk2 (0~20180205.c0d9813c-1) unstable; urgency=medium
 
   * New upstream release.
 
- -- dann frazier <dannf@debian.org>  Mon, 05 Feb 2018 11:43:33 -0700
+ -- dann frazier <dannf@debian.org>  Mon, 05 Feb 2018 12:03:01 -0700
 
 edk2 (0~20180105.0bc94c74-1) unstable; urgency=medium
 
