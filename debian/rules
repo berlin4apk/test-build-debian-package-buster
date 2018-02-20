@@ -79,6 +79,7 @@ ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
+			-DHTTP_BOOT_ENABLE=TRUE \
 			-DSECURE_BOOT_ENABLE=TRUE \
 			-DFD_SIZE_2MB \
 			-b RELEASE
@@ -99,6 +100,7 @@ build-qemu-efi: setup-build
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p ArmVirtPkg/ArmVirtQemu.dsc \
+			-DHTTP_BOOT_ENABLE=TRUE \
 			-DSECURE_BOOT_ENABLE=TRUE \
 			-DINTEL_BDS \
 			-b RELEASE
