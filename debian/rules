@@ -76,8 +76,12 @@ ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 			-b RELEASE -t $(EDK2_TOOLCHAIN); \
 		cp -a Build/Fat/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_ARCH_DIR)/Fat.efi \
 			FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)/Fat.efi; \
-		build -a $(EDK2_HOST_ARCH) -p OvmfPkg/OvmfPkgX64.dsc -DSECURE_BOOT_ENABLE=TRUE -DFD_SIZE_2MB \
-			-b RELEASE -t $(EDK2_TOOLCHAIN)
+		build -a $(EDK2_HOST_ARCH) \
+			-t $(EDK2_TOOLCHAIN) \
+			-p OvmfPkg/OvmfPkgX64.dsc \
+			-DSECURE_BOOT_ENABLE=TRUE \
+			-DFD_SIZE_2MB \
+			-b RELEASE
 endif
 
 build-qemu-efi: setup-build
