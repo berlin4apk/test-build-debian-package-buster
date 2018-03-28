@@ -1,7 +1,7 @@
 #/** @file
 # FDF file of Platform.
 #
-# Copyright (c) 2008 - 2017, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2008 - 2018, Intel Corporation. All rights reserved.<BR>
 #
 # This program and the accompanying materials are licensed and made available under
 # the terms and conditions of the BSD License that accompanies this distribution.
@@ -278,12 +278,12 @@ INF EdkCompatibilityPkg/Compatibility/AcpiVariableHobOnSmramReserveHobThunk/Acpi
 
 INF RuleOverride = BINARY $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/IA32/PiSmmCommunicationPei.inf
 !if $(TPM_ENABLED) == TRUE
-INF SecurityPkg/Tcg/TrEEConfig/TrEEConfigPei.inf
+INF SecurityPkg/Tcg/Tcg2Config/Tcg2ConfigPei.inf
 INF SecurityPkg/Tcg/TcgPei/TcgPei.inf
 INF SecurityPkg/Tcg/PhysicalPresencePei/PhysicalPresencePei.inf
 !endif
 !if $(FTPM_ENABLE) == TRUE
-INF  SecurityPkg/Tcg/TrEEPei/TrEEPei.inf #use PCD config
+INF  SecurityPkg/Tcg/Tcg2Pei/Tcg2Pei.inf #use PCD config
 !endif
 INF MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf
 
@@ -513,7 +513,7 @@ INF RuleOverride = DRIVER_ACPITABLE SecurityPkg/Tcg/TcgSmm/TcgSmm.inf
 INF RuleOverride = BINARY $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/IA32/Tpm2DeviceSeCPei.inf
 INF RuleOverride = BINARY $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/$(DXE_ARCHITECTURE)/Tpm2DeviceSeCDxe.inf
 INF SecurityPkg/Tcg/MemoryOverwriteControl/TcgMor.inf
-INF SecurityPkg/Tcg/TrEEDxe/TrEEDxe.inf
+INF SecurityPkg/Tcg/Tcg2Dxe/Tcg2Dxe.inf
 INF RuleOverride = BINARY $(PLATFORM_BINARY_PACKAGE)/$(DXE_ARCHITECTURE)$(TARGET)/$(DXE_ARCHITECTURE)/FtpmSmm.inf
 !endif
 
@@ -730,7 +730,7 @@ FILE FREEFORM = 878AC2CC-5343-46F2-B563-51F89DAF56BA {
 !endif
 
 !if $(CAPSULE_ENABLE) || $(MICOCODE_CAPSULE_ENABLE)
-INF  MdeModulePkg/Universal/EsrtDxe/EsrtDxe.inf
+INF  MdeModulePkg/Universal/EsrtFmpDxe/EsrtFmpDxe.inf
 !endif
 !if $(CAPSULE_ENABLE)
 INF  SignedCapsulePkg/Universal/SystemFirmwareUpdate/SystemFirmwareReportDxe.inf

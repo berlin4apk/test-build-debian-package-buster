@@ -980,8 +980,6 @@ def CreatePcdDatabaseCode (Info, AutoGenC, AutoGenH):
 def CreatePcdDataBase(PcdDBData):
     delta = {}
     basedata = {}
-    if not PcdDBData:
-        return ""
     for skuname,skuid in PcdDBData:
         if len(PcdDBData[(skuname,skuid)][1]) != len(PcdDBData[("DEFAULT","0")][1]):
             EdkLogger.ERROR("The size of each sku in one pcd are not same")
@@ -1061,9 +1059,12 @@ def NewCreatePcdDatabasePhaseSpecificAutoGen(Platform,Phase):
         AdditionalAutoGenH, AdditionalAutoGenC =  CreateAutoGen(PcdDriverAutoGenData)
     else:
         AdditionalAutoGenH, AdditionalAutoGenC, PcdDbBuffer,VarCheckTab = CreatePcdDatabasePhaseSpecificAutoGen (Platform,{}, Phase)
+        final_data = ()
+        for item in PcdDbBuffer:
+            final_data += unpack("B",item)
+        PcdDBData[("DEFAULT","0")] = (PcdDbBuffer, final_data)
 
-    PcdDbBuffer = CreatePcdDataBase(PcdDBData)
-    return AdditionalAutoGenH, AdditionalAutoGenC, PcdDbBuffer
+    return AdditionalAutoGenH, AdditionalAutoGenC, CreatePcdDataBase(PcdDBData)
 ## Create PCD database in DXE or PEI phase
 #
 #   @param      Platform    The platform object
@@ -1183,12 +1184,6 @@ def CreatePcdDatabasePhaseSpecificAutoGen (Platform, DynamicPcdList, Phase):
         for PcdItem in GlobalData.MixedPcd:
             if (Pcd.TokenCName, Pcd.TokenSpaceGuidCName) in GlobalData.MixedPcd[PcdItem]:
                 CName = PcdItem[0]
-
-        if GlobalData.BuildOptionPcd:
-            for PcdItem in GlobalData.BuildOptionPcd:
-                if (Pcd.TokenSpaceGuidCName, CName) == (PcdItem[0], PcdItem[1]):
-                    Pcd.DefaultValue = PcdItem[2]
-                    break
 
         EdkLogger.debug(EdkLogger.DEBUG_3, "PCD: %s %s (%s : %s)" % (CName, TokenSpaceGuidCName, Pcd.Phase, Phase))
 
@@ -1504,12 +1499,6 @@ def CreatePcdDatabasePhaseSpecificAutoGen (Platform, DynamicPcdList, Phase):
         for PcdItem in GlobalData.MixedPcd:
             if (Pcd.TokenCName, Pcd.TokenSpaceGuidCName) in GlobalData.MixedPcd[PcdItem]:
                 CName = PcdItem[0]
-
-        if GlobalData.BuildOptionPcd:
-            for PcdItem in GlobalData.BuildOptionPcd:
-                if (Pcd.TokenSpaceGuidCName, CName) == (PcdItem[0], PcdItem[1]):
-                    Pcd.DefaultValue = PcdItem[2]
-                    break
 
         EdkLogger.debug(EdkLogger.DEBUG_1, "PCD = %s.%s" % (CName, TokenSpaceGuidCName))
         EdkLogger.debug(EdkLogger.DEBUG_1, "phase = %s" % Phase)

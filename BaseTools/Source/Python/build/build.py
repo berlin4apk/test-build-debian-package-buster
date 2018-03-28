@@ -772,7 +772,7 @@ class Build():
         self.AutoGenTime    = 0
         self.MakeTime       = 0
         self.GenFdsTime     = 0
-        GlobalData.BuildOptionPcd     = BuildOptions.OptionPcd if BuildOptions.OptionPcd else {}
+        GlobalData.BuildOptionPcd     = BuildOptions.OptionPcd if BuildOptions.OptionPcd else []
         #Set global flag for build mode
         GlobalData.gIgnoreSource = BuildOptions.IgnoreSources
         GlobalData.gUseHashCache = BuildOptions.UseHashCache
@@ -1865,13 +1865,21 @@ class Build():
                             if self.Target not in ['clean', 'cleanlib', 'cleanall', 'run', 'fds']:
                                 # for target which must generate AutoGen code and makefile
                                 if not self.SkipAutoGen or self.Target == 'genc':
+                                    self.Progress.Start("Generating code")
                                     Ma.CreateCodeFile(True)
+                                    self.Progress.Stop("done!")
+                                if self.Target == "genc":
+                                    return True
                                 if not self.SkipAutoGen or self.Target == 'genmake':
+                                    self.Progress.Start("Generating makefile")
                                     if CmdListDict and self.Fdf and (Module.File, Arch) in CmdListDict:
                                         Ma.CreateMakeFile(True, CmdListDict[Module.File, Arch])
                                         del CmdListDict[Module.File, Arch]
                                     else:
                                         Ma.CreateMakeFile(True)
+                                    self.Progress.Stop("done!")
+                                if self.Target == "genmake":
+                                    return True
                             self.BuildModules.append(Ma)
                     self.AutoGenTime += int(round((time.time() - AutoGenStart)))
                     MakeStart = time.time()
@@ -2323,7 +2331,8 @@ def MyOptionParser():
         help="Using this name of SKU ID to build the platform, overriding SKUID_IDENTIFIER in DSC file.")
 
     Parser.add_option("-n", action="callback", type="int", dest="ThreadNumber", callback=SingleCheckCallback,
-        help="Build the platform using multi-threaded compiler. The value overrides target.txt's MAX_CONCURRENT_THREAD_NUMBER. Less than 2 will disable multi-thread builds.")
+        help="Build the platform using multi-threaded compiler. The value overrides target.txt's MAX_CONCURRENT_THREAD_NUMBER. When value is set to 0, tool automatically detect number of "\
+             "processor threads, set value to 1 means disable multi-thread build, and set value to more than 1 means user specify the threads number to build.")
 
     Parser.add_option("-f", "--fdf", action="callback", type="string", dest="FdfFile", callback=SingleCheckCallback,
         help="The name of the FDF file to use, which overrides the setting in the DSC file.")

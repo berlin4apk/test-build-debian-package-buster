@@ -1,7 +1,7 @@
 ## @file
 # parse FDF file
 #
-#  Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2007 - 2018, Intel Corporation. All rights reserved.<BR>
 #  Copyright (c) 2015, Hewlett Packard Enterprise Development, L.P.<BR>
 #
 #  This program and the accompanying materials
@@ -59,6 +59,7 @@ import Common.LongFilePathOs as os
 from Common.LongFilePathSupport import OpenLongFilePath as open
 from Capsule import EFI_CERT_TYPE_PKCS7_GUID
 from Capsule import EFI_CERT_TYPE_RSA2048_SHA256_GUID
+from Common.RangeExpression import RangeExpression
 
 ##define T_CHAR_SPACE                ' '
 ##define T_CHAR_NULL                 '\0'
@@ -134,21 +135,6 @@ class Warning (Exception):
 
     def __str__(self):
         return self.Message
-
-## The MACRO class that used to record macro value data when parsing include file
-#
-#
-class MacroProfile :
-    ## The constructor
-    #
-    #   @param  self        The object pointer
-    #   @param  FileName    The file that to be parsed
-    #
-    def __init__(self, FileName, Line):
-        self.FileName = FileName
-        self.DefinedAtLine  = Line
-        self.MacroName = None
-        self.MacroValue = None
 
 ## The Include file content class that used to record file data when parsing include file
 #
@@ -925,6 +911,13 @@ class FdfParser:
 
         MacroDict.update(GlobalData.gGlobalDefines)
         MacroDict.update(GlobalData.gCommandLineDefines)
+        if GlobalData.BuildOptionPcd:
+            for Item in GlobalData.BuildOptionPcd:
+                if type(Item) is tuple:
+                    continue
+                PcdName, TmpValue = Item.split("=")
+                TmpValue = BuildOptionValue(TmpValue, {})
+                MacroDict[PcdName.strip()] = TmpValue
         # Highest priority
 
         return MacroDict
@@ -1142,8 +1135,7 @@ class FdfParser:
 
         if not self.__GetNextToken():
             return False
-        p = re.compile('[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}')
-        if p.match(self.__Token) != None:
+        if RangeExpression.RegGuidPattern.match(self.__Token) != None:
             return True
         else:
             self.__UndoToken()
@@ -2486,6 +2478,8 @@ class FdfParser:
         if not self.__GetNextToken():
             raise Warning("expected INF file path", self.FileName, self.CurrentLineNumber)
         ffsInf.InfFileName = self.__Token
+        if not ffsInf.InfFileName.endswith('.inf'):
+            raise Warning("expected .inf file path", self.FileName, self.CurrentLineNumber)
 
         ffsInf.CurrentLineNum = self.CurrentLineNumber
         ffsInf.CurrentLineContent = self.__CurrentLine()

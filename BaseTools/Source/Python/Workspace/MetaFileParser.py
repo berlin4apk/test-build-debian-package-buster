@@ -1243,6 +1243,13 @@ class DscParser(MetaFileParser):
         # PCD cannot be referenced in macro definition
         if self._ItemType not in [MODEL_META_DATA_DEFINE, MODEL_META_DATA_GLOBAL_DEFINE]:
             Macros.update(self._Symbols)
+        if GlobalData.BuildOptionPcd:
+            for Item in GlobalData.BuildOptionPcd:
+                if type(Item) is tuple:
+                    continue
+                PcdName, TmpValue = Item.split("=")
+                TmpValue = BuildOptionValue(TmpValue, self._GuidDict)
+                Macros[PcdName.strip()] = TmpValue
         return Macros
 
     def _PostProcess(self):
@@ -1994,6 +2001,7 @@ class DecParser(MetaFileParser):
             PcdValue = ValueList[0]
             if PcdValue:
                 try:
+                    self._GuidDict.update(self._AllPcdDict)
                     ValueList[0] = ValueExpressionEx(ValueList[0], ValueList[1], self._GuidDict)(True)
                 except BadExpression, Value:
                     EdkLogger.error('Parser', FORMAT_INVALID, Value, ExtraData=self._CurrentLine, File=self.MetaFile, Line=self._LineIndex + 1)

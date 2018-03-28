@@ -1,7 +1,7 @@
 ## @file
 # This file is used to create a database used by build tool
 #
-# Copyright (c) 2008 - 2017, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2008 - 2018, Intel Corporation. All rights reserved.<BR>
 # (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
@@ -15,6 +15,7 @@ from Common.String import *
 from Common.DataType import *
 from Common.Misc import *
 from types import *
+from collections import OrderedDict
 
 from Workspace.BuildClassObject import PackageBuildClassObject, StructurePcd, PcdClassObject
 
@@ -95,6 +96,7 @@ class DecBuildData(PackageBuildClassObject):
         self._Ppis              = None
         self._Guids             = None
         self._Includes          = None
+        self._CommonIncludes    = None
         self._LibraryClasses    = None
         self._Pcds              = None
         self.__Macros           = None
@@ -296,7 +298,8 @@ class DecBuildData(PackageBuildClassObject):
 
     ## Retrieve public include paths declared in this package
     def _GetInclude(self):
-        if self._Includes == None:
+        if self._Includes == None or self._CommonIncludes is None:
+            self._CommonIncludes = []
             self._Includes = []
             self._PrivateIncludes = []
             PublicInclues = []
@@ -324,7 +327,8 @@ class DecBuildData(PackageBuildClassObject):
                         PublicInclues.append(File)
                     if File in self._PrivateIncludes:
                         EdkLogger.error('build', OPTION_CONFLICT, "Can't determine %s's attribute, it is both defined as Private and non-Private attribute in DEC file." % File, File=self.MetaFile, Line=LineNo)
-
+                if Record[3] == "COMMON":
+                    self._CommonIncludes.append(File)
         return self._Includes
 
     ## Retrieve library class declarations (not used in build at present)
@@ -364,7 +368,7 @@ class DecBuildData(PackageBuildClassObject):
 
 
     def ProcessStructurePcd(self, StructurePcdRawDataSet):
-        s_pcd_set = dict()
+        s_pcd_set = OrderedDict()
         for s_pcd,LineNo in StructurePcdRawDataSet:
             if s_pcd.TokenSpaceGuidCName not in s_pcd_set:
                 s_pcd_set[s_pcd.TokenSpaceGuidCName] = []
@@ -385,13 +389,12 @@ class DecBuildData(PackageBuildClassObject):
                     struct_pcd.TokenSpaceGuidCName, struct_pcd.TokenCName = pcdname.split(".")
                     struct_pcd.PcdDefineLineNo = LineNo
                     struct_pcd.PkgPath = self.MetaFile.File
+                    struct_pcd.SetDecDefaultValue(item.DefaultValue)
                 else:
                     struct_pcd.AddDefaultValue(item.TokenCName, item.DefaultValue,self.MetaFile.File,LineNo)
 
             struct_pcd.PackageDecs = dep_pkgs
-
             str_pcd_set.append(struct_pcd)
-
         return str_pcd_set
 
     ## Retrieve PCD declarations for given type
@@ -439,6 +442,7 @@ class DecBuildData(PackageBuildClassObject):
                                         list(validlists),
                                         list(expressions)
                                         )
+            PcdObj.DefinitionPosition = (self.MetaFile.File,LineNo)
             if "." in TokenSpaceGuid:
                 StrPcdSet.append((PcdObj,LineNo))
             else:
@@ -447,8 +451,21 @@ class DecBuildData(PackageBuildClassObject):
         StructurePcds = self.ProcessStructurePcd(StrPcdSet)
         for pcd in StructurePcds:
             Pcds[pcd.TokenCName, pcd.TokenSpaceGuidCName, self._PCD_TYPE_STRING_[Type]] = pcd
+        StructPattern = re.compile(r'[_a-zA-Z][0-9A-Za-z_]*$')
+        for pcd in Pcds.values():
+            if pcd.DatumType not in [TAB_UINT8, TAB_UINT16, TAB_UINT32, TAB_UINT64, TAB_VOID, "BOOLEAN"]:
+                if StructPattern.match(pcd.DatumType) == None:
+                    EdkLogger.error('build', FORMAT_INVALID, "DatumType only support BOOLEAN, UINT8, UINT16, UINT32, UINT64, VOID* or a valid struct name.", pcd.DefinitionPosition[0],pcd.DefinitionPosition[1])
+        for struct_pcd in Pcds.values():
+            if isinstance(struct_pcd,StructurePcd) and not struct_pcd.StructuredPcdIncludeFile:
+                EdkLogger.error("build", PCD_STRUCTURE_PCD_ERROR, "The structure Pcd %s.%s header file is not found in %s line %s \n" % (struct_pcd.TokenSpaceGuidCName, struct_pcd.TokenCName,struct_pcd.DefinitionPosition[0],struct_pcd.DefinitionPosition[1] ))
 
         return Pcds
+    @property
+    def CommonIncludes(self):
+        if self._CommonIncludes is None:
+            self.Includes
+        return self._CommonIncludes
 
 
     _Macros = property(_GetMacros)

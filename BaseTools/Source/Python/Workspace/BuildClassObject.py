@@ -65,8 +65,11 @@ class PcdClassObject(object):
         self.validlists = validlists
         self.expressions = expressions
         self.DscDefaultValue = None
+        self.DscRawValue = None
         if IsDsc:
             self.DscDefaultValue = Value
+        self.PcdValueFromComm = ""
+        self.DefinitionPosition = ("","")
 
     ## Convert the class to a string
     #
@@ -114,6 +117,7 @@ class StructurePcd(PcdClassObject):
         if validateranges is None: validateranges=[]
         if validlists is None: validlists=[]
         if expressions is None : expressions=[]
+        if Packages is None : Packages = []
         super(StructurePcd, self).__init__(Name, Guid, Type, DatumType, Value, Token, MaxDatumSize, SkuInfoList, IsOverrided, GuidValue, validateranges, validlists, expressions)
         self.StructuredPcdIncludeFile = [] if StructuredPcdIncludeFile is None else StructuredPcdIncludeFile
         self.PackageDecs = Packages
@@ -125,6 +129,9 @@ class StructurePcd(PcdClassObject):
         self.StructName = None
         self.PcdDefineLineNo = 0
         self.PkgPath = ""
+        self.DefaultValueFromDec = ""
+        self.ValueChain = dict()
+        self.PcdFieldValueFromComm = collections.OrderedDict({})
     def __repr__(self):
         return self.TypeName
 
@@ -134,6 +141,8 @@ class StructurePcd(PcdClassObject):
         self.DefaultValues[FieldName] = [Value.strip(), FileName, LineNo]
         return self.DefaultValues[FieldName]
 
+    def SetDecDefaultValue(self,DefaultValue):
+        self.DefaultValueFromDec = DefaultValue
     def AddOverrideValue (self, FieldName, Value, SkuName, DefaultStoreName, FileName="", LineNo=0):
         if SkuName not in self.SkuOverrideValues:
             self.SkuOverrideValues[SkuName] = collections.OrderedDict({})
@@ -168,17 +177,23 @@ class StructurePcd(PcdClassObject):
         self.validateranges = PcdObject.validateranges if PcdObject.validateranges else self.validateranges
         self.validlists = PcdObject.validlists if PcdObject.validlists else self.validlists
         self.expressions = PcdObject.expressions if PcdObject.expressions else self.expressions
+        self.DscRawValue = PcdObject.DscRawValue if PcdObject.DscRawValue else self.DscRawValue
+        self.PcdValueFromComm = PcdObject.PcdValueFromComm if PcdObject.PcdValueFromComm else self.PcdValueFromComm
+        self.DefinitionPosition = PcdObject.DefinitionPosition if PcdObject.DefinitionPosition else self.DefinitionPosition
         if type(PcdObject) is StructurePcd:
             self.StructuredPcdIncludeFile = PcdObject.StructuredPcdIncludeFile if PcdObject.StructuredPcdIncludeFile else self.StructuredPcdIncludeFile
             self.PackageDecs = PcdObject.PackageDecs if PcdObject.PackageDecs else self.PackageDecs
             self.DefaultValues = PcdObject.DefaultValues if PcdObject.DefaultValues else self.DefaultValues
             self.PcdMode = PcdObject.PcdMode if PcdObject.PcdMode else self.PcdMode
             self.DefaultFromDSC=None
+            self.DefaultValueFromDec = PcdObject.DefaultValueFromDec if PcdObject.DefaultValueFromDec else self.DefaultValueFromDec
             self.SkuOverrideValues = PcdObject.SkuOverrideValues if PcdObject.SkuOverrideValues else self.SkuOverrideValues
             self.FlexibleFieldName = PcdObject.FlexibleFieldName if PcdObject.FlexibleFieldName else self.FlexibleFieldName
             self.StructName = PcdObject.DatumType if PcdObject.DatumType else self.StructName
             self.PcdDefineLineNo = PcdObject.PcdDefineLineNo if PcdObject.PcdDefineLineNo else self.PcdDefineLineNo
             self.PkgPath = PcdObject.PkgPath if PcdObject.PkgPath else self.PkgPath
+            self.ValueChain = PcdObject.ValueChain if PcdObject.ValueChain else self.ValueChain
+            self.PcdFieldValueFromComm = PcdObject.PcdFieldValueFromComm if PcdObject.PcdFieldValueFromComm else self.PcdFieldValueFromComm
 
 ## LibraryClassObject
 #
