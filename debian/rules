@@ -6,7 +6,7 @@ SHELL=/bin/bash
 OPENSSL_VER= 1.1.0h
 OPENSSL_SRC= openssl-$(OPENSSL_VER).tar.gz
 OPENSSL_URL= http://www.openssl.org/source/$(OPENSSL_SRC)
-SHELL_SRC  = https://efi-shell.svn.sourceforge.net/svnroot/efi-shell/trunk/Shell
+SHELL_SRC  = https://svn.code.sf.net/p/efi-shell/code/trunk/Shell
 SHELL_REV  = 64
 
 
