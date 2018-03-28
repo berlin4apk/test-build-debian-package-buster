@@ -1,9 +1,9 @@
-edk2 (0~20180328.c27c0003-1) UNRELEASED; urgency=medium
+edk2 (0~20180328.c27c0003-1) unstable; urgency=medium
 
   * New upstream release.
   * Bump openssl up to latest upstream version, 1.1.0h.
 
- -- dann frazier <dannf@debian.org>  Wed, 28 Mar 2018 09:52:22 -0600
+ -- dann frazier <dannf@debian.org>  Wed, 28 Mar 2018 11:06:08 -0600
 
 edk2 (0~20180205.c0d9813c-2) unstable; urgency=medium
 
