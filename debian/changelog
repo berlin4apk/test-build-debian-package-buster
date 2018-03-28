@@ -1,3 +1,9 @@
+edk2 (0~20180205.c0d9813c-3) UNRELEASED; urgency=medium
+
+  * Bump openssl up to latest upstream version, 1.1.0h.
+
+ -- dann frazier <dannf@debian.org>  Wed, 28 Mar 2018 09:52:22 -0600
+
 edk2 (0~20180205.c0d9813c-2) unstable; urgency=medium
 
   * Enable HTTP Boot. LP: #1750481.
