@@ -1,7 +1,7 @@
 ## @file
 # This file is used to be the main entrance of EOT tool
 #
-# Copyright (c) 2008 - 2014, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2008 - 2018, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -24,13 +24,34 @@ from Common.Misc import GuidStructureStringToGuidString
 from InfParserLite import *
 import c
 import Database
-from FvImage import *
 from array import array
 from Report import Report
-from Common.Misc import ParseConsoleLog
 from Common.BuildVersion import gBUILD_VERSION
 from Parser import ConvertGuid
 from Common.LongFilePathSupport import OpenLongFilePath as open
+
+## MultipleFv() class
+#
+#  A class for Multiple FV
+#
+class MultipleFv(FirmwareVolume):
+    def __init__(self, FvList):
+        FirmwareVolume.__init__(self)
+        self.BasicInfo = []
+        for FvPath in FvList:
+            FvName = os.path.splitext(os.path.split(FvPath)[1])[0]
+            Fd = open(FvPath, 'rb')
+            Buf = array('B')
+            try:
+                Buf.fromfile(Fd, os.path.getsize(FvPath))
+            except EOFError:
+                pass
+
+            Fv = FirmwareVolume(FvName)
+            Fv.frombuffer(Buf, 0, len(Buf))
+
+            self.BasicInfo.append([Fv.Name, Fv.FileSystemGuid, Fv.Size])
+            self.FfsDict.append(Fv.FfsDict)    
 
 ## Class Eot
 #
@@ -340,14 +361,6 @@ class Eot(object):
             GuidMacro2 = ''
             GuidValue = ''
 
-            # Find value for hardcode guid macro
-            if GuidName in EotGlobalData.gGuidMacroDict:
-                GuidMacro = EotGlobalData.gGuidMacroDict[GuidName][0]
-                GuidValue = EotGlobalData.gGuidMacroDict[GuidName][1]
-                SqlCommand = """update Report set GuidMacro = '%s', GuidValue = '%s' where GuidName = '%s'""" %(GuidMacro, GuidValue, GuidName)
-                EotGlobalData.gDb.TblReport.Exec(SqlCommand)
-                continue
-
             # Find guid value defined in Dec file
             if GuidName in EotGlobalData.gGuidDict:
                 GuidValue = EotGlobalData.gGuidDict[GuidName]
@@ -579,11 +592,11 @@ class Eot(object):
     #  @param Option: The option list including log level setting
     #
     def SetLogLevel(self, Option):
-        if Option.verbose != None:
+        if Option.verbose is not None:
             EdkLogger.SetLevel(EdkLogger.VERBOSE)
-        elif Option.quiet != None:
+        elif Option.quiet is not None:
             EdkLogger.SetLevel(EdkLogger.QUIET)
-        elif Option.debug != None:
+        elif Option.debug is not None:
             EdkLogger.SetLevel(Option.debug + 1)
         else:
             EdkLogger.SetLevel(EdkLogger.INFO)

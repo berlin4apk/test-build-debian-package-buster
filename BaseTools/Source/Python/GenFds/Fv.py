@@ -29,6 +29,7 @@ from CommonDataClass.FdfClass import FvClassObject
 from Common.Misc import SaveFileOnChange
 from Common.LongFilePathSupport import CopyLongFilePath
 from Common.LongFilePathSupport import OpenLongFilePath as open
+from Common.DataType import *
 
 T_CHAR_LF = '\n'
 FV_UI_EXT_ENTY_GUID = 'A67DF1FA-8DE8-4E98-AF09-4BDF2EFFBC7C'
@@ -70,22 +71,21 @@ class FV (FvClassObject):
     #
     def AddToBuffer (self, Buffer, BaseAddress=None, BlockSize= None, BlockNum=None, ErasePloarity='1', VtfDict=None, MacroDict = {}, Flag=False) :
 
-        if BaseAddress == None and self.UiFvName.upper() + 'fv' in GenFds.ImageBinDict.keys():
+        if BaseAddress is None and self.UiFvName.upper() + 'fv' in GenFds.ImageBinDict:
             return GenFds.ImageBinDict[self.UiFvName.upper() + 'fv']
         
         #
         # Check whether FV in Capsule is in FD flash region.
         # If yes, return error. Doesn't support FV in Capsule image is also in FD flash region.
         #
-        if self.CapsuleName != None:
-            for FdName in GenFdsGlobalVariable.FdfParser.Profile.FdDict.keys():
-                FdObj = GenFdsGlobalVariable.FdfParser.Profile.FdDict[FdName]
+        if self.CapsuleName is not None:
+            for FdObj in GenFdsGlobalVariable.FdfParser.Profile.FdDict.values():
                 for RegionObj in FdObj.RegionList:
-                    if RegionObj.RegionType == 'FV':
+                    if RegionObj.RegionType == BINARY_FILE_TYPE_FV:
                         for RegionData in RegionObj.RegionDataList:
                             if RegionData.endswith(".fv"):
                                 continue
-                            elif RegionData.upper() + 'fv' in GenFds.ImageBinDict.keys():
+                            elif RegionData.upper() + 'fv' in GenFds.ImageBinDict:
                                 continue
                             elif self.UiFvName.upper() == RegionData.upper():
                                 GenFdsGlobalVariable.ErrorLogger("Capsule %s in FD region can't contain a FV %s in FD region." % (self.CapsuleName, self.UiFvName.upper()))
@@ -94,7 +94,7 @@ class FV (FvClassObject):
         GenFdsGlobalVariable.LargeFileInFvFlags.append(False)
         FFSGuid = None
         
-        if self.FvBaseAddress != None:
+        if self.FvBaseAddress is not None:
             BaseAddress = self.FvBaseAddress
         if not Flag:
             self.__InitializeInf__(BaseAddress, BlockSize, BlockNum, ErasePloarity, VtfDict)
@@ -136,7 +136,7 @@ class FV (FvClassObject):
         FvOutputFile = os.path.join(GenFdsGlobalVariable.FvDir, self.UiFvName)
         FvOutputFile = FvOutputFile + '.Fv'
         # BUGBUG: FvOutputFile could be specified from FDF file (FV section, CreateFile statement)
-        if self.CreateFileName != None:
+        if self.CreateFileName is not None:
             FvOutputFile = self.CreateFileName
 
         if Flag:
@@ -163,7 +163,7 @@ class FV (FvClassObject):
             NewFvInfo = None
             if os.path.exists (FvInfoFileName):
                 NewFvInfo = open(FvInfoFileName, 'r').read()
-            if NewFvInfo != None and NewFvInfo != OrigFvInfo:
+            if NewFvInfo is not None and NewFvInfo != OrigFvInfo:
                 FvChildAddr = []
                 AddFileObj = open(FvInfoFileName, 'r')
                 AddrStrings = AddFileObj.readlines()
@@ -235,10 +235,9 @@ class FV (FvClassObject):
         if self.BlockSizeList:
             return True
 
-        for FdName in GenFdsGlobalVariable.FdfParser.Profile.FdDict.keys():
-            FdObj = GenFdsGlobalVariable.FdfParser.Profile.FdDict[FdName]
+        for FdObj in GenFdsGlobalVariable.FdfParser.Profile.FdDict.values():
             for RegionObj in FdObj.RegionList:
-                if RegionObj.RegionType != 'FV':
+                if RegionObj.RegionType != BINARY_FILE_TYPE_FV:
                     continue
                 for RegionData in RegionObj.RegionDataList:
                     #
@@ -273,16 +272,16 @@ class FV (FvClassObject):
         # Add [Options]
         #
         self.FvInfFile.writelines("[options]" + T_CHAR_LF)
-        if BaseAddress != None :
+        if BaseAddress is not None :
             self.FvInfFile.writelines("EFI_BASE_ADDRESS = " + \
                                        BaseAddress          + \
                                        T_CHAR_LF)
 
-        if BlockSize != None:
+        if BlockSize is not None:
             self.FvInfFile.writelines("EFI_BLOCK_SIZE = " + \
                                       '0x%X' %BlockSize    + \
                                       T_CHAR_LF)
-            if BlockNum != None:
+            if BlockNum is not None:
                 self.FvInfFile.writelines("EFI_NUM_BLOCKS   = "  + \
                                       ' 0x%X' %BlockNum    + \
                                       T_CHAR_LF)
@@ -293,20 +292,20 @@ class FV (FvClassObject):
                     self.FvInfFile.writelines("EFI_BLOCK_SIZE  = 0x1" + T_CHAR_LF)
             
             for BlockSize in self.BlockSizeList :
-                if BlockSize[0] != None:
+                if BlockSize[0] is not None:
                     self.FvInfFile.writelines("EFI_BLOCK_SIZE  = "  + \
                                           '0x%X' %BlockSize[0]    + \
                                           T_CHAR_LF)
 
-                if BlockSize[1] != None:
+                if BlockSize[1] is not None:
                     self.FvInfFile.writelines("EFI_NUM_BLOCKS   = "  + \
                                           ' 0x%X' %BlockSize[1]    + \
                                           T_CHAR_LF)
 
-        if self.BsBaseAddress != None:
+        if self.BsBaseAddress is not None:
             self.FvInfFile.writelines('EFI_BOOT_DRIVER_BASE_ADDRESS = ' + \
                                        '0x%X' %self.BsBaseAddress)
-        if self.RtBaseAddress != None:
+        if self.RtBaseAddress is not None:
             self.FvInfFile.writelines('EFI_RUNTIME_DRIVER_BASE_ADDRESS = ' + \
                                       '0x%X' %self.RtBaseAddress)
         #
@@ -317,7 +316,7 @@ class FV (FvClassObject):
         self.FvInfFile.writelines("EFI_ERASE_POLARITY   = "       + \
                                           ' %s' %ErasePloarity    + \
                                           T_CHAR_LF)
-        if not (self.FvAttributeDict == None):
+        if not (self.FvAttributeDict is None):
             for FvAttribute in self.FvAttributeDict.keys() :
                 if FvAttribute == "FvUsedSizeEnable":
                     if self.FvAttributeDict[FvAttribute].upper() in ('TRUE', '1') :
@@ -328,7 +327,7 @@ class FV (FvClassObject):
                                           ' = '             + \
                                           self.FvAttributeDict[FvAttribute] + \
                                           T_CHAR_LF )
-        if self.FvAlignment != None:
+        if self.FvAlignment is not None:
             self.FvInfFile.writelines("EFI_FVB2_ALIGNMENT_"     + \
                                        self.FvAlignment.strip() + \
                                        " = TRUE"                + \
@@ -337,11 +336,10 @@ class FV (FvClassObject):
         #
         # Generate FV extension header file
         #
-        if self.FvNameGuid == None or self.FvNameGuid == '':
+        if not self.FvNameGuid:
             if len(self.FvExtEntryType) > 0 or self.UsedSizeEnable:
                 GenFdsGlobalVariable.ErrorLogger("FV Extension Header Entries declared for %s with no FvNameGuid declaration." % (self.UiFvName))
-        
-        if self.FvNameGuid <> None and self.FvNameGuid <> '':
+        else:
             TotalSize = 16 + 4
             Buffer = ''
             if self.UsedSizeEnable:
@@ -442,7 +440,7 @@ class FV (FvClassObject):
         # Add [Files]
         #
         self.FvInfFile.writelines("[files]" + T_CHAR_LF)
-        if VtfDict != None and self.UiFvName in VtfDict.keys():
+        if VtfDict and self.UiFvName in VtfDict:
             self.FvInfFile.writelines("EFI_FILE_NAME = "                   + \
-                                       VtfDict.get(self.UiFvName)          + \
+                                       VtfDict[self.UiFvName]              + \
                                        T_CHAR_LF)

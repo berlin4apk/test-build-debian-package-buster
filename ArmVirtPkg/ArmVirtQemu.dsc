@@ -243,6 +243,7 @@
   MdeModulePkg/Core/Dxe/DxeMain.inf {
     <LibraryClasses>
       NULL|MdeModulePkg/Library/DxeCrc32GuidedSectionExtractLib/DxeCrc32GuidedSectionExtractLib.inf
+      DevicePathLib|MdePkg/Library/UefiDevicePathLib/UefiDevicePathLib.inf
   }
   MdeModulePkg/Universal/PCD/Dxe/Pcd.inf {
     <LibraryClasses>
@@ -257,6 +258,7 @@
   MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf {
     <LibraryClasses>
       NULL|MdeModulePkg/Library/VarCheckUefiLib/VarCheckUefiLib.inf
+      NULL|EmbeddedPkg/Library/NvVarStoreFormattedLib/NvVarStoreFormattedLib.inf
       # don't use unaligned CopyMem () on the UEFI varstore NOR flash region
       BaseMemoryLib|MdePkg/Library/BaseMemoryLib/BaseMemoryLib.inf
   }
@@ -318,7 +320,11 @@
   #
   # Bds
   #
-  MdeModulePkg/Universal/DevicePathDxe/DevicePathDxe.inf
+  MdeModulePkg/Universal/DevicePathDxe/DevicePathDxe.inf {
+    <LibraryClasses>
+      DevicePathLib|MdePkg/Library/UefiDevicePathLib/UefiDevicePathLib.inf
+      PcdLib|MdePkg/Library/BasePcdLibNull/BasePcdLibNull.inf
+  }
   MdeModulePkg/Universal/DisplayEngineDxe/DisplayEngineDxe.inf
   MdeModulePkg/Universal/SetupBrowserDxe/SetupBrowserDxe.inf
   MdeModulePkg/Universal/DriverHealthManagerDxe/DriverHealthManagerDxe.inf

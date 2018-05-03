@@ -1,7 +1,7 @@
 ## @file
 # This file is used to define each component of the build database
 #
-# Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2018, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -13,7 +13,7 @@
 
 import Common.LongFilePathOs as os
 
-from Common.Misc import sdict
+from collections import OrderedDict
 from Common.Misc import RealPath2
 from Common.BuildToolError import *
 from Common.DataType import *
@@ -55,6 +55,7 @@ class PcdClassObject(object):
         self.DefaultValue = Value
         self.TokenValue = Token
         self.MaxDatumSize = MaxDatumSize
+        self.MaxSizeUserSet = None
         self.SkuInfoList = SkuInfoList
         self.Phase = "DXE"
         self.Pending = False
@@ -212,7 +213,7 @@ class LibraryClassObject(object):
     def __init__(self, Name = None, SupModList = [], Type = None):
         self.LibraryClass = Name
         self.SupModList = SupModList
-        if Type != None:
+        if Type is not None:
             self.SupModList = CleanString(Type).split(DataType.TAB_SPACE_SPLIT)
 
 ## ModuleBuildClassObject
@@ -281,7 +282,7 @@ class ModuleBuildClassObject(object):
 
         self.Binaries                = []
         self.Sources                 = []
-        self.LibraryClasses          = sdict()
+        self.LibraryClasses          = OrderedDict()
         self.Libraries               = []
         self.Protocols               = []
         self.Ppis                    = []

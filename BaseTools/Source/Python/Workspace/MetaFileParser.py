@@ -31,9 +31,13 @@ from Common.Misc import GuidStructureStringToGuidString, CheckPcdDatum, PathClas
 from Common.Expression import *
 from CommonDataClass.Exceptions import *
 from Common.LongFilePathSupport import OpenLongFilePath as open
-
+from collections import defaultdict
 from MetaFileTable import MetaFileStorage
 from MetaFileCommentParser import CheckInfComment
+
+## RegEx for finding file versions
+hexVersionPattern = re.compile(r'0[xX][\da-f-A-F]{5,8}')
+decVersionPattern = re.compile(r'\d+\.\d+')
 
 ## A decorator used to parse macro definition
 def ParseMacro(Parser):
@@ -159,7 +163,7 @@ class MetaFileParser(object):
         self._FileDir = self.MetaFile.Dir
         self._Defines = {}
         self._FileLocalMacros = {}
-        self._SectionsMacroDict = {}
+        self._SectionsMacroDict = defaultdict(dict)
 
         # for recursive parsing
         self._Owner = [Owner]
@@ -219,7 +223,7 @@ class MetaFileParser(object):
         NewRecordList = []
         for Record in RecordList:
             Arch = Record[3]
-            if Arch == 'COMMON' or Arch == FilterArch:
+            if Arch == TAB_ARCH_COMMON or Arch == FilterArch:
                 NewRecordList.append(Record)
         return NewRecordList
 
@@ -241,7 +245,7 @@ class MetaFileParser(object):
                 self.Start()
 
         # No specific ARCH or Platform given, use raw data
-        if self._RawTable and (len(DataInfo) == 1 or DataInfo[1] == None):
+        if self._RawTable and (len(DataInfo) == 1 or DataInfo[1] is None):
             return self._FilterRecordList(self._RawTable.Query(*DataInfo), self._Arch)
 
         # Do post-process if necessary
@@ -306,7 +310,7 @@ class MetaFileParser(object):
             if self._SectionName in self.DataType:
                 self._SectionType = self.DataType[self._SectionName]
                 # Check if the section name is valid
-                if self._SectionName not in SECTIONS_HAVE_ITEM_AFTER_ARCH and len(ItemList) > 3:
+                if self._SectionName not in SECTIONS_HAVE_ITEM_AFTER_ARCH_SET and len(ItemList) > 3:
                     EdkLogger.error("Parser", FORMAT_UNKNOWN_ERROR, "%s is not a valid section name" % Item,
                                     self.MetaFile, self._LineIndex + 1, self._CurrentLine)
             elif self._Version >= 0x00010005:
@@ -319,25 +323,25 @@ class MetaFileParser(object):
             if len(ItemList) > 1:
                 S1 = ItemList[1].upper()
             else:
-                S1 = 'COMMON'
+                S1 = TAB_ARCH_COMMON
             ArchList.add(S1)
 
             # S2 may be Platform or ModuleType
             if len(ItemList) > 2:
-                if self._SectionName.upper() in SECTIONS_HAVE_ITEM_PCD:
+                if self._SectionName.upper() in SECTIONS_HAVE_ITEM_PCD_SET:
                     S2 = ItemList[2]
                 else:
                     S2 = ItemList[2].upper()
             else:
-                S2 = 'COMMON'
+                S2 = TAB_COMMON
             if len(ItemList) > 3:
                 S3 = ItemList[3]
             else:
-                S3 = "COMMON"
+                S3 = TAB_COMMON
             self._Scope.append([S1, S2, S3])
 
         # 'COMMON' must not be used with specific ARCHs at the same section
-        if 'COMMON' in ArchList and len(ArchList) > 1:
+        if TAB_ARCH_COMMON in ArchList and len(ArchList) > 1:
             EdkLogger.error('Parser', FORMAT_INVALID, "'common' ARCH must not be used with specific ARCHs",
                             File=self.MetaFile, Line=self._LineIndex + 1, ExtraData=self._CurrentLine)
         # If the section information is needed later, it should be stored in database
@@ -366,9 +370,9 @@ class MetaFileParser(object):
                 EdkLogger.error("Parser", FORMAT_INVALID, "%s not defined" % (Macro), ExtraData=self._CurrentLine, File=self.MetaFile, Line=self._LineIndex + 1)
         # Sometimes, we need to make differences between EDK and EDK2 modules 
         if Name == 'INF_VERSION':
-            if re.match(r'0[xX][\da-f-A-F]{5,8}', Value):
+            if hexVersionPattern.match(Value):
                 self._Version = int(Value, 0)   
-            elif re.match(r'\d+\.\d+', Value):
+            elif decVersionPattern.match(Value):
                 ValueList = Value.split('.')
                 Major = '%04o' % int(ValueList[0], 0)
                 Minor = '%04o' % int(ValueList[1], 0)
@@ -417,17 +421,16 @@ class MetaFileParser(object):
     def _ConstructSectionMacroDict(self, Name, Value):
         ScopeKey = [(Scope[0], Scope[1],Scope[2]) for Scope in self._Scope]
         ScopeKey = tuple(ScopeKey)
-        SectionDictKey = self._SectionType, ScopeKey
         #
         # DecParser SectionType is a list, will contain more than one item only in Pcd Section
         # As Pcd section macro usage is not alllowed, so here it is safe
         #
         if type(self) == DecParser:
             SectionDictKey = self._SectionType[0], ScopeKey
-        if SectionDictKey not in self._SectionsMacroDict:
-            self._SectionsMacroDict[SectionDictKey] = {}
-        SectionLocalMacros = self._SectionsMacroDict[SectionDictKey]
-        SectionLocalMacros[Name] = Value
+        else:
+            SectionDictKey = self._SectionType, ScopeKey
+
+        self._SectionsMacroDict[SectionDictKey][Name] = Value
 
     ## Get section Macros that are applicable to current line, which may come from other sections 
     ## that share the same name while scope is wider
@@ -455,12 +458,12 @@ class MetaFileParser(object):
 
             for ActiveScope in self._Scope:
                 Scope0, Scope1,Scope2 = ActiveScope[0], ActiveScope[1],ActiveScope[2]
-                if(Scope0, Scope1,Scope2) not in Scope and (Scope0, "COMMON","COMMON") not in Scope and ("COMMON", Scope1,"COMMON") not in Scope:
+                if(Scope0, Scope1,Scope2) not in Scope and (Scope0, TAB_COMMON, TAB_COMMON) not in Scope and (TAB_COMMON, Scope1, TAB_COMMON) not in Scope:
                     break
             else:
                 ComSpeMacroDict.update(self._SectionsMacroDict[(SectionType, Scope)])
 
-            if ("COMMON", "COMMON","COMMON") in Scope:
+            if (TAB_COMMON, TAB_COMMON, TAB_COMMON) in Scope:
                 ComComMacroDict.update(self._SectionsMacroDict[(SectionType, Scope)])
 
         Macros.update(ComComMacroDict)
@@ -568,8 +571,8 @@ class InfParser(MetaFileParser):
             if Line[0] == TAB_SECTION_START and Line[-1] == TAB_SECTION_END:
                 if not GetHeaderComment:
                     for Cmt, LNo in Comments:
-                        self._Store(MODEL_META_DATA_HEADER_COMMENT, Cmt, '', '', 'COMMON',
-                                    'COMMON', self._Owner[-1], LNo, -1, LNo, -1, 0)
+                        self._Store(MODEL_META_DATA_HEADER_COMMENT, Cmt, '', '', TAB_COMMON,
+                                    TAB_COMMON, self._Owner[-1], LNo, -1, LNo, -1, 0)
                     GetHeaderComment = True
                 else:
                     TailComments.extend(SectionComments + Comments)
@@ -620,7 +623,7 @@ class InfParser(MetaFileParser):
             self._ValueList = ['', '', '']
             # parse current line, result will be put in self._ValueList
             self._SectionParser[self._SectionType](self)
-            if self._ValueList == None or self._ItemType == MODEL_META_DATA_DEFINE:
+            if self._ValueList is None or self._ItemType == MODEL_META_DATA_DEFINE:
                 self._ItemType = -1
                 Comments = []
                 continue
@@ -658,8 +661,8 @@ class InfParser(MetaFileParser):
 
         # If there are tail comments in INF file, save to database whatever the comments are
         for Comment in TailComments:
-            self._Store(MODEL_META_DATA_TAIL_COMMENT, Comment[0], '', '', 'COMMON',
-                                'COMMON', self._Owner[-1], -1, -1, -1, -1, 0)
+            self._Store(MODEL_META_DATA_TAIL_COMMENT, Comment[0], '', '', TAB_COMMON,
+                                TAB_COMMON, self._Owner[-1], -1, -1, -1, -1, 0)
         self._Done()
 
     ## Data parser for the format in which there's path
@@ -932,7 +935,7 @@ class DscParser(MetaFileParser):
                 self._SubsectionType = MODEL_UNKNOWN
                 self._SubsectionName = ''
                 self._Owner[-1] = -1
-                OwnerId = {}
+                OwnerId.clear()
                 continue
             # subsection header
             elif Line[0] == TAB_OPTION_START and Line[-1] == TAB_OPTION_END:
@@ -952,7 +955,7 @@ class DscParser(MetaFileParser):
 
             self._ValueList = ['', '', '']
             self._SectionParser[SectionType](self)
-            if self._ValueList == None:
+            if self._ValueList is None:
                 continue
             #
             # Model, Value1, Value2, Value3, Arch, ModuleType, BelongsToItem=-1, BelongsToFile=-1,
@@ -1022,7 +1025,7 @@ class DscParser(MetaFileParser):
                             ExtraData=self._CurrentLine)
 
         ItemType = self.DataType[DirectiveName]
-        Scope = [['COMMON', 'COMMON','COMMON']]
+        Scope = [[TAB_COMMON, TAB_COMMON, TAB_COMMON]]
         if ItemType == MODEL_META_DATA_INCLUDE:
             Scope = self._Scope
         if ItemType == MODEL_META_DATA_CONDITIONAL_STATEMENT_ENDIF:
@@ -1292,7 +1295,7 @@ class DscParser(MetaFileParser):
         self._DirectiveEvalStack = []
         self._FileWithError = self.MetaFile
         self._FileLocalMacros = {}
-        self._SectionsMacroDict = {}
+        self._SectionsMacroDict.clear()
         GlobalData.gPlatformDefines = {}
 
         # Get all macro and PCD which has straitforward value
@@ -1361,7 +1364,7 @@ class DscParser(MetaFileParser):
                                 File=self._FileWithError, ExtraData=' '.join(self._ValueList),
                                 Line=self._LineIndex + 1)
 
-            if self._ValueList == None:
+            if self._ValueList is None:
                 continue
 
             NewOwner = self._IdMapping.get(Owner, -1)
@@ -1504,12 +1507,12 @@ class DscParser(MetaFileParser):
             # Allow using system environment variables  in path after !include
             #
             __IncludeMacros['WORKSPACE'] = GlobalData.gGlobalDefines['WORKSPACE']
-            if "ECP_SOURCE" in GlobalData.gGlobalDefines.keys():
+            if "ECP_SOURCE" in GlobalData.gGlobalDefines:
                 __IncludeMacros['ECP_SOURCE'] = GlobalData.gGlobalDefines['ECP_SOURCE']
             #
             # During GenFds phase call DSC parser, will go into this branch.
             #
-            elif "ECP_SOURCE" in GlobalData.gCommandLineDefines.keys():
+            elif "ECP_SOURCE" in GlobalData.gCommandLineDefines:
                 __IncludeMacros['ECP_SOURCE'] = GlobalData.gCommandLineDefines['ECP_SOURCE']
 
             __IncludeMacros['EFI_SOURCE'] = GlobalData.gGlobalDefines['EFI_SOURCE']
@@ -1538,9 +1541,13 @@ class DscParser(MetaFileParser):
             self._FileWithError = IncludedFile1
 
             IncludedFileTable = MetaFileStorage(self._Table.Cur, IncludedFile1, MODEL_FILE_DSC, False)
-            Owner = self._Content[self._ContentIndex - 1][0]
+            FromItem = self._Content[self._ContentIndex - 1][0]
+            if self._InSubsection:
+                Owner = self._Content[self._ContentIndex - 1][8]
+            else:
+                Owner = self._Content[self._ContentIndex - 1][0]
             Parser = DscParser(IncludedFile1, self._FileType, self._Arch, IncludedFileTable,
-                               Owner=Owner, From=Owner)
+                               Owner=Owner, From=FromItem)
 
             self.IncludedFiles.add (IncludedFile1)
 
@@ -1552,7 +1559,10 @@ class DscParser(MetaFileParser):
 
             # set the parser status with current status
             Parser._SectionName = self._SectionName
-            Parser._SectionType = self._SectionType
+            if self._InSubsection:
+                Parser._SectionType = self._SubsectionType
+            else:
+                Parser._SectionType = self._SectionType
             Parser._Scope = self._Scope
             Parser._Enabled = self._Enabled
             # Parse the included file
@@ -1740,7 +1750,7 @@ class DecParser(MetaFileParser):
             # section content
             self._ValueList = ['', '', '']
             self._SectionParser[self._SectionType[0]](self)
-            if self._ValueList == None or self._ItemType == MODEL_META_DATA_DEFINE:
+            if self._ValueList is None or self._ItemType == MODEL_META_DATA_DEFINE:
                 self._ItemType = -1
                 self._Comments = []
                 continue
@@ -1832,7 +1842,7 @@ class DecParser(MetaFileParser):
             if len(ItemList) > 1:
                 S1 = ItemList[1].upper()
             else:
-                S1 = 'COMMON'
+                S1 = TAB_ARCH_COMMON
             ArchList.add(S1)
             # S2 may be Platform or ModuleType
             if len(ItemList) > 2:
@@ -1843,18 +1853,18 @@ class DecParser(MetaFileParser):
                         EdkLogger.error("Parser", FORMAT_INVALID, 'Please use keyword "Private" as section tag modifier.',
                                         File=self.MetaFile, Line=self._LineIndex + 1, ExtraData=self._CurrentLine)
             else:
-                S2 = 'COMMON'
+                S2 = TAB_COMMON
             PrivateList.add(S2)
             if [S1, S2, self.DataType[self._SectionName]] not in self._Scope:
                 self._Scope.append([S1, S2, self.DataType[self._SectionName]])
 
         # 'COMMON' must not be used with specific ARCHs at the same section
-        if 'COMMON' in ArchList and len(ArchList) > 1:
+        if TAB_ARCH_COMMON in ArchList and len(ArchList) > 1:
             EdkLogger.error('Parser', FORMAT_INVALID, "'common' ARCH must not be used with specific ARCHs",
                             File=self.MetaFile, Line=self._LineIndex + 1, ExtraData=self._CurrentLine)
 
         # It is not permissible to mix section tags without the Private attribute with section tags with the Private attribute
-        if 'COMMON' in PrivateList and len(PrivateList) > 1:
+        if TAB_COMMON in PrivateList and len(PrivateList) > 1:
             EdkLogger.error('Parser', FORMAT_INVALID, "Can't mix section tags without the Private attribute with section tags with the Private attribute",
                             File=self.MetaFile, Line=self._LineIndex + 1, ExtraData=self._CurrentLine)
 

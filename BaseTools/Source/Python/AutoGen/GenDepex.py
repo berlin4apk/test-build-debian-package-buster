@@ -24,26 +24,27 @@ from Common.Misc import SaveFileOnChange
 from Common.Misc import GuidStructureStringToGuidString
 from Common import EdkLogger as EdkLogger
 from Common.BuildVersion import gBUILD_VERSION
+from Common.DataType import *
 
 ## Regular expression for matching "DEPENDENCY_START ... DEPENDENCY_END"
 gStartClosePattern = re.compile(".*DEPENDENCY_START(.+)DEPENDENCY_END.*", re.S)
 
 ## Mapping between module type and EFI phase
 gType2Phase = {
-    "BASE"              :   None,
-    "SEC"               :   "PEI",
-    "PEI_CORE"          :   "PEI",
-    "PEIM"              :   "PEI",
-    "DXE_CORE"          :   "DXE",
-    "DXE_DRIVER"        :   "DXE",
-    "DXE_SMM_DRIVER"    :   "DXE",
-    "DXE_RUNTIME_DRIVER":   "DXE",
-    "DXE_SAL_DRIVER"    :   "DXE",
-    "UEFI_DRIVER"       :   "DXE",
-    "UEFI_APPLICATION"  :   "DXE",
-    "SMM_CORE"          :   "DXE",
-    "MM_STANDALONE"     :   "MM",
-    "MM_CORE_STANDALONE" :  "MM",
+    SUP_MODULE_BASE              :   None,
+    SUP_MODULE_SEC               :   "PEI",
+    SUP_MODULE_PEI_CORE          :   "PEI",
+    SUP_MODULE_PEIM              :   "PEI",
+    SUP_MODULE_DXE_CORE          :   "DXE",
+    SUP_MODULE_DXE_DRIVER        :   "DXE",
+    SUP_MODULE_DXE_SMM_DRIVER    :   "DXE",
+    SUP_MODULE_DXE_RUNTIME_DRIVER:   "DXE",
+    SUP_MODULE_DXE_SAL_DRIVER    :   "DXE",
+    SUP_MODULE_UEFI_DRIVER       :   "DXE",
+    SUP_MODULE_UEFI_APPLICATION  :   "DXE",
+    SUP_MODULE_SMM_CORE          :   "DXE",
+    SUP_MODULE_MM_STANDALONE     :   "MM",
+    SUP_MODULE_MM_CORE_STANDALONE :  "MM",
 }
 
 ## Convert dependency expression string into EFI internal representation
@@ -299,12 +300,12 @@ class DependencyExpression:
             NewOperand.append(Token)
 
         # don't generate depex if only TRUE operand left
-        if self.ModuleType == 'PEIM' and len(NewOperand) == 1 and NewOperand[0] == 'TRUE':
+        if self.ModuleType == SUP_MODULE_PEIM and len(NewOperand) == 1 and NewOperand[0] == 'TRUE':
             self.PostfixNotation = []
             return
 
         # don't generate depex if all operands are architecture protocols
-        if self.ModuleType in ['UEFI_DRIVER', 'DXE_DRIVER', 'DXE_RUNTIME_DRIVER', 'DXE_SAL_DRIVER', 'DXE_SMM_DRIVER', 'MM_STANDALONE'] and \
+        if self.ModuleType in [SUP_MODULE_UEFI_DRIVER, SUP_MODULE_DXE_DRIVER, SUP_MODULE_DXE_RUNTIME_DRIVER, SUP_MODULE_DXE_SAL_DRIVER, SUP_MODULE_DXE_SMM_DRIVER, SUP_MODULE_MM_STANDALONE] and \
            Op == 'AND' and \
            self.ArchProtocols == set([GuidStructureStringToGuidString(Guid) for Guid in AllOperand]):
             self.PostfixNotation = []
@@ -360,7 +361,7 @@ class DependencyExpression:
 
         FilePath = ""
         FileChangeFlag = True
-        if File == None:
+        if File is None:
             sys.stdout.write(Buffer.getvalue())
             FilePath = "STDOUT"
         else:
@@ -414,13 +415,13 @@ def Main():
         EdkLogger.SetLevel(EdkLogger.QUIET)
     elif Option.verbose:
         EdkLogger.SetLevel(EdkLogger.VERBOSE)
-    elif Option.debug != None:
+    elif Option.debug is not None:
         EdkLogger.SetLevel(Option.debug + 1)
     else:
         EdkLogger.SetLevel(EdkLogger.INFO)
 
     try:
-        if Option.ModuleType == None or Option.ModuleType not in gType2Phase:
+        if Option.ModuleType is None or Option.ModuleType not in gType2Phase:
             EdkLogger.error("GenDepex", OPTION_MISSING, "Module type is not specified or supported")
 
         DxsFile = ''
@@ -437,7 +438,7 @@ def Main():
             EdkLogger.error("GenDepex", OPTION_MISSING, "No expression string or file given")
 
         Dpx = DependencyExpression(DxsString, Option.ModuleType, Option.Optimize)
-        if Option.OutputFile != None:
+        if Option.OutputFile is not None:
             FileChangeFlag = Dpx.Generate(Option.OutputFile)
             if not FileChangeFlag and DxsFile:
                 #
@@ -450,7 +451,7 @@ def Main():
             Dpx.Generate()
     except BaseException, X:
         EdkLogger.quiet("")
-        if Option != None and Option.debug != None:
+        if Option is not None and Option.debug is not None:
             EdkLogger.quiet(traceback.format_exc())
         else:
             EdkLogger.quiet(str(X))

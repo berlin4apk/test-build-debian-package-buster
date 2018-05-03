@@ -16,6 +16,8 @@ from Common.GlobalData import *
 from CommonDataClass.Exceptions import BadExpression
 from CommonDataClass.Exceptions import WrnExpression
 import uuid
+from Common.Expression import PcdPattern
+from Common.DataType import *
 
 ERR_STRING_EXPR = 'This operator cannot be used in string expression: [%s].'
 ERR_SNYTAX = 'Syntax error, the rest of expression cannot be evaluated: [%s].'
@@ -37,16 +39,6 @@ ERR_ARRAY_TOKEN = 'Bad C array or C format GUID token: [%s].'
 ERR_ARRAY_ELE = 'This must be HEX value for NList or Array: [%s].'
 ERR_EMPTY_EXPR = 'Empty expression is not allowed.'
 ERR_IN_OPERAND = 'Macro after IN operator can only be: $(FAMILY), $(ARCH), $(TOOL_CHAIN_TAG) and $(TARGET).'
-
-def MaxOfType(DataType):
-    if DataType == 'UINT8':
-        return int('0xFF', 16)
-    if DataType == 'UINT16':
-        return int('0xFFFF', 16)
-    if DataType == 'UINT32':
-        return int('0xFFFFFFFF', 16)
-    if DataType == 'UINT64':
-        return int('0xFFFFFFFFFFFFFFFF', 16)
 
 class RangeObject(object):
     def __init__(self, start, end, empty = False):
@@ -110,7 +102,7 @@ class XOROperatorObject(object):
         rangeId = str(uuid.uuid1())
         rangeContainer = RangeContainer()
         rangeContainer.push(RangeObject(0, int(Operand) - 1))
-        rangeContainer.push(RangeObject(int(Operand) + 1, MaxOfType(DataType)))
+        rangeContainer.push(RangeObject(int(Operand) + 1, MAX_VAL_TYPE[DataType]))
         SymbolTable[rangeId] = rangeContainer
         return rangeId
 
@@ -148,7 +140,7 @@ class GEOperatorObject(object):
             raise BadExpression(ERR_SNYTAX % Expr)
         rangeId1 = str(uuid.uuid1())
         rangeContainer = RangeContainer()
-        rangeContainer.push(RangeObject(int(Operand), MaxOfType(DataType)))
+        rangeContainer.push(RangeObject(int(Operand), MAX_VAL_TYPE[DataType]))
         SymbolTable[rangeId1] = rangeContainer
         return rangeId1   
       
@@ -161,7 +153,7 @@ class GTOperatorObject(object):
             raise BadExpression(ERR_SNYTAX % Expr)
         rangeId1 = str(uuid.uuid1())
         rangeContainer = RangeContainer()
-        rangeContainer.push(RangeObject(int(Operand) + 1, MaxOfType(DataType)))
+        rangeContainer.push(RangeObject(int(Operand) + 1, MAX_VAL_TYPE[DataType]))
         SymbolTable[rangeId1] = rangeContainer
         return rangeId1   
     
@@ -209,11 +201,6 @@ class RangeExpression(object):
 
     NonLetterOpLst = ['+', '-', '&', '|', '^', '!', '=', '>', '<']
 
-    PcdPattern = re.compile(r'[_a-zA-Z][0-9A-Za-z_]*\.[_a-zA-Z][0-9A-Za-z_]*$')
-    HexPattern = re.compile(r'0[xX][0-9a-fA-F]+')
-    RegGuidPattern = re.compile(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
-    ExRegGuidPattern = re.compile(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
-    
     RangePattern = re.compile(r'[0-9]+ - [0-9]+')
 
     def preProcessRangeExpr(self, expr):
@@ -221,7 +208,7 @@ class RangeExpression(object):
         # convert interval to object index. ex. 1 - 10 to a GUID
         expr = expr.strip()
         NumberDict = {}
-        for HexNumber in self.HexPattern.findall(expr):
+        for HexNumber in gHexPattern.findall(expr):
             Number = str(int(HexNumber, 16))
             NumberDict[HexNumber] = Number
         for HexNum in NumberDict:
@@ -311,18 +298,18 @@ class RangeExpression(object):
             rangeContainer = RangeContainer()
             rangeid = str(uuid.uuid1())
             if rangeobj.empty:
-                rangeContainer.push(RangeObject(0, MaxOfType(self.PcdDataType)))
+                rangeContainer.push(RangeObject(0, MAX_VAL_TYPE[self.PcdDataType]))
             else:
                 if rangeobj.start > 0:
                     rangeContainer.push(RangeObject(0, rangeobj.start - 1))
-                if rangeobj.end < MaxOfType(self.PcdDataType):
-                    rangeContainer.push(RangeObject(rangeobj.end + 1, MaxOfType(self.PcdDataType)))
+                if rangeobj.end < MAX_VAL_TYPE[self.PcdDataType]:
+                    rangeContainer.push(RangeObject(rangeobj.end + 1, MAX_VAL_TYPE[self.PcdDataType]))
             self.operanddict[rangeid] = rangeContainer
             rangeids.append(rangeid)
 
         if len(rangeids) == 0:
             rangeContainer = RangeContainer()
-            rangeContainer.push(RangeObject(0, MaxOfType(self.PcdDataType)))
+            rangeContainer.push(RangeObject(0, MAX_VAL_TYPE[self.PcdDataType]))
             rangeid = str(uuid.uuid1())
             self.operanddict[rangeid] = rangeContainer
             return rangeid
@@ -341,18 +328,18 @@ class RangeExpression(object):
     def Eval(self, Operator, Oprand1, Oprand2 = None):
         
         if Operator in ["!", "NOT", "not"]:
-            if not self.RegGuidPattern.match(Oprand1.strip()):
+            if not gGuidPattern.match(Oprand1.strip()):
                 raise BadExpression(ERR_STRING_EXPR % Operator)
             return self.NegtiveRange(Oprand1)
         else:
             if Operator in ["==", ">=", "<=", ">", "<", '^']:
                 return self.EvalRange(Operator, Oprand1)
             elif Operator == 'and' :
-                if not self.ExRegGuidPattern.match(Oprand1.strip()) or not self.ExRegGuidPattern.match(Oprand2.strip()):
+                if not gGuidPatternEnd.match(Oprand1.strip()) or not gGuidPatternEnd.match(Oprand2.strip()):
                     raise BadExpression(ERR_STRING_EXPR % Operator)
                 return self.Rangeintersection(Oprand1, Oprand2)    
             elif Operator == 'or':
-                if not self.ExRegGuidPattern.match(Oprand1.strip()) or not self.ExRegGuidPattern.match(Oprand2.strip()):
+                if not gGuidPatternEnd.match(Oprand1.strip()) or not gGuidPatternEnd.match(Oprand2.strip()):
                     raise BadExpression(ERR_STRING_EXPR % Operator)
                 return self.Rangecollections(Oprand1, Oprand2)
             else:
@@ -410,7 +397,7 @@ class RangeExpression(object):
         # check if the expression does not need to evaluate
         if RealValue and Depth == 0:
             self._Token = self._Expr
-            if self.ExRegGuidPattern.match(self._Expr):
+            if gGuidPatternEnd.match(self._Expr):
                 return [self.operanddict[self._Expr] ]
 
             self._Idx = 0
@@ -576,7 +563,7 @@ class RangeExpression(object):
             raise BadExpression(ERR_EMPTY_TOKEN)
 
         # PCD token
-        if self.PcdPattern.match(self._Token):
+        if PcdPattern.match(self._Token):
             if self._Token not in self._Symb:
                 Ex = BadExpression(ERR_PCD_RESOLVE % self._Token)
                 Ex.Pcd = self._Token
@@ -626,7 +613,7 @@ class RangeExpression(object):
             self._LiteralToken.endswith('}'):
             return True
 
-        if self.HexPattern.match(self._LiteralToken):
+        if gHexPattern.match(self._LiteralToken):
             Token = self._LiteralToken[2:]
             Token = Token.lstrip('0')
             if not Token:
@@ -657,7 +644,7 @@ class RangeExpression(object):
         self._Token = ''
         if Expr:
             Ch = Expr[0]
-            Match = self.RegGuidPattern.match(Expr)
+            Match = gGuidPattern.match(Expr)
             if Match and not Expr[Match.end():Match.end() + 1].isalnum() \
                 and Expr[Match.end():Match.end() + 1] != '_':
                 self._Idx += Match.end()

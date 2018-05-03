@@ -1,7 +1,7 @@
 ## @file
 # Trim files preprocessed by compiler
 #
-# Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2018, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -23,6 +23,7 @@ from optparse import OptionParser
 from optparse import make_option
 from Common.BuildToolError import *
 from Common.Misc import *
+from Common.DataType import *
 from Common.BuildVersion import gBUILD_VERSION
 import Common.EdkLogger as EdkLogger
 from Common.LongFilePathSupport import OpenLongFilePath as open
@@ -173,7 +174,7 @@ def TrimPreprocessedFile(Source, Target, ConvertHex, TrimLong):
         elif PreprocessedFile == "" or InjectedFile != PreprocessedFile:
             continue
 
-        if LineIndexOfOriginalFile == None:
+        if LineIndexOfOriginalFile is None:
             #
             # Any non-empty lines must be from original preprocessed file.
             # And this must be the first one.
@@ -193,7 +194,7 @@ def TrimPreprocessedFile(Source, Target, ConvertHex, TrimLong):
         # convert Decimal number format
         Line = gDecNumberPattern.sub(r"\1", Line)
 
-        if LineNumber != None:
+        if LineNumber is not None:
             EdkLogger.verbose("Got line directive: line=%d" % LineNumber)
             # in case preprocessor removed some lines, like blank or comment lines
             if LineNumber <= len(NewLines):
@@ -216,10 +217,10 @@ def TrimPreprocessedFile(Source, Target, ConvertHex, TrimLong):
         Brace = 0
         for Index in range(len(Lines)):
             Line = Lines[Index]
-            if MulPatternFlag == False and gTypedef_MulPattern.search(Line) == None:
-                if SinglePatternFlag == False and gTypedef_SinglePattern.search(Line) == None:
+            if MulPatternFlag == False and gTypedef_MulPattern.search(Line) is None:
+                if SinglePatternFlag == False and gTypedef_SinglePattern.search(Line) is None:
                     # remove "#pragram pack" directive
-                    if gPragmaPattern.search(Line) == None:
+                    if gPragmaPattern.search(Line) is None:
                         NewLines.append(Line)
                     continue
                 elif SinglePatternFlag == False:
@@ -282,9 +283,9 @@ def TrimPreprocessedVfr(Source, Target):
             Lines[Index] = "\n"
             continue
 
-        if FoundTypedef == False and gTypedefPattern.search(Line) == None:
+        if FoundTypedef == False and gTypedefPattern.search(Line) is None:
             # keep "#pragram pack" directive
-            if gPragmaPattern.search(Line) == None:
+            if gPragmaPattern.search(Line) is None:
                 Lines[Index] = "\n"
             continue
         elif FoundTypedef == False:
@@ -303,7 +304,7 @@ def TrimPreprocessedVfr(Source, Target):
             FoundTypedef = False
             TypedefEnd = Index
             # keep all "typedef struct" except to GUID, EFI_PLABEL and PAL_CALL_RETURN
-            if Line.strip("} ;\r\n") in ["GUID", "EFI_PLABEL", "PAL_CALL_RETURN"]:
+            if Line.strip("} ;\r\n") in [TAB_GUID, "EFI_PLABEL", "PAL_CALL_RETURN"]:
                 for i in range(TypedefStart, TypedefEnd+1):
                     Lines[i] = "\n"
 
@@ -437,7 +438,7 @@ def GenerateVfrBinSec(ModuleName, DebugDir, OutputFile):
         for CurrentDir, Dirs, Files in os.walk(DebugDir):
             for FileName in Files:
                 Name, Ext = os.path.splitext(FileName)
-                if Ext == '.lst':
+                if Ext == '.c' and Name != 'AutoGen':
                     VfrNameList.append (Name + 'Bin')
 
     VfrNameList.append (ModuleName + 'Strings')
@@ -510,7 +511,7 @@ def TrimEdkSources(Source, Target):
             for FileName in Files:
                 Dummy, Ext = os.path.splitext(FileName)
                 if Ext.upper() not in ['.C', '.H']: continue
-                if Target == None or Target == '':
+                if Target is None or Target == '':
                     TrimEdkSourceCode(
                         os.path.join(CurrentDir, FileName),
                         os.path.join(CurrentDir, FileName)
@@ -568,7 +569,7 @@ def TrimEdkSourceCode(Source, Target):
 
     NewLines = None
     for Re,Repl in gImportCodePatterns:
-        if NewLines == None:
+        if NewLines is None:
             NewLines = Re.sub(Repl, Lines)
         else:
             NewLines = Re.sub(Repl, NewLines)
@@ -672,11 +673,11 @@ def Main():
     
     try:
         if CommandOptions.FileType == "Vfr":
-            if CommandOptions.OutputFile == None:
+            if CommandOptions.OutputFile is None:
                 CommandOptions.OutputFile = os.path.splitext(InputFile)[0] + '.iii'
             TrimPreprocessedVfr(InputFile, CommandOptions.OutputFile)
         elif CommandOptions.FileType == "Asl":
-            if CommandOptions.OutputFile == None:
+            if CommandOptions.OutputFile is None:
                 CommandOptions.OutputFile = os.path.splitext(InputFile)[0] + '.iii'
             TrimAslFile(InputFile, CommandOptions.OutputFile, CommandOptions.IncludePathFile)
         elif CommandOptions.FileType == "EdkSourceCode":
@@ -684,13 +685,13 @@ def Main():
         elif CommandOptions.FileType == "VfrOffsetBin":
             GenerateVfrBinSec(CommandOptions.ModuleName, CommandOptions.DebugDir, CommandOptions.OutputFile)
         else :
-            if CommandOptions.OutputFile == None:
+            if CommandOptions.OutputFile is None:
                 CommandOptions.OutputFile = os.path.splitext(InputFile)[0] + '.iii'
             TrimPreprocessedFile(InputFile, CommandOptions.OutputFile, CommandOptions.ConvertHex, CommandOptions.TrimLong)
     except FatalError, X:
         import platform
         import traceback
-        if CommandOptions != None and CommandOptions.LogLevel <= EdkLogger.DEBUG_9:
+        if CommandOptions is not None and CommandOptions.LogLevel <= EdkLogger.DEBUG_9:
             EdkLogger.quiet("(Python %s on %s) " % (platform.python_version(), sys.platform) + traceback.format_exc())
         return 1
     except:

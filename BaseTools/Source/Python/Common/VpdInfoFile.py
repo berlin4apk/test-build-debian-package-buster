@@ -6,7 +6,7 @@
 # is pointed by *_*_*_VPD_TOOL_GUID in conf/tools_def.txt 
 #
 #
-# Copyright (c) 2010 - 2016, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2010 - 2018, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -23,6 +23,7 @@ import subprocess
 import Common.GlobalData as GlobalData
 from Common.LongFilePathSupport import OpenLongFilePath as open
 from Common.Misc import SaveFileOnChange
+from Common.DataType import *
 
 FILE_COMMENT_TEMPLATE = \
 """
@@ -67,9 +68,7 @@ FILE_COMMENT_TEMPLATE = \
 #  <NList>           ::=  <HexNumber> ["," <HexNumber>]*
 #
 class VpdInfoFile:
-    
-    ## The mapping dictionary from datum type to size string.
-    _MAX_SIZE_TYPE = {"BOOLEAN":"1", "UINT8":"1", "UINT16":"2", "UINT32":"4", "UINT64":"8"}
+
     _rVpdPcdLine = None 
     ## Constructor
     def __init__(self):
@@ -89,25 +88,25 @@ class VpdInfoFile:
     #  @param offset integer value for VPD's offset in specific SKU.
     #
     def Add(self, Vpd, skuname,Offset):
-        if (Vpd == None):
+        if (Vpd is None):
             EdkLogger.error("VpdInfoFile", BuildToolError.ATTRIBUTE_UNKNOWN_ERROR, "Invalid VPD PCD entry.")
         
         if not (Offset >= 0 or Offset == "*"):
             EdkLogger.error("VpdInfoFile", BuildToolError.PARAMETER_INVALID, "Invalid offset parameter: %s." % Offset)
         
-        if Vpd.DatumType == "VOID*":
+        if Vpd.DatumType == TAB_VOID:
             if Vpd.MaxDatumSize <= 0:
                 EdkLogger.error("VpdInfoFile", BuildToolError.PARAMETER_INVALID, 
                                 "Invalid max datum size for VPD PCD %s.%s" % (Vpd.TokenSpaceGuidCName, Vpd.TokenCName))
-        elif Vpd.DatumType in ["BOOLEAN", "UINT8", "UINT16", "UINT32", "UINT64"]: 
-            if Vpd.MaxDatumSize == None or Vpd.MaxDatumSize == "":
-                Vpd.MaxDatumSize = VpdInfoFile._MAX_SIZE_TYPE[Vpd.DatumType]
+        elif Vpd.DatumType in TAB_PCD_NUMERIC_TYPES: 
+            if Vpd.MaxDatumSize is None or Vpd.MaxDatumSize == "":
+                Vpd.MaxDatumSize = MAX_SIZE_TYPE[Vpd.DatumType]
         else:
             if Vpd.MaxDatumSize <= 0:
                 EdkLogger.error("VpdInfoFile", BuildToolError.PARAMETER_INVALID,
                                 "Invalid max datum size for VPD PCD %s.%s" % (Vpd.TokenSpaceGuidCName, Vpd.TokenCName))
             
-        if Vpd not in self._VpdArray.keys():
+        if Vpd not in self._VpdArray:
             #
             # If there is no Vpd instance in dict, that imply this offset for a given SKU is a new one 
             #
@@ -122,7 +121,7 @@ class VpdInfoFile:
     #  If 
     #  @param FilePath        The given file path which would hold VPD information
     def Write(self, FilePath):
-        if not (FilePath != None or len(FilePath) != 0):
+        if not (FilePath is not None or len(FilePath) != 0):
             EdkLogger.error("VpdInfoFile", BuildToolError.PARAMETER_INVALID,  
                             "Invalid parameter FilePath: %s." % FilePath)        
 
@@ -180,12 +179,12 @@ class VpdInfoFile:
             if (TokenSpaceName, PcdTokenName) not in self._VpdInfo:
                 self._VpdInfo[(TokenSpaceName, PcdTokenName)] = []
             self._VpdInfo[(TokenSpaceName, PcdTokenName)].append((SkuId,Offset, Value))
-            for VpdObject in self._VpdArray.keys():
+            for VpdObject in self._VpdArray:
                 VpdObjectTokenCName = VpdObject.TokenCName
                 for PcdItem in GlobalData.MixedPcd:
                     if (VpdObject.TokenCName, VpdObject.TokenSpaceGuidCName) in GlobalData.MixedPcd[PcdItem]:
                         VpdObjectTokenCName = PcdItem[0]
-                for sku in VpdObject.SkuInfoList.keys():
+                for sku in VpdObject.SkuInfoList:
                     if VpdObject.TokenSpaceGuidCName == TokenSpaceName and VpdObjectTokenCName == PcdTokenName.strip() and sku == SkuId:
                         if self._VpdArray[VpdObject][sku] == "*":
                             if Offset == "*":
@@ -227,8 +226,8 @@ class VpdInfoFile:
 #  @param VpdFileName   The string path name for VPD information guid.txt
 # 
 def CallExtenalBPDGTool(ToolPath, VpdFileName):
-    assert ToolPath != None, "Invalid parameter ToolPath"
-    assert VpdFileName != None and os.path.exists(VpdFileName), "Invalid parameter VpdFileName"
+    assert ToolPath is not None, "Invalid parameter ToolPath"
+    assert VpdFileName is not None and os.path.exists(VpdFileName), "Invalid parameter VpdFileName"
     
     OutputDir = os.path.dirname(VpdFileName)
     FileName = os.path.basename(VpdFileName)
@@ -250,7 +249,7 @@ def CallExtenalBPDGTool(ToolPath, VpdFileName):
         EdkLogger.error("BPDG", BuildToolError.COMMAND_FAILURE, ExtraData="%s" % (str(X)))
     (out, error) = PopenObject.communicate()
     print out
-    while PopenObject.returncode == None :
+    while PopenObject.returncode is None :
         PopenObject.wait()
     
     if PopenObject.returncode != 0:

@@ -25,6 +25,7 @@ from Common.Misc import *
 from Common.String import *
 from BuildEngine import *
 import Common.GlobalData as GlobalData
+from collections import OrderedDict
 
 ## Regular expression for finding header file inclusions
 gIncludePattern = re.compile(r"^[ \t]*#?[ \t]*include(?:[ \t]*(?:\\(?:\r\n|\r|\n))*[ \t]*)*(?:\(?[\"<]?[ \t]*)([-\w.\\/() \t]+)(?:[ \t]*[\">]?\)?)", re.MULTILINE | re.UNICODE | re.IGNORECASE)
@@ -426,8 +427,6 @@ cleanlib:
         self.ResultFileList = []
         self.IntermediateDirectoryList = ["$(DEBUG_DIR)", "$(OUTPUT_DIR)"]
 
-        self.SourceFileDatabase = {}        # {file type : file path}
-        self.DestFileDatabase = {}          # {file type : file path}
         self.FileBuildTargetList = []       # [(src, target string)]
         self.BuildTargetList = []           # [target string]
         self.PendingBuildTargetList = []    # [FileBuildRule objects]
@@ -442,7 +441,7 @@ cleanlib:
         self.LibraryMakefileList = []
         self.LibraryBuildDirectoryList = []
         self.SystemLibraryList = []
-        self.Macros = sdict()
+        self.Macros = OrderedDict()
         self.Macros["OUTPUT_DIR"      ] = self._AutoGenObject.Macros["OUTPUT_DIR"]
         self.Macros["DEBUG_DIR"       ] = self._AutoGenObject.Macros["DEBUG_DIR"]
         self.Macros["MODULE_BUILD_DIR"] = self._AutoGenObject.Macros["MODULE_BUILD_DIR"]
@@ -491,14 +490,14 @@ cleanlib:
             ImageEntryPoint = "_ModuleEntryPoint"
 
         for k, v in self._AutoGenObject.Module.Defines.iteritems():
-            if k not in self._AutoGenObject.Macros.keys():
+            if k not in self._AutoGenObject.Macros:
                 self._AutoGenObject.Macros[k] = v
 
-        if 'MODULE_ENTRY_POINT' not in self._AutoGenObject.Macros.keys():
+        if 'MODULE_ENTRY_POINT' not in self._AutoGenObject.Macros:
             self._AutoGenObject.Macros['MODULE_ENTRY_POINT'] = ModuleEntryPoint
-        if 'ARCH_ENTRY_POINT' not in self._AutoGenObject.Macros.keys():
+        if 'ARCH_ENTRY_POINT' not in self._AutoGenObject.Macros:
             self._AutoGenObject.Macros['ARCH_ENTRY_POINT'] = ArchEntryPoint
-        if 'IMAGE_ENTRY_POINT' not in self._AutoGenObject.Macros.keys():
+        if 'IMAGE_ENTRY_POINT' not in self._AutoGenObject.Macros:
             self._AutoGenObject.Macros['IMAGE_ENTRY_POINT'] = ImageEntryPoint
 
         PCI_COMPRESS_Flag = False
@@ -539,7 +538,7 @@ cleanlib:
         RespFileList = os.path.join(self._AutoGenObject.OutputDir, 'respfilelist.txt')
         if RespDict:
             RespFileListContent = ''
-            for Resp in RespDict.keys():
+            for Resp in RespDict:
                 RespFile = os.path.join(self._AutoGenObject.OutputDir, str(Resp).lower() + '.txt')
                 StrList = RespDict[Resp].split(' ')
                 UnexpandMacro = []
@@ -793,7 +792,7 @@ cleanlib:
                         SingleCommandLength = len(SingleCommand)
                         SingleCommandList = SingleCommand.split()
                         if len(SingleCommandList) > 0:
-                            for Flag in FlagDict.keys():
+                            for Flag in FlagDict:
                                 if '$('+ Flag +')' in SingleCommandList[0]:
                                     Tool = Flag
                                     break
@@ -806,12 +805,12 @@ cleanlib:
                                     if 'FLAGS' not in self._AutoGenObject._BuildOption[Tool]:
                                         EdkLogger.error("build", AUTOGEN_ERROR, "%s_FLAGS doesn't exist in %s ToolChain and %s Arch." %(Tool, self._AutoGenObject.ToolChain, self._AutoGenObject.Arch), ExtraData="[%s]" % str(self._AutoGenObject))
                                     Str = self._AutoGenObject._BuildOption[Tool]['FLAGS']
-                                    for Option in self._AutoGenObject.BuildOption.keys():
+                                    for Option in self._AutoGenObject.BuildOption:
                                         for Attr in self._AutoGenObject.BuildOption[Option]:
                                             if Str.find(Option + '_' + Attr) != -1:
                                                 Str = Str.replace('$(' + Option + '_' + Attr + ')', self._AutoGenObject.BuildOption[Option][Attr])
                                     while(Str.find('$(') != -1):
-                                        for macro in self._AutoGenObject.Macros.keys():
+                                        for macro in self._AutoGenObject.Macros:
                                             MacroName = '$('+ macro + ')'
                                             if (Str.find(MacroName) != -1):
                                                 Str = Str.replace(MacroName, self._AutoGenObject.Macros[macro])
@@ -823,12 +822,12 @@ cleanlib:
                                     SingleCommandLength += self._AutoGenObject.IncludePathLength + len(IncPrefix) * len(self._AutoGenObject._IncludePathList)
                                 elif item.find('$(') != -1:
                                     Str = item
-                                    for Option in self._AutoGenObject.BuildOption.keys():
+                                    for Option in self._AutoGenObject.BuildOption:
                                         for Attr in self._AutoGenObject.BuildOption[Option]:
                                             if Str.find(Option + '_' + Attr) != -1:
                                                 Str = Str.replace('$(' + Option + '_' + Attr + ')', self._AutoGenObject.BuildOption[Option][Attr])
                                     while(Str.find('$(') != -1):
-                                        for macro in self._AutoGenObject.Macros.keys():
+                                        for macro in self._AutoGenObject.Macros:
                                             MacroName = '$('+ macro + ')'
                                             if (Str.find(MacroName) != -1):
                                                 Str = Str.replace(MacroName, self._AutoGenObject.Macros[macro])
@@ -841,19 +840,19 @@ cleanlib:
                                 FlagDict[Tool]['Value'] = True
 
                 # generate the response file content by combine the FLAGS and INC
-                for Flag in FlagDict.keys():
+                for Flag in FlagDict:
                     if FlagDict[Flag]['Value']:
                         Key = Flag + '_RESP'
                         RespMacro = FlagDict[Flag]['Macro'].replace('FLAGS', 'RESP')
                         Value = self._AutoGenObject.BuildOption[Flag]['FLAGS']
                         for inc in self._AutoGenObject._IncludePathList:
                             Value += ' ' + IncPrefix + inc
-                        for Option in self._AutoGenObject.BuildOption.keys():
+                        for Option in self._AutoGenObject.BuildOption:
                             for Attr in self._AutoGenObject.BuildOption[Option]:
                                 if Value.find(Option + '_' + Attr) != -1:
                                     Value = Value.replace('$(' + Option + '_' + Attr + ')', self._AutoGenObject.BuildOption[Option][Attr])
                         while (Value.find('$(') != -1):
-                            for macro in self._AutoGenObject.Macros.keys():
+                            for macro in self._AutoGenObject.Macros:
                                 MacroName = '$('+ macro + ')'
                                 if (Value.find(MacroName) != -1):
                                     Value = Value.replace(MacroName, self._AutoGenObject.Macros[macro])
@@ -906,12 +905,12 @@ cleanlib:
             # skip non-C files
             if File.Ext not in [".c", ".C"] or File.Name == "AutoGen.c":
                 continue
-            elif DepSet == None:
+            elif DepSet is None:
                 DepSet = set(self.FileDependency[File])
             else:
                 DepSet &= set(self.FileDependency[File])
         # in case nothing in SourceFileList
-        if DepSet == None:
+        if DepSet is None:
             DepSet = set()
         #
         # Extract common files list in the dependency files
@@ -1516,7 +1515,7 @@ class TopLevelMakefile(BuildFile):
 
         # TRICK: for not generating GenFds call in makefile if no FDF file
         MacroList = []
-        if PlatformInfo.FdfFile != None and PlatformInfo.FdfFile != "":
+        if PlatformInfo.FdfFile is not None and PlatformInfo.FdfFile != "":
             FdfFileList = [PlatformInfo.FdfFile]
             # macros passed to GenFds
             MacroList.append('"%s=%s"' % ("EFI_SOURCE", GlobalData.gEfiSource.replace('\\', '\\\\')))

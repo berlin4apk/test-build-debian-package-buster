@@ -33,7 +33,6 @@ from Common import EdkLogger
 from Common.Misc import SaveFileOnChange
 from Common.Misc import GuidStructureByteArrayToGuidString
 from Common.Misc import GuidStructureStringToGuidString
-from Common.InfClassObject import gComponentType2ModuleType
 from Common.BuildToolError import FILE_WRITE_FAILURE
 from Common.BuildToolError import CODE_ERROR
 from Common.BuildToolError import COMMAND_FAILURE
@@ -95,33 +94,33 @@ gSubSectionSep = "-" * gLineMaxLength
 
 ## The look up table to map PCD type to pair of report display type and DEC type
 gPcdTypeMap = {
-  'FixedAtBuild'     : ('FIXED',  'FixedAtBuild'),
-  'PatchableInModule': ('PATCH',  'PatchableInModule'),
-  'FeatureFlag'      : ('FLAG',   'FeatureFlag'),
-  'Dynamic'          : ('DYN',    'Dynamic'),
-  'DynamicHii'       : ('DYNHII', 'Dynamic'),
-  'DynamicVpd'       : ('DYNVPD', 'Dynamic'),
-  'DynamicEx'        : ('DEX',    'DynamicEx'),
-  'DynamicExHii'     : ('DEXHII', 'DynamicEx'),
-  'DynamicExVpd'     : ('DEXVPD', 'DynamicEx'),
+  TAB_PCDS_FIXED_AT_BUILD     : ('FIXED',  TAB_PCDS_FIXED_AT_BUILD),
+  TAB_PCDS_PATCHABLE_IN_MODULE: ('PATCH',  TAB_PCDS_PATCHABLE_IN_MODULE),
+  TAB_PCDS_FEATURE_FLAG       : ('FLAG',   TAB_PCDS_FEATURE_FLAG),
+  TAB_PCDS_DYNAMIC            : ('DYN',    TAB_PCDS_DYNAMIC),
+  TAB_PCDS_DYNAMIC_HII        : ('DYNHII', TAB_PCDS_DYNAMIC),
+  TAB_PCDS_DYNAMIC_VPD        : ('DYNVPD', TAB_PCDS_DYNAMIC),
+  TAB_PCDS_DYNAMIC_EX         : ('DEX',    TAB_PCDS_DYNAMIC_EX),
+  TAB_PCDS_DYNAMIC_EX_HII     : ('DEXHII', TAB_PCDS_DYNAMIC_EX),
+  TAB_PCDS_DYNAMIC_EX_VPD     : ('DEXVPD', TAB_PCDS_DYNAMIC_EX),
   }
 
 ## The look up table to map module type to driver type
 gDriverTypeMap = {
-  'SEC'               : '0x3 (SECURITY_CORE)',
-  'PEI_CORE'          : '0x4 (PEI_CORE)',
-  'PEIM'              : '0x6 (PEIM)',
-  'DXE_CORE'          : '0x5 (DXE_CORE)',
-  'DXE_DRIVER'        : '0x7 (DRIVER)',
-  'DXE_SAL_DRIVER'    : '0x7 (DRIVER)',
-  'DXE_SMM_DRIVER'    : '0x7 (DRIVER)',
-  'DXE_RUNTIME_DRIVER': '0x7 (DRIVER)',
-  'UEFI_DRIVER'       : '0x7 (DRIVER)',
-  'UEFI_APPLICATION'  : '0x9 (APPLICATION)',
-  'SMM_CORE'          : '0xD (SMM_CORE)',
+  SUP_MODULE_SEC               : '0x3 (SECURITY_CORE)',
+  SUP_MODULE_PEI_CORE          : '0x4 (PEI_CORE)',
+  SUP_MODULE_PEIM              : '0x6 (PEIM)',
+  SUP_MODULE_DXE_CORE          : '0x5 (DXE_CORE)',
+  SUP_MODULE_DXE_DRIVER        : '0x7 (DRIVER)',
+  SUP_MODULE_DXE_SAL_DRIVER    : '0x7 (DRIVER)',
+  SUP_MODULE_DXE_SMM_DRIVER    : '0x7 (DRIVER)',
+  SUP_MODULE_DXE_RUNTIME_DRIVER: '0x7 (DRIVER)',
+  SUP_MODULE_UEFI_DRIVER       : '0x7 (DRIVER)',
+  SUP_MODULE_UEFI_APPLICATION  : '0x9 (APPLICATION)',
+  SUP_MODULE_SMM_CORE          : '0xD (SMM_CORE)',
   'SMM_DRIVER'        : '0xA (SMM)', # Extension of module type to support PI 1.1 SMM drivers
-  'MM_STANDALONE'     : '0xE (MM_STANDALONE)',
-  'MM_CORE_STANDALONE' : '0xF (MM_CORE_STANDALONE)'
+  SUP_MODULE_MM_STANDALONE     : '0xE (MM_STANDALONE)',
+  SUP_MODULE_MM_CORE_STANDALONE : '0xF (MM_CORE_STANDALONE)'
   }
 
 ## The look up table of the supported opcode in the dependency expression binaries
@@ -209,7 +208,7 @@ def FindIncludeFiles(Source, IncludePathList, IncludeFiles):
             FileName = "Protocol/%(Key)s/%(Key)s.h" % {"Key" : Key}
         elif "PPI" in Type:
             FileName = "Ppi/%(Key)s/%(Key)s.h" % {"Key" : Key}
-        elif "GUID" in Type:
+        elif TAB_GUID in Type:
             FileName = "Guid/%(Key)s/%(Key)s.h" % {"Key" : Key}
         else:
             continue
@@ -408,9 +407,9 @@ class DepexReport(object):
         self._DepexFileName = os.path.join(M.BuildDir, "OUTPUT", M.Module.BaseName + ".depex")
         ModuleType = M.ModuleType
         if not ModuleType:
-            ModuleType = gComponentType2ModuleType.get(M.ComponentType, "")
+            ModuleType = COMPONENT_TO_MODULE_MAP_DICT.get(M.ComponentType, "")
 
-        if ModuleType in ["SEC", "PEI_CORE", "DXE_CORE", "SMM_CORE", "MM_CORE_STANDALONE", "UEFI_APPLICATION"]:
+        if ModuleType in [SUP_MODULE_SEC, SUP_MODULE_PEI_CORE, SUP_MODULE_DXE_CORE, SUP_MODULE_SMM_CORE, SUP_MODULE_MM_CORE_STANDALONE, SUP_MODULE_UEFI_APPLICATION]:
             return
       
         for Source in M.SourceFileList:
@@ -573,11 +572,11 @@ class ModuleReport(object):
         if not M.IsLibrary:
             ModuleType = M.ModuleType
             if not ModuleType:
-                ModuleType = gComponentType2ModuleType.get(M.ComponentType, "")
+                ModuleType = COMPONENT_TO_MODULE_MAP_DICT.get(M.ComponentType, "")
             #
             # If a module complies to PI 1.1, promote Module type to "SMM_DRIVER"
             #
-            if ModuleType == "DXE_SMM_DRIVER":
+            if ModuleType == SUP_MODULE_DXE_SMM_DRIVER:
                 PiSpec = M.Module.Specification.get("PI_SPECIFICATION_VERSION", "0x00010000")
                 if int(PiSpec, 0) >= 0x0001000A:
                     ModuleType = "SMM_DRIVER"
@@ -722,7 +721,7 @@ def ReadMessage(From, To, ExitFlag):
         # read one line a time
         Line = From.readline()
         # empty string means "end"
-        if Line != None and Line != "":
+        if Line is not None and Line != "":
             To(Line.rstrip())
         else:
             break
@@ -785,7 +784,7 @@ class PcdReport(object):
                 Pcd = Pa.Platform.Pcds[item]
                 if not Pcd.Type:
                     # check the Pcd in FDF file, whether it is used in module first
-                    for T in ["FixedAtBuild", "PatchableInModule", "FeatureFlag", "Dynamic", "DynamicEx"]:
+                    for T in PCD_TYPE_LIST:
                         PcdList = self.AllPcds.setdefault(Pcd.TokenSpaceGuidCName, {}).setdefault(T, [])
                         if Pcd in PcdList:
                             Pcd.Type = T
@@ -793,7 +792,7 @@ class PcdReport(object):
                 if not Pcd.Type:
                     PcdTypeFlag = False
                     for package in Pa.PackageList:
-                        for T in ["FixedAtBuild", "PatchableInModule", "FeatureFlag", "Dynamic", "DynamicEx"]:
+                        for T in PCD_TYPE_LIST:
                             if (Pcd.TokenCName, Pcd.TokenSpaceGuidCName, T) in package.Pcds:
                                 Pcd.Type = T
                                 PcdTypeFlag = True
@@ -805,10 +804,10 @@ class PcdReport(object):
                 if not Pcd.DatumType:
                     PcdType = Pcd.Type
                     # Try to remove Hii and Vpd suffix
-                    if PcdType.startswith("DynamicEx"):
-                        PcdType = "DynamicEx"
-                    elif PcdType.startswith("Dynamic"):
-                        PcdType = "Dynamic"
+                    if PcdType.startswith(TAB_PCDS_DYNAMIC_EX):
+                        PcdType = TAB_PCDS_DYNAMIC_EX
+                    elif PcdType.startswith(TAB_PCDS_DYNAMIC):
+                        PcdType = TAB_PCDS_DYNAMIC
                     for package in Pa.PackageList:
                         if (Pcd.TokenCName, Pcd.TokenSpaceGuidCName, PcdType) in package.Pcds:
                             Pcd.DatumType = package.Pcds[(Pcd.TokenCName, Pcd.TokenSpaceGuidCName, PcdType)].DatumType
@@ -824,7 +823,7 @@ class PcdReport(object):
                 for PcdItem in GlobalData.gConditionalPcds:
                     if '.' in PcdItem:
                         (TokenSpaceGuidCName, TokenCName) = PcdItem.split('.')
-                        if (TokenCName, TokenSpaceGuidCName) in Pa.Platform.Pcds.keys():
+                        if (TokenCName, TokenSpaceGuidCName) in Pa.Platform.Pcds:
                             Pcd = Pa.Platform.Pcds[(TokenCName, TokenSpaceGuidCName)]
                             PcdList = self.ConditionalPcds.setdefault(Pcd.TokenSpaceGuidCName, {}).setdefault(Pcd.Type, [])
                             if Pcd not in PcdList:
@@ -877,10 +876,11 @@ class PcdReport(object):
                     self.DscPcdDefault[(TokenCName, TokenSpaceGuidCName)] = DscDefaultValue
 
     def GenerateReport(self, File, ModulePcdSet):
-        if self.ConditionalPcds:
-            self.GenerateReportDetail(File, ModulePcdSet, 1)
-        if self.UnusedPcds:
-            self.GenerateReportDetail(File, ModulePcdSet, 2)
+        if not ModulePcdSet:
+            if self.ConditionalPcds:
+                self.GenerateReportDetail(File, ModulePcdSet, 1)
+            if self.UnusedPcds:
+                self.GenerateReportDetail(File, ModulePcdSet, 2)
         self.GenerateReportDetail(File, ModulePcdSet)
 
     ##
@@ -904,7 +904,7 @@ class PcdReport(object):
         elif ReportSubType == 2:
             PcdDict = self.UnusedPcds
 
-        if ModulePcdSet == None:
+        if not ModulePcdSet:
             FileWrite(File, gSectionStart)
             if ReportSubType == 1:
                 FileWrite(File, "Conditional Directives used by the build system")
@@ -966,10 +966,11 @@ class PcdReport(object):
                     PcdValue = DecDefaultValue
                     if DscDefaultValue:
                         PcdValue = DscDefaultValue
-                    if ModulePcdSet != None:
+                    if ModulePcdSet is not None:
                         if (Pcd.TokenCName, Pcd.TokenSpaceGuidCName, Type) not in ModulePcdSet:
                             continue
                         InfDefault, PcdValue = ModulePcdSet[Pcd.TokenCName, Pcd.TokenSpaceGuidCName, Type]
+                        Pcd.DefaultValue = PcdValue
                         if InfDefault == "":
                             InfDefault = None
 
@@ -985,49 +986,49 @@ class PcdReport(object):
                                 break
 
                     if First:
-                        if ModulePcdSet == None:
+                        if ModulePcdSet is None:
                             FileWrite(File, "")
                         FileWrite(File, Key)
                         First = False
 
 
-                    if Pcd.DatumType in ('UINT8', 'UINT16', 'UINT32', 'UINT64'):
+                    if Pcd.DatumType in TAB_PCD_CLEAN_NUMERIC_TYPES:
                         PcdValueNumber = int(PcdValue.strip(), 0)
-                        if DecDefaultValue == None:
+                        if DecDefaultValue is None:
                             DecMatch = True
                         else:
                             DecDefaultValueNumber = int(DecDefaultValue.strip(), 0)
                             DecMatch = (DecDefaultValueNumber == PcdValueNumber)
 
-                        if InfDefaultValue == None:
+                        if InfDefaultValue is None:
                             InfMatch = True
                         else:
                             InfDefaultValueNumber = int(InfDefaultValue.strip(), 0)
                             InfMatch = (InfDefaultValueNumber == PcdValueNumber)
 
-                        if DscDefaultValue == None:
+                        if DscDefaultValue is None:
                             DscMatch = True
                         else:
                             DscDefaultValueNumber = int(DscDefaultValue.strip(), 0)
                             DscMatch = (DscDefaultValueNumber == PcdValueNumber)
                     else:
-                        if DecDefaultValue == None:
+                        if DecDefaultValue is None:
                             DecMatch = True
                         else:
                             DecMatch = (DecDefaultValue.strip() == PcdValue.strip())
 
-                        if InfDefaultValue == None:
+                        if InfDefaultValue is None:
                             InfMatch = True
                         else:
                             InfMatch = (InfDefaultValue.strip() == PcdValue.strip())
 
-                        if DscDefaultValue == None:
+                        if DscDefaultValue is None:
                             DscMatch = True
                         else:
                             DscMatch = (DscDefaultValue.strip() == PcdValue.strip())
 
                     IsStructure = False
-                    if GlobalData.gStructurePcd and (self.Arch in GlobalData.gStructurePcd.keys()) and ((Pcd.TokenCName, Pcd.TokenSpaceGuidCName) in GlobalData.gStructurePcd[self.Arch]):
+                    if GlobalData.gStructurePcd and (self.Arch in GlobalData.gStructurePcd) and ((Pcd.TokenCName, Pcd.TokenSpaceGuidCName) in GlobalData.gStructurePcd[self.Arch]):
                         IsStructure = True
                         if TypeName in ('DYNVPD', 'DEXVPD'):
                             SkuInfoList = Pcd.SkuInfoList
@@ -1087,7 +1088,7 @@ class PcdReport(object):
                         else:
                             self.PrintPcdValue(File, Pcd, PcdTokenCName, TypeName, IsStructure, DscMatch, DscDefaultValBak, InfMatch, InfDefaultValue, DecMatch, DecDefaultValue, '*M')
 
-                    if ModulePcdSet == None:
+                    if ModulePcdSet is None:
                         if IsStructure:
                             continue
                         if not TypeName in ('PATCH', 'FLAG', 'FIXED'):
@@ -1096,7 +1097,7 @@ class PcdReport(object):
                             ModuleOverride = self.ModulePcdOverride.get((Pcd.TokenCName, Pcd.TokenSpaceGuidCName), {})
                             for ModulePath in ModuleOverride:
                                 ModuleDefault = ModuleOverride[ModulePath]
-                                if Pcd.DatumType in ('UINT8', 'UINT16', 'UINT32', 'UINT64'):
+                                if Pcd.DatumType in TAB_PCD_CLEAN_NUMERIC_TYPES:
                                     ModulePcdDefaultValueNumber = int(ModuleDefault.strip(), 0)
                                     Match = (ModulePcdDefaultValueNumber == PcdValueNumber)
                                 else:
@@ -1111,7 +1112,7 @@ class PcdReport(object):
                                 else:
                                     FileWrite(File, ' *M %-*s = %s' % (self.MaxLen + 19, ModulePath, ModuleDefault.strip()))
 
-        if ModulePcdSet == None:
+        if ModulePcdSet is None:
             FileWrite(File, gSectionEnd)
         else:
             if not ReportSubType and ModulePcdSet:
@@ -1127,7 +1128,7 @@ class PcdReport(object):
         return HasDscOverride
 
     def PrintPcdDefault(self, File, Pcd, IsStructure, DscMatch, DscDefaultValue, InfMatch, InfDefaultValue, DecMatch, DecDefaultValue):
-        if not DscMatch and DscDefaultValue != None:
+        if not DscMatch and DscDefaultValue is not None:
             Value = DscDefaultValue.strip()
             IsByteArray, ArrayList = ByteArrayForamt(Value)
             if IsByteArray:
@@ -1136,7 +1137,7 @@ class PcdReport(object):
                     FileWrite(File, '%s' % (Array))
             else:
                 FileWrite(File, '    %*s = %s' % (self.MaxLen + 19, 'DSC DEFAULT', Value))
-        if not InfMatch and InfDefaultValue != None:
+        if not InfMatch and InfDefaultValue is not None:
             Value = InfDefaultValue.strip()
             IsByteArray, ArrayList = ByteArrayForamt(Value)
             if IsByteArray:
@@ -1146,7 +1147,7 @@ class PcdReport(object):
             else:
                 FileWrite(File, '    %*s = %s' % (self.MaxLen + 19, 'INF DEFAULT', Value))
 
-        if not DecMatch and DecDefaultValue != None:
+        if not DecMatch and DecDefaultValue is not None:
             Value = DecDefaultValue.strip()
             IsByteArray, ArrayList = ByteArrayForamt(Value)
             if IsByteArray:
@@ -1366,7 +1367,7 @@ class PredictionReport(object):
                 # their source code to find PPI/Protocol produce or consume
                 # information.
                 #
-                if Module.ModuleType == "BASE":
+                if Module.ModuleType == SUP_MODULE_BASE:
                     continue
                 #
                 # Add module referenced source files
@@ -1409,7 +1410,7 @@ class PredictionReport(object):
         if Wa.FdfProfile:
             for Fd in Wa.FdfProfile.FdDict:
                 for FdRegion in Wa.FdfProfile.FdDict[Fd].RegionList:
-                    if FdRegion.RegionType != "FV":
+                    if FdRegion.RegionType != BINARY_FILE_TYPE_FV:
                         continue
                     for FvName in FdRegion.RegionDataList:
                         if FvName in self._FvList:
@@ -1685,7 +1686,7 @@ class FdRegionReport(object):
         # If the input FdRegion is not a firmware volume,
         # we are done.
         #
-        if self.Type != "FV":
+        if self.Type != BINARY_FILE_TYPE_FV:
             return
 
         #
@@ -1779,7 +1780,7 @@ class FdRegionReport(object):
         FileWrite(File, "Type:               %s" % Type)
         FileWrite(File, "Base Address:       0x%X" % BaseAddress)
 
-        if self.Type == "FV":
+        if self.Type == BINARY_FILE_TYPE_FV:
             FvTotalSize = 0
             FvTakenSize = 0
             FvFreeSize  = 0
@@ -1842,7 +1843,7 @@ class FdRegionReport(object):
         if (len(self.FvList) > 0):
             for FvItem in self.FvList:
                 Info = self.FvInfo[FvItem]
-                self._GenerateReport(File, Info[0], "FV", Info[1], Info[2], FvItem)
+                self._GenerateReport(File, Info[0], TAB_FV_DIRECTORY, Info[1], Info[2], FvItem)
         else:
             self._GenerateReport(File, "FD Region", self.Type, self.BaseAddress, self.Size)
 
@@ -1868,7 +1869,7 @@ class FdReport(object):
         self.BaseAddress = Fd.BaseAddress
         self.Size = Fd.Size
         self.FdRegionList = [FdRegionReport(FdRegion, Wa) for FdRegion in Fd.RegionList]
-        self.FvPath = os.path.join(Wa.BuildDir, "FV")
+        self.FvPath = os.path.join(Wa.BuildDir, TAB_FV_DIRECTORY)
         self.VpdFilePath = os.path.join(self.FvPath, "%s.map" % Wa.Platform.VpdToolGuid)
         self.VPDBaseAddress = 0
         self.VPDSize = 0
@@ -1971,7 +1972,7 @@ class PlatformReport(object):
             self.PcdReport = PcdReport(Wa)
 
         self.FdReportList = []
-        if "FLASH" in ReportType and Wa.FdfProfile and MaList == None:
+        if "FLASH" in ReportType and Wa.FdfProfile and MaList is None:
             for Fd in Wa.FdfProfile.FdDict:
                 self.FdReportList.append(FdReport(Wa.FdfProfile.FdDict[Fd], Wa))
 
@@ -1984,7 +1985,7 @@ class PlatformReport(object):
             self.DepexParser = DepexParser(Wa)
             
         self.ModuleReportList = []
-        if MaList != None:
+        if MaList is not None:
             self._IsModuleBuild = True
             for Ma in MaList:
                 self.ModuleReportList.append(ModuleReport(Ma, ReportType))
@@ -1994,13 +1995,13 @@ class PlatformReport(object):
                 ModuleAutoGenList = []
                 for ModuleKey in Pa.Platform.Modules:
                     ModuleAutoGenList.append(Pa.Platform.Modules[ModuleKey].M)
-                if GlobalData.gFdfParser != None:
+                if GlobalData.gFdfParser is not None:
                     if Pa.Arch in GlobalData.gFdfParser.Profile.InfDict:
                         INFList = GlobalData.gFdfParser.Profile.InfDict[Pa.Arch]
                         for InfName in INFList:
                             InfClass = PathClass(NormPath(InfName), Wa.WorkspaceDir, Pa.Arch)
                             Ma = ModuleAutoGen(Wa, InfClass, Pa.BuildTarget, Pa.ToolChain, Pa.Arch, Wa.MetaFile)
-                            if Ma == None:
+                            if Ma is None:
                                 continue
                             if Ma not in ModuleAutoGenList:
                                 ModuleAutoGenList.append(Ma)

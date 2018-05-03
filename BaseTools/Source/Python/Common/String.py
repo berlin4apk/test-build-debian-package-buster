@@ -1,7 +1,7 @@
 ## @file
 # This file is used to define common string related functions used in parsing process
 #
-# Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2018, Intel Corporation. All rights reserved.<BR>
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
 # which accompanies this distribution.  The full text of the license may be found at
@@ -110,7 +110,7 @@ def GetSplitList(String, SplitStr=DataType.TAB_VALUE_SPLIT, MaxSplit= -1):
 # @param Arch:  The Arch to be added or merged
 #
 def MergeArches(Dict, Key, Arch):
-    if Key in Dict.keys():
+    if Key in Dict:
         Dict[Key].append(Arch)
     else:
         Dict[Key] = Arch.split()
@@ -634,7 +634,7 @@ def PreCheck(FileName, FileContent, SupSectionTag):
 # @retval True The file type is correct
 #
 def CheckFileType(CheckFilename, ExtName, ContainerFilename, SectionName, Line, LineNo= -1):
-    if CheckFilename != '' and CheckFilename != None:
+    if CheckFilename != '' and CheckFilename is not None:
         (Root, Ext) = os.path.splitext(CheckFilename)
         if Ext.upper() != ExtName.upper():
             ContainerFile = open(ContainerFilename, 'r').read()
@@ -662,7 +662,7 @@ def CheckFileType(CheckFilename, ExtName, ContainerFilename, SectionName, Line, 
 #
 def CheckFileExist(WorkspaceDir, CheckFilename, ContainerFilename, SectionName, Line, LineNo= -1):
     CheckFile = ''
-    if CheckFilename != '' and CheckFilename != None:
+    if CheckFilename != '' and CheckFilename is not None:
         CheckFile = WorkspaceFile(WorkspaceDir, CheckFilename)
         if not os.path.isfile(CheckFile):
             ContainerFile = open(ContainerFilename, 'r').read()

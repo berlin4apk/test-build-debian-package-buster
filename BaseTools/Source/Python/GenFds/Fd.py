@@ -1,7 +1,7 @@
 ## @file
 # process FD generation
 #
-#  Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2007 - 2018, Intel Corporation. All rights reserved.<BR>
 #
 #  This program and the accompanying materials
 #  are licensed and made available under the terms and conditions of the BSD License
@@ -27,6 +27,7 @@ from Common import EdkLogger
 from Common.BuildToolError import *
 from Common.Misc import SaveFileOnChange
 from GenFds import GenFds
+from Common.DataType import BINARY_FILE_TYPE_FV
 
 ## generate FD
 #
@@ -46,7 +47,7 @@ class FD(FDClassObject):
     #   @retval string      Generated FD file name
     #
     def GenFd (self, Flag = False):
-        if self.FdUiName.upper() + 'fd' in GenFds.ImageBinDict.keys():
+        if self.FdUiName.upper() + 'fd' in GenFds.ImageBinDict:
             return GenFds.ImageBinDict[self.FdUiName.upper() + 'fd']
 
         #
@@ -158,7 +159,7 @@ class FD(FDClassObject):
         FvAddDict ={}
         FvList = []
         for RegionObj in self.RegionList:
-            if RegionObj.RegionType == 'FV':
+            if RegionObj.RegionType == BINARY_FILE_TYPE_FV:
                 if len(RegionObj.RegionDataList) == 1:
                     RegionData = RegionObj.RegionDataList[0]
                     FvList.append(RegionData.upper())
