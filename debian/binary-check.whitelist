@@ -1,3 +1,4 @@
+.gitmodules
 AppPkg/Applications/Python/Python-2.7.2/Demo/comparisons/patterns
 AppPkg/Applications/Python/Python-2.7.2/Demo/md5test/foo
 AppPkg/Applications/Python/Python-2.7.2/Demo/parser/FILES
@@ -45,6 +46,7 @@ BaseTools/BinWrappers/PosixLike/BPDG
 BaseTools/BinWrappers/PosixLike/BootSectImage
 BaseTools/BinWrappers/PosixLike/Brotli
 BaseTools/BinWrappers/PosixLike/BrotliCompress
+BaseTools/BinWrappers/PosixLike/DevicePath
 BaseTools/BinWrappers/PosixLike/Ecc
 BaseTools/BinWrappers/PosixLike/EfiLdrImage
 BaseTools/BinWrappers/PosixLike/EfiRom
@@ -75,6 +77,7 @@ BaseTools/BinWrappers/PosixLike/VolInfo
 BaseTools/BinWrappers/PosixLike/build
 BaseTools/BuildEnv
 BaseTools/Conf/XMLSchema/DistributionPackage.xsd
+BaseTools/Scripts/PackageDocumentTools/packagedocapp.pyw
 BaseTools/Source/C/Makefiles/ms.app
 BaseTools/Source/C/Makefiles/ms.common
 BaseTools/Source/C/Makefiles/ms.lib
@@ -91,6 +94,7 @@ EmulatorPkg/Unix/GdbRun
 EmulatorPkg/Unix/Host/X11IncludeHack
 EmulatorPkg/Unix/lldbinit
 IntelFspWrapperPkg/FspWrapperSecCore/Vtf0/Bin/ResetVec.ia32.raw
+StandaloneMmPkg
 StdLib/Efi/StdLib/etc/host.conf
 StdLib/Efi/StdLib/etc/hosts
 StdLib/Efi/StdLib/etc/networks
