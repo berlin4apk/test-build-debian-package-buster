@@ -105,7 +105,7 @@ def CheckEnvVariable():
 
     WorkspaceDir = os.path.normcase(os.path.normpath(os.environ["WORKSPACE"]))
     if not os.path.exists(WorkspaceDir):
-        EdkLogger.error("build", FILE_NOT_FOUND, "WORKSPACE doesn't exist", ExtraData="%s" % WorkspaceDir)
+        EdkLogger.error("build", FILE_NOT_FOUND, "WORKSPACE doesn't exist", ExtraData=WorkspaceDir)
     elif ' ' in WorkspaceDir:
         EdkLogger.error("build", FORMAT_NOT_SUPPORTED, "No space is allowed in WORKSPACE path",
                         ExtraData=WorkspaceDir)
@@ -117,7 +117,7 @@ def CheckEnvVariable():
     if mws.PACKAGES_PATH:
         for Path in mws.PACKAGES_PATH:
             if not os.path.exists(Path):
-                EdkLogger.error("build", FILE_NOT_FOUND, "One Path in PACKAGES_PATH doesn't exist", ExtraData="%s" % Path)
+                EdkLogger.error("build", FILE_NOT_FOUND, "One Path in PACKAGES_PATH doesn't exist", ExtraData=Path)
             elif ' ' in Path:
                 EdkLogger.error("build", FORMAT_NOT_SUPPORTED, "No space is allowed in PACKAGES_PATH", ExtraData=Path)
 
@@ -377,7 +377,8 @@ class BuildUnit:
     #   @param  Other       The other BuildUnit object compared to
     #
     def __eq__(self, Other):
-        return Other is not None and self.BuildObject == Other.BuildObject \
+        return Other and self.BuildObject == Other.BuildObject \
+                and Other.BuildObject \
                 and self.BuildObject.Arch == Other.BuildObject.Arch
 
     ## hash() method
@@ -544,7 +545,7 @@ class BuildTask:
             # while not BuildTask._ErrorFlag.isSet() and \
             while len(BuildTask._RunningQueue) > 0:
                 EdkLogger.verbose("Waiting for thread ending...(%d)" % len(BuildTask._RunningQueue))
-                EdkLogger.debug(EdkLogger.DEBUG_8, "Threads [%s]" % ", ".join([Th.getName() for Th in threading.enumerate()]))
+                EdkLogger.debug(EdkLogger.DEBUG_8, "Threads [%s]" % ", ".join(Th.getName() for Th in threading.enumerate()))
                 # avoid tense loop
                 time.sleep(0.1)
         except BaseException, X:
@@ -1542,7 +1543,7 @@ class Build():
                         GuidString = MatchGuid.group()
                         if GuidString.upper() in ModuleList:
                             Line = Line.replace(GuidString, ModuleList[GuidString.upper()].Name)
-                    MapBuffer.write('%s' % (Line))
+                    MapBuffer.write(Line)
                     #
                     # Add the debug image full path.
                     #

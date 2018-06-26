@@ -32,7 +32,7 @@ import Common.ToolDefClassObject as ToolDefClassObject
 from Common.DataType import *
 import Common.GlobalData as GlobalData
 from Common import EdkLogger
-from Common.String import *
+from Common.StringUtils import *
 from Common.Misc import DirCache, PathClass
 from Common.Misc import SaveFileOnChange
 from Common.Misc import ClearDuplicatedInf
@@ -428,7 +428,7 @@ def FindExtendTool(KeyStringList, CurrentArchList, NameGuid):
         if BuildOption:
             ToolList = [TAB_TOD_DEFINES_TARGET, TAB_TOD_DEFINES_TOOL_CHAIN_TAG, TAB_TOD_DEFINES_TARGET_ARCH]
             for Index in range(2, -1, -1):
-                for Key in dict(BuildOption):
+                for Key in list(BuildOption.keys()):
                     List = Key.split('_')
                     if List[Index] == '*':
                         for String in ToolDb[ToolList[Index]]:
@@ -761,7 +761,7 @@ class GenFds :
                                     length = F.tell()
                                     F.seek(4)
                                     TmpStr = unpack('%dh' % ((length - 4) / 2), F.read())
-                                    Name = ''.join([chr(c) for c in TmpStr[:-1]])
+                                    Name = ''.join(chr(c) for c in TmpStr[:-1])
                         else:
                             FileList = []
                             if 'fv.sec.txt' in MatchDict:

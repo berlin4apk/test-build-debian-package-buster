@@ -16,6 +16,7 @@
 #include <Guid/XenInfo.h>
 #include <Guid/RootBridgesConnectedEventGroup.h>
 #include <Protocol/FirmwareVolume2.h>
+#include <Library/Tcg2PhysicalPresenceLib.h>
 
 
 //
@@ -26,7 +27,6 @@ VOID          *mEfiDevPathNotifyReg;
 EFI_EVENT     mEfiDevPathEvent;
 VOID          *mEmuVariableEventReg;
 EFI_EVENT     mEmuVariableEvent;
-BOOLEAN       mDetectVgaOnly;
 UINT16        mHostBridgeDevId;
 
 //
@@ -320,6 +320,15 @@ ConnectRootBridge (
   );
 
 STATIC
+EFI_STATUS
+EFIAPI
+ConnectVirtioPciRng (
+  IN EFI_HANDLE Handle,
+  IN VOID       *Instance,
+  IN VOID       *Context
+  );
+
+STATIC
 VOID
 SaveS3BootScript (
   VOID
@@ -400,6 +409,13 @@ PlatformBootManagerBeforeConsole (
   ASSERT_RETURN_ERROR (PcdStatus);
 
   PlatformRegisterOptionsAndKeys ();
+
+  //
+  // Install both VIRTIO_DEVICE_PROTOCOL and (dependent) EFI_RNG_PROTOCOL
+  // instances on Virtio PCI RNG devices.
+  //
+  VisitAllInstancesOfProtocol (&gEfiPciIoProtocolGuid, ConnectVirtioPciRng,
+    NULL);
 }
 
 
@@ -424,6 +440,95 @@ ConnectRootBridge (
                                     //   children
                   FALSE             // Recursive
                   );
+  return Status;
+}
+
+
+STATIC
+EFI_STATUS
+EFIAPI
+ConnectVirtioPciRng (
+  IN EFI_HANDLE Handle,
+  IN VOID       *Instance,
+  IN VOID       *Context
+  )
+{
+  EFI_PCI_IO_PROTOCOL *PciIo;
+  EFI_STATUS          Status;
+  UINT16              VendorId;
+  UINT16              DeviceId;
+  UINT8               RevisionId;
+  BOOLEAN             Virtio10;
+  UINT16              SubsystemId;
+
+  PciIo = Instance;
+
+  //
+  // Read and check VendorId.
+  //
+  Status = PciIo->Pci.Read (PciIo, EfiPciIoWidthUint16, PCI_VENDOR_ID_OFFSET,
+                        1, &VendorId);
+  if (EFI_ERROR (Status)) {
+    goto Error;
+  }
+  if (VendorId != VIRTIO_VENDOR_ID) {
+    return EFI_SUCCESS;
+  }
+
+  //
+  // Read DeviceId and RevisionId.
+  //
+  Status = PciIo->Pci.Read (PciIo, EfiPciIoWidthUint16, PCI_DEVICE_ID_OFFSET,
+                        1, &DeviceId);
+  if (EFI_ERROR (Status)) {
+    goto Error;
+  }
+  Status = PciIo->Pci.Read (PciIo, EfiPciIoWidthUint8, PCI_REVISION_ID_OFFSET,
+                        1, &RevisionId);
+  if (EFI_ERROR (Status)) {
+    goto Error;
+  }
+
+  //
+  // From DeviceId and RevisionId, determine whether the device is a
+  // modern-only Virtio 1.0 device. In case of Virtio 1.0, DeviceId can
+  // immediately be restricted to VIRTIO_SUBSYSTEM_ENTROPY_SOURCE, and
+  // SubsystemId will only play a sanity-check role. Otherwise, DeviceId can
+  // only be sanity-checked, and SubsystemId will decide.
+  //
+  if (DeviceId == 0x1040 + VIRTIO_SUBSYSTEM_ENTROPY_SOURCE &&
+      RevisionId >= 0x01) {
+    Virtio10 = TRUE;
+  } else if (DeviceId >= 0x1000 && DeviceId <= 0x103F && RevisionId == 0x00) {
+    Virtio10 = FALSE;
+  } else {
+    return EFI_SUCCESS;
+  }
+
+  //
+  // Read and check SubsystemId as dictated by Virtio10.
+  //
+  Status = PciIo->Pci.Read (PciIo, EfiPciIoWidthUint16,
+                        PCI_SUBSYSTEM_ID_OFFSET, 1, &SubsystemId);
+  if (EFI_ERROR (Status)) {
+    goto Error;
+  }
+  if ((Virtio10 && SubsystemId >= 0x40) ||
+      (!Virtio10 && SubsystemId == VIRTIO_SUBSYSTEM_ENTROPY_SOURCE)) {
+    Status = gBS->ConnectController (
+                    Handle, // ControllerHandle
+                    NULL,   // DriverImageHandle -- connect all drivers
+                    NULL,   // RemainingDevicePath -- produce all child handles
+                    FALSE   // Recursive -- don't follow child handles
+                    );
+    if (EFI_ERROR (Status)) {
+      goto Error;
+    }
+  }
+  return EFI_SUCCESS;
+
+Error:
+  DEBUG ((DEBUG_ERROR, "%a: %r\n", __FUNCTION__, Status));
   return Status;
 }
 
@@ -830,35 +935,33 @@ DetectAndPreparePlatformPciDevicePath (
     );
   ASSERT_EFI_ERROR (Status);
 
-  if (!mDetectVgaOnly) {
+  //
+  // Here we decide whether it is LPC Bridge
+  //
+  if ((IS_PCI_LPC (Pci)) ||
+      ((IS_PCI_ISA_PDECODE (Pci)) &&
+       (Pci->Hdr.VendorId == 0x8086) &&
+       (Pci->Hdr.DeviceId == 0x7000)
+      )
+     ) {
     //
-    // Here we decide whether it is LPC Bridge
+    // Add IsaKeyboard to ConIn,
+    // add IsaSerial to ConOut, ConIn, ErrOut
     //
-    if ((IS_PCI_LPC (Pci)) ||
-        ((IS_PCI_ISA_PDECODE (Pci)) &&
-         (Pci->Hdr.VendorId == 0x8086) &&
-         (Pci->Hdr.DeviceId == 0x7000)
-        )
-       ) {
-      //
-      // Add IsaKeyboard to ConIn,
-      // add IsaSerial to ConOut, ConIn, ErrOut
-      //
-      DEBUG ((EFI_D_INFO, "Found LPC Bridge device\n"));
-      PrepareLpcBridgeDevicePath (Handle);
-      return EFI_SUCCESS;
-    }
+    DEBUG ((EFI_D_INFO, "Found LPC Bridge device\n"));
+    PrepareLpcBridgeDevicePath (Handle);
+    return EFI_SUCCESS;
+  }
+  //
+  // Here we decide which Serial device to enable in PCI bus
+  //
+  if (IS_PCI_16550SERIAL (Pci)) {
     //
-    // Here we decide which Serial device to enable in PCI bus
+    // Add them to ConOut, ConIn, ErrOut.
     //
-    if (IS_PCI_16550SERIAL (Pci)) {
-      //
-      // Add them to ConOut, ConIn, ErrOut.
-      //
-      DEBUG ((EFI_D_INFO, "Found PCI 16550 SERIAL device\n"));
-      PreparePciSerialDevicePath (Handle);
-      return EFI_SUCCESS;
-    }
+    DEBUG ((EFI_D_INFO, "Found PCI 16550 SERIAL device\n"));
+    PreparePciSerialDevicePath (Handle);
+    return EFI_SUCCESS;
   }
 
   //
@@ -878,26 +981,6 @@ DetectAndPreparePlatformPciDevicePath (
 
 
 /**
-  Do platform specific PCI Device check and add them to ConOut, ConIn, ErrOut
-
-  @param[in]  DetectVgaOnly - Only detect VGA device if it's TRUE.
-
-  @retval EFI_SUCCESS - PCI Device check and Console variable update
-                        successfully.
-  @retval EFI_STATUS - PCI Device check or Console variable update fail.
-
-**/
-EFI_STATUS
-DetectAndPreparePlatformPciDevicePaths (
-  BOOLEAN DetectVgaOnly
-  )
-{
-  mDetectVgaOnly = DetectVgaOnly;
-  return VisitAllPciInstances (DetectAndPreparePlatformPciDevicePath);
-}
-
-
-/**
   Connect the predefined platform default console device.
 
   Always try to find and enable PCI display devices.
@@ -910,50 +993,34 @@ PlatformInitializeConsole (
   )
 {
   UINTN                              Index;
-  EFI_DEVICE_PATH_PROTOCOL           *VarConout;
-  EFI_DEVICE_PATH_PROTOCOL           *VarConin;
 
   //
-  // Connect RootBridge
+  // Do platform specific PCI Device check and add them to ConOut, ConIn,
+  // ErrOut
   //
-  GetEfiGlobalVariable2 (EFI_CON_OUT_VARIABLE_NAME, (VOID **) &VarConout,
-    NULL);
-  GetEfiGlobalVariable2 (EFI_CON_IN_VARIABLE_NAME, (VOID **) &VarConin, NULL);
+  VisitAllPciInstances (DetectAndPreparePlatformPciDevicePath);
 
-  if (VarConout == NULL || VarConin == NULL) {
+  //
+  // Have chance to connect the platform default console,
+  // the platform default console is the minimum device group
+  // the platform should support
+  //
+  for (Index = 0; PlatformConsole[Index].DevicePath != NULL; ++Index) {
     //
-    // Do platform specific PCI Device check and add them to ConOut, ConIn,
-    // ErrOut
+    // Update the console variable with the connect type
     //
-    DetectAndPreparePlatformPciDevicePaths (FALSE);
-
-    //
-    // Have chance to connect the platform default console,
-    // the platform default console is the minimum device group
-    // the platform should support
-    //
-    for (Index = 0; PlatformConsole[Index].DevicePath != NULL; ++Index) {
-      //
-      // Update the console variable with the connect type
-      //
-      if ((PlatformConsole[Index].ConnectType & CONSOLE_IN) == CONSOLE_IN) {
-        EfiBootManagerUpdateConsoleVariable (ConIn,
-          PlatformConsole[Index].DevicePath, NULL);
-      }
-      if ((PlatformConsole[Index].ConnectType & CONSOLE_OUT) == CONSOLE_OUT) {
-        EfiBootManagerUpdateConsoleVariable (ConOut,
-          PlatformConsole[Index].DevicePath, NULL);
-      }
-      if ((PlatformConsole[Index].ConnectType & STD_ERROR) == STD_ERROR) {
-        EfiBootManagerUpdateConsoleVariable (ErrOut,
-          PlatformConsole[Index].DevicePath, NULL);
-      }
+    if ((PlatformConsole[Index].ConnectType & CONSOLE_IN) == CONSOLE_IN) {
+      EfiBootManagerUpdateConsoleVariable (ConIn,
+        PlatformConsole[Index].DevicePath, NULL);
     }
-  } else {
-    //
-    // Only detect VGA device and add them to ConOut
-    //
-    DetectAndPreparePlatformPciDevicePaths (TRUE);
+    if ((PlatformConsole[Index].ConnectType & CONSOLE_OUT) == CONSOLE_OUT) {
+      EfiBootManagerUpdateConsoleVariable (ConOut,
+        PlatformConsole[Index].DevicePath, NULL);
+    }
+    if ((PlatformConsole[Index].ConnectType & STD_ERROR) == STD_ERROR) {
+      EfiBootManagerUpdateConsoleVariable (ErrOut,
+        PlatformConsole[Index].DevicePath, NULL);
+    }
   }
 }
 
@@ -1448,6 +1515,11 @@ PlatformBootManagerAfterConsole (
   // Set PCI Interrupt Line registers and ACPI SCI_EN
   //
   PciAcpiInitialization ();
+
+  //
+  // Process TPM PPI request
+  //
+  Tcg2PhysicalPresenceLibProcessRequest (NULL);
 
   //
   // Process QEMU's -kernel command line option

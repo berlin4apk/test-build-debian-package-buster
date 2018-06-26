@@ -587,10 +587,10 @@ LookupUnicodeString2 (
 EFI_STATUS
 EFIAPI
 AddUnicodeString (
-  IN CONST CHAR8               *Language,
-  IN CONST CHAR8               *SupportedLanguages,
-  IN EFI_UNICODE_STRING_TABLE  **UnicodeStringTable,
-  IN CONST CHAR16              *UnicodeString
+  IN     CONST CHAR8               *Language,
+  IN     CONST CHAR8               *SupportedLanguages,
+  IN OUT EFI_UNICODE_STRING_TABLE  **UnicodeStringTable,
+  IN     CONST CHAR16              *UnicodeString
   );
 
 /**
@@ -638,11 +638,11 @@ AddUnicodeString (
 EFI_STATUS
 EFIAPI
 AddUnicodeString2 (
-  IN CONST CHAR8               *Language,
-  IN CONST CHAR8               *SupportedLanguages,
-  IN EFI_UNICODE_STRING_TABLE  **UnicodeStringTable,
-  IN CONST CHAR16              *UnicodeString,
-  IN BOOLEAN                   Iso639Language
+  IN     CONST CHAR8               *Language,
+  IN     CONST CHAR8               *SupportedLanguages,
+  IN OUT EFI_UNICODE_STRING_TABLE  **UnicodeStringTable,
+  IN     CONST CHAR16              *UnicodeString,
+  IN     BOOLEAN                   Iso639Language
   );
 
 /**
@@ -789,8 +789,8 @@ GetEfiGlobalVariable2 (
   @param[in]  SupportedLanguages  A pointer to a Null-terminated ASCII string that
                                   contains a set of language codes in the format 
                                   specified by Iso639Language.
-  @param[in]  Iso639Language      If TRUE, then all language codes are assumed to be
-                                  in ISO 639-2 format.  If FALSE, then all language
+  @param[in]  Iso639Language      If not zero, then all language codes are assumed to be
+                                  in ISO 639-2 format.  If zero, then all language
                                   codes are assumed to be in RFC 4646 language format
   @param[in]  ...                 A variable argument list that contains pointers to 
                                   Null-terminated ASCII strings that contain one or more
@@ -818,7 +818,7 @@ CHAR8 *
 EFIAPI
 GetBestLanguage (
   IN CONST CHAR8  *SupportedLanguages, 
-  IN BOOLEAN      Iso639Language,
+  IN UINTN        Iso639Language,
   ...
   );
 

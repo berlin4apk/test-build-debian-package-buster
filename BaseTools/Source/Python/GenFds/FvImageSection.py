@@ -1,7 +1,7 @@
 ## @file
 # process FV image section generation
 #
-#  Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2007 - 2018, Intel Corporation. All rights reserved.<BR>
 #
 #  This program and the accompanying materials
 #  are licensed and made available under the terms and conditions of the BSD License
@@ -83,7 +83,7 @@ class FvImageSection(FvImageSectionClassObject):
             if MaxFvAlignment >= 0x400:
                 if MaxFvAlignment >= 0x100000:
                     #The max alignment supported by FFS is 16M.
-                    if MaxFvAlignment >=1000000:
+                    if MaxFvAlignment >= 0x1000000:
                         self.Alignment = "16M"
                     else:
                         self.Alignment = str(MaxFvAlignment / 0x100000) + "M"
@@ -133,6 +133,12 @@ class FvImageSection(FvImageSectionClassObject):
                             # FvAlignmentValue is less than 1K
                             self.Alignment = str (FvAlignmentValue)
                         FvFileObj.close()
+                    else:
+                        if len (mws.getPkgPath()) == 0:
+                            EdkLogger.error("GenFds", FILE_NOT_FOUND, "%s is not found in WORKSPACE: %s" % self.FvFileName, GenFdsGlobalVariable.WorkSpaceDir)
+                        else:
+                            EdkLogger.error("GenFds", FILE_NOT_FOUND, "%s is not found in packages path:\n\t%s" % (self.FvFileName, '\n\t'.join(mws.getPkgPath())))
+
                 else:
                     EdkLogger.error("GenFds", GENFDS_ERROR, "FvImageSection Failed! %s NOT found in FDF" % self.FvName)
 

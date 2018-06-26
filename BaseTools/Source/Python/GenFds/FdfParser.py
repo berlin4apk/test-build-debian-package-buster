@@ -48,12 +48,12 @@ from GenFdsGlobalVariable import GenFdsGlobalVariable
 from Common.BuildToolError import *
 from Common import EdkLogger
 from Common.Misc import PathClass
-from Common.String import NormPath
+from Common.StringUtils import NormPath
 import Common.GlobalData as GlobalData
 from Common.Expression import *
 from Common import GlobalData
 from Common.DataType import *
-from Common.String import ReplaceMacro
+from Common.StringUtils import ReplaceMacro
 import uuid
 from Common.Misc import tdict
 from Common.MultipleWorkspace import MultipleWorkspace as mws
@@ -914,7 +914,6 @@ class FdfParser:
         return MacroDict
 
     def __EvaluateConditional(self, Expression, Line, Op = None, Value = None):
-        FileLineTuple = GetRealFileLine(self.FileName, Line)
         MacroPcdDict = self.__CollectMacroPcd()
         if Op == 'eval':
             try:
@@ -939,12 +938,12 @@ class FdfParser:
                                       " it must be defined in a [PcdsFixedAtBuild] or [PcdsFeatureFlag] section"
                                       " of the DSC file (%s), and it is currently defined in this section:"
                                       " %s, line #: %d." % (Excpt.Pcd, GlobalData.gPlatformOtherPcds['DSCFILE'], Info[0], Info[1]),
-                                      *FileLineTuple)
+                                      self.FileName, Line)
                     else:
                         raise Warning("PCD (%s) is not defined in DSC file (%s)" % (Excpt.Pcd, GlobalData.gPlatformOtherPcds['DSCFILE']),
-                                      *FileLineTuple)
+                                      self.FileName, Line)
                 else:
-                    raise Warning(str(Excpt), *FileLineTuple)
+                    raise Warning(str(Excpt), self.FileName, Line)
         else:
             if Expression.startswith('$(') and Expression[-1] == ')':
                 Expression = Expression[2:-1]            
@@ -1134,21 +1133,20 @@ class FdfParser:
 
     @staticmethod
     def __Verify(Name, Value, Scope):
-        if Scope in [TAB_UINT64, TAB_UINT8]:
-            ValueNumber = 0
-            try:
-                ValueNumber = int (Value, 0)
-            except:
-                EdkLogger.error("FdfParser", FORMAT_INVALID, "The value is not valid dec or hex number for %s." % Name)
-            if ValueNumber < 0:
-                EdkLogger.error("FdfParser", FORMAT_INVALID, "The value can't be set to negative value for %s." % Name)
-            if Scope == TAB_UINT64:
-                if ValueNumber >= 0x10000000000000000:
-                    EdkLogger.error("FdfParser", FORMAT_INVALID, "Too large value for %s." % Name)
-            if Scope == TAB_UINT8:
-                if ValueNumber >= 0x100:
-                    EdkLogger.error("FdfParser", FORMAT_INVALID, "Too large value for %s." % Name)
-            return True
+        # value verification only applies to numeric values.
+        if Scope not in TAB_PCD_NUMERIC_TYPES:
+            return
+
+        ValueNumber = 0
+        try:
+            ValueNumber = int(Value, 0)
+        except:
+            EdkLogger.error("FdfParser", FORMAT_INVALID, "The value is not valid dec or hex number for %s." % Name)
+        if ValueNumber < 0:
+            EdkLogger.error("FdfParser", FORMAT_INVALID, "The value can't be set to negative value for %s." % Name)
+        if ValueNumber > MAX_VAL_TYPE[Scope]:
+            EdkLogger.error("FdfParser", FORMAT_INVALID, "Too large value for %s." % Name)
+        return True
 
     ## __UndoToken() method
     #
@@ -1363,6 +1361,7 @@ class FdfParser:
 
         try:
             self.Preprocess()
+            self.__GetError()
             #
             # Keep processing sections of the FDF until no new sections or a syntax error is found
             #
@@ -1442,6 +1441,17 @@ class FdfParser:
             Value = self.__Token
 
         return False
+
+    ##__GetError() method
+    def __GetError(self):
+        #save the Current information
+        CurrentLine = self.CurrentLineNumber
+        CurrentOffset = self.CurrentOffsetWithinLine
+        while self.__GetNextToken():
+            if self.__Token == TAB_ERROR:
+                EdkLogger.error('FdfParser', ERROR_STATEMENT, self.__CurrentLine().replace(TAB_ERROR, '', 1), File=self.FileName, Line=self.CurrentLineNumber)
+        self.CurrentLineNumber = CurrentLine
+        self.CurrentOffsetWithinLine = CurrentOffset
 
     ## __GetFd() method
     #
@@ -2330,7 +2340,7 @@ class FdfParser:
         if not self.__GetNextHexNumber() and not self.__GetNextDecimalNumber():
             raise Warning("expected Hex FV extension entry type value At Line ", self.FileName, self.CurrentLineNumber)
 
-        FvObj.FvExtEntryTypeValue += [self.__Token]
+        FvObj.FvExtEntryTypeValue.append(self.__Token)
 
         if not self.__IsToken( "{"):
             raise Warning("expected '{'", self.FileName, self.CurrentLineNumber)
@@ -2338,7 +2348,7 @@ class FdfParser:
         if not self.__IsKeyword ("FILE") and not self.__IsKeyword ("DATA"):
             raise Warning("expected 'FILE' or 'DATA'", self.FileName, self.CurrentLineNumber)
 
-        FvObj.FvExtEntryType += [self.__Token]
+        FvObj.FvExtEntryType.append(self.__Token)
 
         if self.__Token == 'DATA':
 
@@ -2372,7 +2382,7 @@ class FdfParser:
                 raise Warning("expected '}'", self.FileName, self.CurrentLineNumber)
 
             DataString = DataString.rstrip(",")
-            FvObj.FvExtEntryData += [DataString]
+            FvObj.FvExtEntryData.append(DataString)
 
         if self.__Token == 'FILE':
         
@@ -2382,7 +2392,7 @@ class FdfParser:
             if not self.__GetNextToken():
                 raise Warning("expected FV Extension Entry file path At Line ", self.FileName, self.CurrentLineNumber)
                 
-            FvObj.FvExtEntryData += [self.__Token]
+            FvObj.FvExtEntryData.append(self.__Token)
 
             if not self.__IsToken( "}"):
                 raise Warning("expected '}'", self.FileName, self.CurrentLineNumber)

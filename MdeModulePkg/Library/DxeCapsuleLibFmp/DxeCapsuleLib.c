@@ -45,6 +45,7 @@
 #include <Protocol/GraphicsOutput.h>
 #include <Protocol/EsrtManagement.h>
 #include <Protocol/FirmwareManagement.h>
+#include <Protocol/FirmwareManagementProgress.h>
 #include <Protocol/DevicePath.h>
 
 EFI_SYSTEM_RESOURCE_TABLE *mEsrtTable                  = NULL;
@@ -52,6 +53,8 @@ BOOLEAN                   mIsVirtualAddrConverted      = FALSE;
 
 BOOLEAN                   mDxeCapsuleLibEndOfDxe       = FALSE;
 EFI_EVENT                 mDxeCapsuleLibEndOfDxeEvent  = NULL;
+
+EDKII_FIRMWARE_MANAGEMENT_PROGRESS_PROTOCOL  *mFmpProgress = NULL;
 
 /**
   Initialize capsule related variables.
@@ -101,18 +104,17 @@ RecordFmpCapsuleStatusVariable (
   Function indicate the current completion progress of the firmware
   update. Platform may override with own specific progress function.
 
-  @param[in]  Completion    A value between 1 and 100 indicating the current completion progress of the firmware update
+  @param[in]  Completion  A value between 1 and 100 indicating the current
+                          completion progress of the firmware update
 
-  @retval EFI_SUCESS    Input capsule is a correct FMP capsule.
+  @retval EFI_SUCESS             The capsule update progress was updated.
+  @retval EFI_INVALID_PARAMETER  Completion is greater than 100%.
 **/
 EFI_STATUS
 EFIAPI
-Update_Image_Progress (
+UpdateImageProgress (
   IN UINTN  Completion
-  )
-{
-  return EFI_SUCCESS;
-}
+  );
 
 /**
   Return if this CapsuleGuid is a FMP capsule GUID or not.
@@ -839,6 +841,7 @@ SetFmpImageData (
   UINT8                                         *Image;
   VOID                                          *VendorCode;
   CHAR16                                        *AbortReason;
+  EFI_FIRMWARE_MANAGEMENT_UPDATE_IMAGE_PROGRESS ProgressCallback;
 
   Status = gBS->HandleProtocol(
                   Handle,
@@ -847,6 +850,19 @@ SetFmpImageData (
                   );
   if (EFI_ERROR(Status)) {
     return Status;
+  }
+
+  //
+  // Lookup Firmware Management Progress Protocol before SetImage() is called
+  // This is an optional protocol that may not be present on Handle.
+  //
+  Status = gBS->HandleProtocol (
+                  Handle,
+                  &gEdkiiFirmwareManagementProgressProtocolGuid,
+                  (VOID **)&mFmpProgress
+                  );
+  if (EFI_ERROR (Status)) {
+    mFmpProgress = NULL;
   }
 
   if (ImageHeader->Version >= EFI_FIRMWARE_MANAGEMENT_CAPSULE_IMAGE_HEADER_INIT_VERSION) {
@@ -873,20 +889,42 @@ SetFmpImageData (
     DEBUG((DEBUG_INFO, "(UpdateHardwareInstance - 0x%x)", ImageHeader->UpdateHardwareInstance));
   }
   DEBUG((DEBUG_INFO, "\n"));
+
+  //
+  // Before calling SetImage(), reset the progress bar to 0%
+  //
+  ProgressCallback = UpdateImageProgress;
+  Status = UpdateImageProgress (0);
+  if (EFI_ERROR (Status)) {
+    ProgressCallback = NULL;
+  }
+
   Status = Fmp->SetImage(
                   Fmp,
                   ImageHeader->UpdateImageIndex,          // ImageIndex
                   Image,                                  // Image
                   ImageHeader->UpdateImageSize,           // ImageSize
                   VendorCode,                             // VendorCode
-                  Update_Image_Progress,                  // Progress
+                  ProgressCallback,                       // Progress
                   &AbortReason                            // AbortReason
                   );
+  //
+  // Set the progress bar to 100% after returning from SetImage()
+  //
+  if (ProgressCallback != NULL) {
+    UpdateImageProgress (100);
+  }
+
   DEBUG((DEBUG_INFO, "Fmp->SetImage - %r\n", Status));
   if (AbortReason != NULL) {
     DEBUG ((DEBUG_ERROR, "%s\n", AbortReason));
     FreePool(AbortReason);
   }
+
+  //
+  // Clear mFmpProgress after SetImage() returns
+  //
+  mFmpProgress = NULL;
 
   return Status;
 }

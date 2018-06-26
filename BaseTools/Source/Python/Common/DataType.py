@@ -130,7 +130,6 @@ BINARY_FILE_TYPE_UI = 'UI'
 BINARY_FILE_TYPE_BIN = 'BIN'
 BINARY_FILE_TYPE_FV = 'FV'
 
-PLATFORM_COMPONENT_TYPE_LIBRARY = EDK_COMPONENT_TYPE_LIBRARY
 PLATFORM_COMPONENT_TYPE_LIBRARY_CLASS = 'LIBRARY_CLASS'
 PLATFORM_COMPONENT_TYPE_MODULE = 'MODULE'
 
@@ -292,7 +291,7 @@ TAB_PCDS_PATCHABLE_LOAD_FIX_ADDRESS_SET =  {TAB_PCDS_PATCHABLE_LOAD_FIX_ADDRESS_
 ## The mapping dictionary from datum type to its maximum number.
 MAX_VAL_TYPE = {"BOOLEAN":0x01, TAB_UINT8:0xFF, TAB_UINT16:0xFFFF, TAB_UINT32:0xFFFFFFFF, TAB_UINT64:0xFFFFFFFFFFFFFFFF}
 ## The mapping dictionary from datum type to size string.
-MAX_SIZE_TYPE = {"BOOLEAN":"1", TAB_UINT8:"1", TAB_UINT16:"2", TAB_UINT32:"4", TAB_UINT64:"8"}
+MAX_SIZE_TYPE = {"BOOLEAN":1, TAB_UINT8:1, TAB_UINT16:2, TAB_UINT32:4, TAB_UINT64:8}
 
 TAB_DEPEX = 'Depex'
 TAB_DEPEX_COMMON = TAB_DEPEX + TAB_SPLIT + TAB_ARCH_COMMON
@@ -472,7 +471,7 @@ TAB_ELSE = '!else'
 TAB_IF_DEF = '!ifdef'
 TAB_IF_N_DEF = '!ifndef'
 TAB_IF_EXIST = '!if exist'
-TAB_ERROR = '!ERROR'
+TAB_ERROR = '!error'
 
 #
 # Unknown section
@@ -486,6 +485,18 @@ DATABASE_PATH = ":memory:" #"BuildDatabase.db"
 
 # used by ECC
 MODIFIER_SET = {'IN', 'OUT', 'OPTIONAL', 'UNALIGNED', 'EFI_RUNTIMESERVICE', 'EFI_BOOTSERVICE', 'EFIAPI'}
+
+# Dependency Opcodes
+DEPEX_OPCODE_BEFORE = "BEFORE"
+DEPEX_OPCODE_AFTER = "AFTER"
+DEPEX_OPCODE_PUSH = "PUSH"
+DEPEX_OPCODE_AND = "AND"
+DEPEX_OPCODE_OR = "OR"
+DEPEX_OPCODE_NOT = "NOT"
+DEPEX_OPCODE_END = "END"
+DEPEX_OPCODE_SOR = "SOR"
+DEPEX_OPCODE_TRUE = "TRUE"
+DEPEX_OPCODE_FALSE = "FALSE"
 
 # Dependency Expression
 DEPEX_SUPPORTED_OPCODE_SET = {"BEFORE", "AFTER", "PUSH", "AND", "OR", "NOT", "END", "SOR", "TRUE", "FALSE", '(', ')'}
@@ -532,3 +543,14 @@ SECTIONS_HAVE_ITEM_AFTER_ARCH_SET = {TAB_LIBRARY_CLASSES.upper(), TAB_DEPEX.uppe
                                  PCDS_DYNAMICEX_HII.upper(),
                                  TAB_BUILD_OPTIONS.upper(),
                                  TAB_INCLUDES.upper()}
+
+#
+# pack codes as used in PcdDb and elsewhere
+#
+PACK_PATTERN_GUID = '=LHHBBBBBBBB'
+PACK_CODE_BY_SIZE = {8:'=Q',
+                     4:'=L',
+                     2:'=H',
+                     1:'=B',
+                     0:'=B',
+                    16:""}

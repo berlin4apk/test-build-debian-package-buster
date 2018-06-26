@@ -22,56 +22,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 #include "Tcg2Smm.h"
 
-typedef enum {
-  PtpInterfaceTis,
-  PtpInterfaceFifo,
-  PtpInterfaceCrb,
-  PtpInterfaceMax,
-} PTP_INTERFACE_TYPE;
-
-/**
-  Return PTP interface type.
-
-  @param[in] Register                Pointer to PTP register.
-
-  @return PTP interface type.
-**/
-PTP_INTERFACE_TYPE
-GetPtpInterface (
-  IN VOID *Register
-  )
-{
-  PTP_CRB_INTERFACE_IDENTIFIER  InterfaceId;
-  PTP_FIFO_INTERFACE_CAPABILITY InterfaceCapability;
-
-  //
-  // Check interface id
-  //
-  InterfaceId.Uint32 = MmioRead32 ((UINTN)&((PTP_CRB_REGISTERS *)Register)->InterfaceId);
-  InterfaceCapability.Uint32 = MmioRead32 ((UINTN)&((PTP_FIFO_REGISTERS *)Register)->InterfaceCapability);
-
-  if (InterfaceId.Bits.InterfaceType == PTP_INTERFACE_IDENTIFIER_INTERFACE_TYPE_TIS) {
-    return PtpInterfaceTis;
-  }
-
-  if ((InterfaceId.Bits.InterfaceType == PTP_INTERFACE_IDENTIFIER_INTERFACE_TYPE_CRB) &&
-      (InterfaceId.Bits.InterfaceVersion == PTP_INTERFACE_IDENTIFIER_INTERFACE_VERSION_CRB) &&
-      (InterfaceId.Bits.CapCRB != 0)) {
-    return PtpInterfaceCrb;
-  }
-
-  if ((InterfaceId.Bits.InterfaceType == PTP_INTERFACE_IDENTIFIER_INTERFACE_TYPE_FIFO) &&
-      (InterfaceId.Bits.InterfaceVersion == PTP_INTERFACE_IDENTIFIER_INTERFACE_VERSION_FIFO) &&
-      (InterfaceId.Bits.CapFIFO != 0) &&
-      (InterfaceCapability.Bits.InterfaceVersion == INTERFACE_CAPABILITY_INTERFACE_VERSION_PTP)) {
-    return PtpInterfaceFifo;
-  }
-
-  //
-  // No Ptp interface available
-  //
-  return PtpInterfaceMax;
-}
 
 EFI_TPM2_ACPI_TABLE  mTpm2AcpiTemplate = {
   {
@@ -310,15 +260,17 @@ UpdatePPVersion (
   @param[in, out] Table            The TPM item in ACPI table.
   @param[in]      IrqBuffer        Input new IRQ buffer.
   @param[in]      IrqBuffserSize   Input new IRQ buffer size.
+  @param[out]     IsShortFormPkgLength   If _PRS returns Short length Package(ACPI spec 20.2.4).
 
   @return                          patch status.
 
 **/
 EFI_STATUS
 UpdatePossibleResource (
-  EFI_ACPI_DESCRIPTION_HEADER    *Table,
-  UINT32                         *IrqBuffer,
-  UINT32                         IrqBuffserSize
+  IN OUT  EFI_ACPI_DESCRIPTION_HEADER    *Table,
+  IN      UINT32                         *IrqBuffer,
+  IN      UINT32                         IrqBuffserSize,
+  OUT     BOOLEAN                        *IsShortFormPkgLength
   )
 {
   UINT8       *DataPtr;
@@ -431,7 +383,7 @@ UpdatePossibleResource (
       //
       // Notify _PRS to report short formed ResourceTemplate
       //
-      mTcgNvs->IsShortFormPkgLength = TRUE;
+      *IsShortFormPkgLength = TRUE;
 
       break;
     }
@@ -503,7 +455,7 @@ UpdatePossibleResource (
         //
         // Notify _PRS to report long formed ResourceTemplate
         //
-        mTcgNvs->IsShortFormPkgLength = FALSE;
+        *IsShortFormPkgLength = FALSE;
         break;
       }
     }
@@ -672,6 +624,9 @@ PublishAcpiTable (
   UINTN                          TableSize;
   UINT32                         *PossibleIrqNumBuf;
   UINT32                         PossibleIrqNumBufSize;
+  BOOLEAN                        IsShortFormPkgLength;
+
+  IsShortFormPkgLength = FALSE;
 
   Status = GetSectionFromFv (
              &gEfiCallerIdGuid,
@@ -710,7 +665,7 @@ PublishAcpiTable (
     PossibleIrqNumBufSize = (UINT32)PcdGetSize(PcdTpm2PossibleIrqNumBuf);
 
     if (PossibleIrqNumBufSize <= MAX_PRS_INT_BUF_SIZE && (PossibleIrqNumBufSize % sizeof(UINT32)) == 0) {
-      Status = UpdatePossibleResource(Table, PossibleIrqNumBuf, PossibleIrqNumBufSize);
+      Status = UpdatePossibleResource(Table, PossibleIrqNumBuf, PossibleIrqNumBufSize, &IsShortFormPkgLength);
       DEBUG ((
         DEBUG_INFO,
         "UpdatePossibleResource status - %x. TPM2 service may not ready in OS.\n",
@@ -743,7 +698,7 @@ PublishAcpiTable (
   mTcgNvs = AssignOpRegion (Table, SIGNATURE_32 ('T', 'N', 'V', 'S'), (UINT16) sizeof (TCG_NVS));
   ASSERT (mTcgNvs != NULL);
   mTcgNvs->TpmIrqNum            = PcdGet32(PcdTpm2CurrentIrqNum);
-  mTcgNvs->IsShortFormPkgLength = FALSE;
+  mTcgNvs->IsShortFormPkgLength = IsShortFormPkgLength;
 
   //
   // Publish the TPM ACPI table. Table is re-checksumed.
@@ -780,7 +735,7 @@ PublishTpm2 (
   UINTN                          TableKey;
   UINT64                         OemTableId;
   EFI_TPM2_ACPI_CONTROL_AREA     *ControlArea;
-  PTP_INTERFACE_TYPE             InterfaceType;
+  TPM2_PTP_INTERFACE_TYPE        InterfaceType;
 
   mTpm2AcpiTemplate.Header.Revision = PcdGet8(PcdTpm2AcpiTableRev);
   DEBUG((DEBUG_INFO, "Tpm2 ACPI table revision is %d\n", mTpm2AcpiTemplate.Header.Revision));
@@ -807,9 +762,9 @@ PublishTpm2 (
     sizeof(mTpm2AcpiTemplate)
     );
 
-  InterfaceType = GetPtpInterface ((VOID *) (UINTN) PcdGet64 (PcdTpmBaseAddress));
+  InterfaceType = PcdGet8(PcdActiveTpmInterfaceType);
   switch (InterfaceType) {
-  case PtpInterfaceCrb:
+  case Tpm2PtpInterfaceCrb:
     mTpm2AcpiTemplate.StartMethod = EFI_TPM2_ACPI_TABLE_START_METHOD_COMMAND_RESPONSE_BUFFER_INTERFACE;
     mTpm2AcpiTemplate.AddressOfControlArea = PcdGet64 (PcdTpmBaseAddress) + 0x40;
     ControlArea = (EFI_TPM2_ACPI_CONTROL_AREA *)(UINTN)mTpm2AcpiTemplate.AddressOfControlArea;
@@ -818,8 +773,8 @@ PublishTpm2 (
     ControlArea->Command      = PcdGet64 (PcdTpmBaseAddress) + 0x80;
     ControlArea->Response     = PcdGet64 (PcdTpmBaseAddress) + 0x80;
     break;
-  case PtpInterfaceFifo:
-  case PtpInterfaceTis:
+  case Tpm2PtpInterfaceFifo:
+  case Tpm2PtpInterfaceTis:
     break;
   default:
     DEBUG((EFI_D_ERROR, "TPM2 InterfaceType get error! %d\n", InterfaceType));

@@ -59,17 +59,23 @@ ParseUpdateDataFile (
   @param[in]  ConfigData              Points to the component configuration structure.
   @param[out] LastAttemptVersion      The last attempt version, which will be recorded in ESRT and FMP EFI_FIRMWARE_IMAGE_DESCRIPTOR.
   @param[out] LastAttemptStatus       The last attempt status, which will be recorded in ESRT and FMP EFI_FIRMWARE_IMAGE_DESCRIPTOR.
+  @param[in]  Progress                A function used by the driver to report the progress of the firmware update.
+  @param[in]  StartPercentage         The start completion percentage value that may be used to report progress during the flash write operation.
+  @param[in]  EndPercentage           The end completion percentage value that may be used to report progress during the flash write operation.
 
   @retval EFI_SUCCESS             The System Firmware image is updated.
   @retval EFI_WRITE_PROTECTED     The flash device is read only.
 **/
 EFI_STATUS
 PerformUpdate (
-  IN VOID                         *SystemFirmwareImage,
-  IN UINTN                        SystemFirmwareImageSize,
-  IN UPDATE_CONFIG_DATA           *ConfigData,
-  OUT UINT32                      *LastAttemptVersion,
-  OUT UINT32                      *LastAttemptStatus
+  IN VOID                                           *SystemFirmwareImage,
+  IN UINTN                                          SystemFirmwareImageSize,
+  IN UPDATE_CONFIG_DATA                             *ConfigData,
+  OUT UINT32                                        *LastAttemptVersion,
+  OUT UINT32                                        *LastAttemptStatus,
+  IN EFI_FIRMWARE_MANAGEMENT_UPDATE_IMAGE_PROGRESS  Progress,
+  IN UINTN                                          StartPercentage,
+  IN UINTN                                          EndPercentage
   )
 {
   EFI_STATUS                   Status;
@@ -78,13 +84,22 @@ PerformUpdate (
   DEBUG((DEBUG_INFO, "  BaseAddress - 0x%lx,", ConfigData->BaseAddress));
   DEBUG((DEBUG_INFO, "  ImageOffset - 0x%x,", ConfigData->ImageOffset));
   DEBUG((DEBUG_INFO, "  Legnth - 0x%x\n", ConfigData->Length));
-  Status = PerformFlashWrite (
+  if (Progress != NULL) {
+    Progress (StartPercentage);
+  }
+  Status = PerformFlashWriteWithProgress (
              ConfigData->FirmwareType,
              ConfigData->BaseAddress,
              ConfigData->AddressType,
              (VOID *)((UINTN)SystemFirmwareImage + (UINTN)ConfigData->ImageOffset),
-             ConfigData->Length
+             ConfigData->Length,
+             Progress,
+             StartPercentage,
+             EndPercentage
              );
+  if (Progress != NULL) {
+    Progress (EndPercentage);
+  }
   if (!EFI_ERROR(Status)) {
     *LastAttemptStatus = LAST_ATTEMPT_STATUS_SUCCESS;
     if (ConfigData->FirmwareType == PlatformFirmwareTypeNvRam) {
@@ -105,18 +120,20 @@ PerformUpdate (
   @param[in]  ConfigImageSize         The length of the config file image in bytes.
   @param[out] LastAttemptVersion      The last attempt version, which will be recorded in ESRT and FMP EFI_FIRMWARE_IMAGE_DESCRIPTOR.
   @param[out] LastAttemptStatus       The last attempt status, which will be recorded in ESRT and FMP EFI_FIRMWARE_IMAGE_DESCRIPTOR.
+  @param[in]  Progress                A function used by the driver to report the progress of the firmware update.
 
   @retval EFI_SUCCESS             The System Firmware image is updated.
   @retval EFI_WRITE_PROTECTED     The flash device is read only.
 **/
 EFI_STATUS
 UpdateImage (
-  IN VOID                         *SystemFirmwareImage,
-  IN UINTN                        SystemFirmwareImageSize,
-  IN VOID                         *ConfigImage,
-  IN UINTN                        ConfigImageSize,
-  OUT UINT32                      *LastAttemptVersion,
-  OUT UINT32                      *LastAttemptStatus
+  IN VOID                                           *SystemFirmwareImage,
+  IN UINTN                                          SystemFirmwareImageSize,
+  IN VOID                                           *ConfigImage,
+  IN UINTN                                          ConfigImageSize,
+  OUT UINT32                                        *LastAttemptVersion,
+  OUT UINT32                                        *LastAttemptStatus,
+  IN EFI_FIRMWARE_MANAGEMENT_UPDATE_IMAGE_PROGRESS  Progress
   )
 {
   EFI_STATUS                            Status;
@@ -124,19 +141,34 @@ UpdateImage (
   UPDATE_CONFIG_DATA                    *UpdateConfigData;
   CONFIG_HEADER                         ConfigHeader;
   UINTN                                 Index;
+  UINTN                                 TotalSize;
+  UINTN                                 BytesWritten;
+  UINTN                                 StartPercentage;
+  UINTN                                 EndPercentage;
 
   if (ConfigImage == NULL) {
     DEBUG((DEBUG_INFO, "PlatformUpdate (NoConfig):"));
     DEBUG((DEBUG_INFO, "  BaseAddress - 0x%x,", 0));
     DEBUG((DEBUG_INFO, "  Length - 0x%x\n", SystemFirmwareImageSize));
     // ASSUME the whole System Firmware include NVRAM region.
-    Status = PerformFlashWrite (
+    StartPercentage = 0;
+    EndPercentage = 100;
+    if (Progress != NULL) {
+      Progress (StartPercentage);
+    }
+    Status = PerformFlashWriteWithProgress (
                PlatformFirmwareTypeNvRam,
                0,
                FlashAddressTypeRelativeAddress,
                SystemFirmwareImage,
-               SystemFirmwareImageSize
+               SystemFirmwareImageSize,
+               Progress,
+               StartPercentage,
+               EndPercentage
                );
+    if (Progress != NULL) {
+      Progress (EndPercentage);
+    }
     if (!EFI_ERROR(Status)) {
       *LastAttemptStatus = LAST_ATTEMPT_STATUS_SUCCESS;
       mNvRamUpdated = TRUE;
@@ -163,17 +195,30 @@ UpdateImage (
   DEBUG((DEBUG_INFO, "ConfigHeader.NumOfUpdates - 0x%x\n", ConfigHeader.NumOfUpdates));
   DEBUG((DEBUG_INFO, "PcdEdkiiSystemFirmwareFileGuid - %g\n", PcdGetPtr(PcdEdkiiSystemFirmwareFileGuid)));
 
+  TotalSize = 0;
+  for (Index = 0; Index < ConfigHeader.NumOfUpdates; Index++) {
+    if (CompareGuid(&ConfigData[Index].FileGuid, PcdGetPtr(PcdEdkiiSystemFirmwareFileGuid))) {
+      TotalSize = TotalSize + ConfigData[Index].Length;
+    }
+  }
+
+  BytesWritten = 0;
   Index = 0;
   UpdateConfigData = ConfigData;
   while (Index < ConfigHeader.NumOfUpdates) {
     if (CompareGuid(&UpdateConfigData->FileGuid, PcdGetPtr(PcdEdkiiSystemFirmwareFileGuid))) {
       DEBUG((DEBUG_INFO, "FileGuid - %g (processing)\n", &UpdateConfigData->FileGuid));
+      StartPercentage = (BytesWritten * 100) / TotalSize;
+      EndPercentage   = ((BytesWritten + UpdateConfigData->Length) * 100) / TotalSize;
       Status = PerformUpdate (
                  SystemFirmwareImage,
                  SystemFirmwareImageSize,
                  UpdateConfigData,
                  LastAttemptVersion,
-                 LastAttemptStatus
+                 LastAttemptStatus,
+                 Progress,
+                 StartPercentage,
+                 EndPercentage
                  );
       //
       // Shall updates be serialized so that if an update is not successfully completed,
@@ -185,6 +230,8 @@ UpdateImage (
     } else {
       DEBUG((DEBUG_INFO, "FileGuid - %g (ignored)\n", &UpdateConfigData->FileGuid));
     }
+
+    BytesWritten += UpdateConfigData->Length;
 
     Index++;
     UpdateConfigData++;
@@ -202,6 +249,7 @@ UpdateImage (
   @param[in]  ImageSize          The size of the EDKII system FMP capsule image in bytes.
   @param[out] LastAttemptVersion The last attempt version, which will be recorded in ESRT and FMP EFI_FIRMWARE_IMAGE_DESCRIPTOR.
   @param[out] LastAttemptStatus  The last attempt status, which will be recorded in ESRT and FMP EFI_FIRMWARE_IMAGE_DESCRIPTOR.
+  @param[in]  Progress           A function used by the driver to report the progress of the firmware update.
 
   @retval EFI_SUCCESS             EDKII system FMP capsule passes authentication and the System Firmware image is updated.
   @retval EFI_SECURITY_VIOLATION  EDKII system FMP capsule fails authentication and the System Firmware image is not updated.
@@ -209,10 +257,11 @@ UpdateImage (
 **/
 EFI_STATUS
 SystemFirmwareAuthenticatedUpdate (
-  IN VOID                         *Image,
-  IN UINTN                        ImageSize,
-  OUT UINT32                      *LastAttemptVersion,
-  OUT UINT32                      *LastAttemptStatus
+  IN VOID                                           *Image,
+  IN UINTN                                          ImageSize,
+  OUT UINT32                                        *LastAttemptVersion,
+  OUT UINT32                                        *LastAttemptStatus,
+  IN EFI_FIRMWARE_MANAGEMENT_UPDATE_IMAGE_PROGRESS  Progress
   )
 {
   EFI_STATUS                  Status;
@@ -240,7 +289,7 @@ SystemFirmwareAuthenticatedUpdate (
   ExtractConfigImage(AuthenticatedImage, AuthenticatedImageSize, &ConfigImage, &ConfigImageSize);
 
   DEBUG((DEBUG_INFO, "UpdateImage ...\n"));
-  Status = UpdateImage(SystemFirmwareImage, SystemFirmwareImageSize, ConfigImage, ConfigImageSize, LastAttemptVersion, LastAttemptStatus);
+  Status = UpdateImage(SystemFirmwareImage, SystemFirmwareImageSize, ConfigImage, ConfigImageSize, LastAttemptVersion, LastAttemptStatus, Progress);
   if (EFI_ERROR(Status)) {
     DEBUG((DEBUG_INFO, "UpdateImage - %r\n", Status));
     return Status;
@@ -442,8 +491,8 @@ FmpSetImage (
     return EFI_INVALID_PARAMETER;
   }
 
-  Status = SystemFirmwareAuthenticatedUpdate((VOID *)Image, ImageSize, &SystemFmpPrivate->LastAttempt.LastAttemptVersion, &SystemFmpPrivate->LastAttempt.LastAttemptStatus);
-  DEBUG((DEBUG_INFO, "SetImage - LastAttemp Version - 0x%x, State - 0x%x\n", SystemFmpPrivate->LastAttempt.LastAttemptVersion, SystemFmpPrivate->LastAttempt.LastAttemptStatus));
+  Status = SystemFirmwareAuthenticatedUpdate((VOID *)Image, ImageSize, &SystemFmpPrivate->LastAttempt.LastAttemptVersion, &SystemFmpPrivate->LastAttempt.LastAttemptStatus, Progress);
+  DEBUG((DEBUG_INFO, "SetImage - LastAttempt Version - 0x%x, State - 0x%x\n", SystemFmpPrivate->LastAttempt.LastAttemptVersion, SystemFmpPrivate->LastAttempt.LastAttemptStatus));
 
   //
   // If NVRAM is updated, we should no longer touch variable services, because

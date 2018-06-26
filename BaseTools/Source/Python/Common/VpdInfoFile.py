@@ -99,7 +99,7 @@ class VpdInfoFile:
                 EdkLogger.error("VpdInfoFile", BuildToolError.PARAMETER_INVALID, 
                                 "Invalid max datum size for VPD PCD %s.%s" % (Vpd.TokenSpaceGuidCName, Vpd.TokenCName))
         elif Vpd.DatumType in TAB_PCD_NUMERIC_TYPES: 
-            if Vpd.MaxDatumSize is None or Vpd.MaxDatumSize == "":
+            if not Vpd.MaxDatumSize:
                 Vpd.MaxDatumSize = MAX_SIZE_TYPE[Vpd.DatumType]
         else:
             if Vpd.MaxDatumSize <= 0:
@@ -246,7 +246,7 @@ def CallExtenalBPDGTool(ToolPath, VpdFileName):
                                         stderr= subprocess.PIPE,
                                         shell=True)
     except Exception, X:
-        EdkLogger.error("BPDG", BuildToolError.COMMAND_FAILURE, ExtraData="%s" % (str(X)))
+        EdkLogger.error("BPDG", BuildToolError.COMMAND_FAILURE, ExtraData=str(X))
     (out, error) = PopenObject.communicate()
     print out
     while PopenObject.returncode is None :
