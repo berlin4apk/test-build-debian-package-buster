@@ -1,11 +1,11 @@
-edk2 (0~20180626.e5735040-1) UNRELEASED; urgency=medium
+edk2 (0~20180626.e5735040-1) unstable; urgency=medium
 
   * New upstream release.
   * d/p/ShellPkg-dp-Correct-case-of-included-file.patch: Add; fixes FTBFS.
   * debian/control: Point the Vcs-* links to the edk2 project in my
     namespace on salsa until we identify a more permanent location.
 
- -- dann frazier <dannf@debian.org>  Tue, 26 Jun 2018 14:19:20 -0600
+ -- dann frazier <dannf@debian.org>  Tue, 26 Jun 2018 17:06:59 -0600
 
 edk2 (0~20180503.ebafede9-1) unstable; urgency=medium
 
