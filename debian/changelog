@@ -1,6 +1,7 @@
 edk2 (0~20180626.e5735040-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * d/p/ShellPkg-dp-Correct-case-of-included-file.patch: Add; fixes FTBFS.
 
  -- dann frazier <dannf@debian.org>  Tue, 26 Jun 2018 14:19:20 -0600
 

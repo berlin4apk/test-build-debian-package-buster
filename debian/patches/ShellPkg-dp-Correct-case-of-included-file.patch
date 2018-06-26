@@ -1,0 +1,21 @@
+Subject: [PATCH] ShellPkg/dp: Correct case of included file
+Author: dann frazier <dannf@debian.org>
+Forwarded: https://lists.01.org/pipermail/edk2-devel/2018-June/026555.html
+Last-Update: 2018-06-26
+
+diff --git a/ShellPkg/DynamicCommand/DpDynamicCommand/Dp.h b/ShellPkg/DynamicCommand/DpDynamicCommand/Dp.h
+index 96bc89db8d..0e6e9422ef 100644
+--- a/ShellPkg/DynamicCommand/DpDynamicCommand/Dp.h
++++ b/ShellPkg/DynamicCommand/DpDynamicCommand/Dp.h
+@@ -41,7 +41,7 @@
+ #include <Library/HiiLib.h>
+ #include <Library/FileHandleLib.h>
+ #include <Library/UefiHiiServicesLib.h>
+-#include <Library/Performancelib.h>
++#include <Library/PerformanceLib.h>
+ 
+ extern EFI_HANDLE mDpHiiHandle;
+ 
+-- 
+2.18.0
+
