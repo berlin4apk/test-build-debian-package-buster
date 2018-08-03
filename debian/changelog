@@ -2,6 +2,8 @@ edk2 (0~20180803.dd4cae4d-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * debian/control: Point the Vcs-* links to the new location on salsa.
+  * d/p/ShellPkg-dp-Correct-case-of-included-file.patch: Drop;
+    now upstream.
 
  -- dann frazier <dannf@debian.org>  Wed, 27 Jun 2018 16:45:06 -0600
 
