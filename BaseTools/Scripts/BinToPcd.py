@@ -14,6 +14,7 @@
 '''
 BinToPcd
 '''
+from __future__ import print_function
 
 import sys
 import argparse
@@ -40,13 +41,13 @@ if __name__ == '__main__':
         return Value
 
     def ValidatePcdName (Argument):
-        if re.split ('[a-zA-Z\_][a-zA-Z0-9\_]*\.[a-zA-Z\_][a-zA-Z0-9\_]*', Argument) != ['','']:
+        if re.split ('[a-zA-Z\_][a-zA-Z0-9\_]*\.[a-zA-Z\_][a-zA-Z0-9\_]*', Argument) != ['', '']:
             Message = '{Argument} is not in the form <PcdTokenSpaceGuidCName>.<PcdCName>'.format (Argument = Argument)
             raise argparse.ArgumentTypeError (Message)
         return Argument
 
     def ValidateGuidName (Argument):
-        if re.split ('[a-zA-Z\_][a-zA-Z0-9\_]*', Argument) != ['','']:
+        if re.split ('[a-zA-Z\_][a-zA-Z0-9\_]*', Argument) != ['', '']:
             Message = '{Argument} is not a valid GUID C name'.format (Argument = Argument)
             raise argparse.ArgumentTypeError (Message)
         return Argument
@@ -65,11 +66,12 @@ if __name__ == '__main__':
             #
             # If Xdr flag is not set, then concatenate all the data
             #
-            Buffer = b''.join (Buffer)
+            Buffer = bytearray (b''.join (Buffer))
         #
         # Return a PCD value of the form '{0x01, 0x02, ...}' along with the PCD length in bytes
         #
-        return '{' + (', '.join (['0x{Byte:02X}'.format (Byte = Item) for Item in Buffer])) + '}', len (Buffer)
+        PcdValue = '{' + ', '.join (['0x{Byte:02X}'.format (Byte = Item) for Item in Buffer]) + '}'
+        return PcdValue.encode (), len (Buffer)
 
     #
     # Create command line argument parser object
@@ -83,7 +85,7 @@ if __name__ == '__main__':
                          help = "Output filename for PCD value or PCD statement")
     parser.add_argument ("-p", "--pcd", dest = 'PcdName', type = ValidatePcdName,
                          help = "Name of the PCD in the form <PcdTokenSpaceGuidCName>.<PcdCName>")
-    parser.add_argument ("-t", "--type", dest = 'PcdType', default = None, choices = ['VPD','HII'],
+    parser.add_argument ("-t", "--type", dest = 'PcdType', default = None, choices = ['VPD', 'HII'],
                          help = "PCD statement type (HII or VPD).  Default is standard.")
     parser.add_argument ("-m", "--max-size", dest = 'MaxSize', type = ValidateUnsignedInteger,
                          help = "Maximum size of the PCD.  Ignored with --type HII.")

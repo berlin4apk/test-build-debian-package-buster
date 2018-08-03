@@ -4,7 +4,7 @@
   This file implements all APIs in Performance Library class in MdePkg. It creates
   performance logging GUIDed HOB on the first performance logging and then logs the
   performance data to the GUIDed HOB. Due to the limitation of temporary RAM, the maximum
-  number of performance logging entry is specified by PcdMaxPeiPerformanceLogEntries or 
+  number of performance logging entry is specified by PcdMaxPeiPerformanceLogEntries or
   PcdMaxPeiPerformanceLogEntries16.
 
 Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
@@ -77,10 +77,10 @@ GetFpdtRecordPtr (
     //
     PeiFirmwarePerformance  = (UINT8*)GET_GUID_HOB_DATA (GuidHob);
     *PeiPerformanceLogHeader = (FPDT_PEI_EXT_PERF_HEADER *)PeiFirmwarePerformance;
-    if (!(*PeiPerformanceLogHeader)->HobIsFull && (*PeiPerformanceLogHeader)->SizeOfAllEntries + RecordSize > (UINTN)(PeiPerformanceLogEntries * PEI_MAX_RECORD_SIZE)) {
+    if (!(*PeiPerformanceLogHeader)->HobIsFull && (*PeiPerformanceLogHeader)->SizeOfAllEntries + RecordSize > (PeiPerformanceLogEntries * PEI_MAX_RECORD_SIZE)) {
       (*PeiPerformanceLogHeader)->HobIsFull = TRUE;
     }
-    if (!(*PeiPerformanceLogHeader)->HobIsFull && (*PeiPerformanceLogHeader)->SizeOfAllEntries + RecordSize <= (UINTN)(PeiPerformanceLogEntries * PEI_MAX_RECORD_SIZE)) {
+    if (!(*PeiPerformanceLogHeader)->HobIsFull && (*PeiPerformanceLogHeader)->SizeOfAllEntries + RecordSize <= (PeiPerformanceLogEntries * PEI_MAX_RECORD_SIZE)) {
       FpdtRecordPtr->RecordHeader = (EFI_ACPI_5_0_FPDT_PERFORMANCE_RECORD_HEADER *)(PeiFirmwarePerformance + sizeof (FPDT_PEI_EXT_PERF_HEADER) + (*PeiPerformanceLogHeader)->SizeOfAllEntries);
       break;
     }
@@ -423,9 +423,11 @@ InsertFpdtRecord (
   case PERF_EVENTSIGNAL_END_ID:
   case PERF_CALLBACK_START_ID:
   case PERF_CALLBACK_END_ID:
-    if (String != NULL && AsciiStrLen (String) != 0) {
-      StringPtr = String;
-    } else {
+    if (String == NULL || Guid == NULL) {
+      return EFI_INVALID_PARAMETER;
+    }
+    StringPtr = String;
+    if (AsciiStrLen (String) == 0) {
       StringPtr = "unknown name";
     }
     if (!PcdGetBool (PcdEdkiiFpdtStringRecordEnableOnly)) {
@@ -436,6 +438,7 @@ InsertFpdtRecord (
       FpdtRecordPtr.DualGuidStringEvent->Timestamp        = TimeStamp;
       CopyMem (&FpdtRecordPtr.DualGuidStringEvent->Guid1, ModuleGuid, sizeof (FpdtRecordPtr.DualGuidStringEvent->Guid1));
       CopyMem (&FpdtRecordPtr.DualGuidStringEvent->Guid2, Guid, sizeof (FpdtRecordPtr.DualGuidStringEvent->Guid2));
+      CopyStringIntoPerfRecordAndUpdateLength (FpdtRecordPtr.DualGuidStringEvent->String, StringPtr, &FpdtRecordPtr.DualGuidStringEvent->Header.Length);
     }
     break;
 

@@ -12,14 +12,14 @@
   and start and end time values.
   Dp uses this information to group records in different ways.  It also uses
   timer information to calculate elapsed time for each measurement.
- 
+
   Copyright (c) 2009 - 2018, Intel Corporation. All rights reserved.
   (C) Copyright 2015-2016 Hewlett Packard Enterprise Development LP<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
   http://opensource.org/licenses/bsd-license.php
- 
+
   THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
   WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 **/
@@ -73,7 +73,8 @@ PERF_CUM_DATA CumData[] = {
   PERF_INIT_CUM_DATA (LOAD_IMAGE_TOK),
   PERF_INIT_CUM_DATA (START_IMAGE_TOK),
   PERF_INIT_CUM_DATA (DRIVERBINDING_START_TOK),
-  PERF_INIT_CUM_DATA (DRIVERBINDING_SUPPORT_TOK)
+  PERF_INIT_CUM_DATA (DRIVERBINDING_SUPPORT_TOK),
+  PERF_INIT_CUM_DATA (DRIVERBINDING_STOP_TOK)
 };
 
 /// Number of items for which we are gathering cumulative statistics.
@@ -741,10 +742,10 @@ InitSummaryData (
 
 /**
   Dump performance data.
-  
+
   @param[in]  ImageHandle     The image handle.
   @param[in]  SystemTable     The system table.
-  
+
   @retval SHELL_SUCCESS            Command completed successfully.
   @retval SHELL_INVALID_PARAMETER  Command usage error.
   @retval SHELL_ABORTED            The user aborts the operation.
@@ -775,6 +776,7 @@ RunDp (
   UINTN                     NameSize;
   SHELL_STATUS              ShellStatus;
   TIMER_INFO                TimerInfo;
+  UINT64                    Intermediate;
 
   StringPtr   = NULL;
   SummaryMode = FALSE;
@@ -799,6 +801,9 @@ RunDp (
   if (EFI_ERROR(Status)) {
     ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_DP_INVALID_ARG), mDpHiiHandle);
     return SHELL_INVALID_PARAMETER;
+  } else if (ShellCommandLineGetCount(ParamPackage) > 1){
+    ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_DP_TOO_MANY), mDpHiiHandle);
+    return SHELL_INVALID_PARAMETER;
   }
 
   //
@@ -812,24 +817,80 @@ RunDp (
   mShowId     = ShellCommandLineGetFlag (ParamPackage, L"-i");
   CumulativeMode = ShellCommandLineGetFlag (ParamPackage, L"-c");
 
+  if (AllMode && RawMode) {
+    ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_DP_CONFLICT_ARG), mDpHiiHandle, L"-A", L"-R");
+    return SHELL_INVALID_PARAMETER;
+  }
+
   // Options with Values
-  CmdLineArg  = ShellCommandLineGetValue (ParamPackage, L"-n");
-  if (CmdLineArg == NULL) {
-    Number2Display = DEFAULT_DISPLAYCOUNT;
+  if (ShellCommandLineGetFlag (ParamPackage, L"-n")) {
+    CmdLineArg  = ShellCommandLineGetValue (ParamPackage, L"-n");
+    if (CmdLineArg == NULL) {
+      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_DP_TOO_FEW), mDpHiiHandle);
+      return SHELL_INVALID_PARAMETER;
+    } else {
+      if (!(RawMode || AllMode)) {
+        ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_DP_NO_RAW_ALL), mDpHiiHandle);
+        return SHELL_INVALID_PARAMETER;
+      }
+      Status = ShellConvertStringToUint64(CmdLineArg, &Intermediate, FALSE, TRUE);
+      if (EFI_ERROR (Status)) {
+        ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_DP_INVALID_NUM_ARG), mDpHiiHandle, L"-n");
+        return SHELL_INVALID_PARAMETER;
+      } else {
+        Number2Display = (UINTN)Intermediate;
+        if (Number2Display == 0 || Number2Display > MAXIMUM_DISPLAYCOUNT) {
+          ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_DP_INVALID_RANGE), mDpHiiHandle, L"-n", 0, MAXIMUM_DISPLAYCOUNT);
+          return SHELL_INVALID_PARAMETER;
+        }
+      }
+    }
   } else {
-    Number2Display = StrDecimalToUintn(CmdLineArg);
-    if (Number2Display == 0) {
-      Number2Display = MAXIMUM_DISPLAYCOUNT;
+    Number2Display = DEFAULT_DISPLAYCOUNT;
+  }
+
+  if (ShellCommandLineGetFlag (ParamPackage, L"-t")) {
+    CmdLineArg  = ShellCommandLineGetValue (ParamPackage, L"-t");
+    if (CmdLineArg == NULL) {
+      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_DP_TOO_FEW), mDpHiiHandle);
+      return SHELL_INVALID_PARAMETER;
+    } else {
+      Status = ShellConvertStringToUint64(CmdLineArg, &Intermediate, FALSE, TRUE);
+      if (EFI_ERROR (Status)) {
+        ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_DP_INVALID_NUM_ARG), mDpHiiHandle, L"-t");
+        return SHELL_INVALID_PARAMETER;
+      } else {
+        mInterestThreshold = Intermediate;
+      }
+    }
+  } else {
+    mInterestThreshold = DEFAULT_THRESHOLD;  // 1ms := 1,000 us
+  }
+
+  if (ShellCommandLineGetFlag (ParamPackage, L"-c")) {
+    CustomCumulativeToken = ShellCommandLineGetValue (ParamPackage, L"-c");
+    if (CustomCumulativeToken == NULL) {
+      ShellPrintHiiEx (-1, -1, NULL, STRING_TOKEN (STR_DP_TOO_FEW), mDpHiiHandle);
+      return SHELL_INVALID_PARAMETER;
+    } else {
+      CustomCumulativeData = AllocateZeroPool (sizeof (PERF_CUM_DATA));
+      if (CustomCumulativeData == NULL) {
+        ShellStatus = SHELL_OUT_OF_RESOURCES;
+        goto Done;
+      }
+      CustomCumulativeData->MinDur = PERF_MAXDUR;
+      CustomCumulativeData->MaxDur = 0;
+      CustomCumulativeData->Count  = 0;
+      CustomCumulativeData->Duration = 0;
+      NameSize = StrLen (CustomCumulativeToken) + 1;
+      CustomCumulativeData->Name   = AllocateZeroPool (NameSize);
+      if (CustomCumulativeData->Name == NULL) {
+        ShellStatus = SHELL_OUT_OF_RESOURCES;
+        goto Done;
+      }
+      UnicodeStrToAsciiStrS (CustomCumulativeToken, CustomCumulativeData->Name, NameSize);
     }
   }
-
-  CmdLineArg  = ShellCommandLineGetValue (ParamPackage, L"-t");
-  if (CmdLineArg == NULL) {
-    mInterestThreshold = DEFAULT_THRESHOLD;  // 1ms := 1,000 us
-  } else {
-    mInterestThreshold = StrDecimalToUint64(CmdLineArg);
-  }
-
 
   //
   // DP dump performance data by parsing FPDT table in ACPI table.
@@ -872,29 +933,6 @@ RunDp (
   // Initialize the Summary data.
   //
   InitSummaryData ();
-
-  //
-  // Init the custom cumulative data.
-  //
-  CustomCumulativeToken = ShellCommandLineGetValue (ParamPackage, L"-c");
-  if (CustomCumulativeToken != NULL) {
-    CustomCumulativeData = AllocateZeroPool (sizeof (PERF_CUM_DATA));
-    if (CustomCumulativeData == NULL) {
-      ShellStatus = SHELL_OUT_OF_RESOURCES;
-      goto Done;
-    }
-    CustomCumulativeData->MinDur = PERF_MAXDUR;
-    CustomCumulativeData->MaxDur = 0;
-    CustomCumulativeData->Count  = 0;
-    CustomCumulativeData->Duration = 0;
-    NameSize = StrLen (CustomCumulativeToken) + 1;
-    CustomCumulativeData->Name   = AllocateZeroPool (NameSize);
-    if (CustomCumulativeData->Name == NULL) {
-      ShellStatus = SHELL_OUT_OF_RESOURCES;
-      goto Done;
-    }
-    UnicodeStrToAsciiStrS (CustomCumulativeToken, CustomCumulativeData->Name, NameSize);
-  }
 
   //
   // Timer specific processing
@@ -952,7 +990,7 @@ RunDp (
 ****    Cooked (Default)
 ****************************************************************************/
   GatherStatistics (CustomCumulativeData);
-  if (CumulativeMode) {                       
+  if (CumulativeMode) {
     ProcessCumulative (CustomCumulativeData);
   } else if (AllMode) {
     Status = DumpAllTrace( Number2Display, ExcludeMode);

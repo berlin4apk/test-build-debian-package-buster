@@ -35,6 +35,18 @@ Tpm2GetPtpInterface (
   );
 
 /**
+  Return PTP CRB interface IdleByPass state.
+
+  @param[in] Register                Pointer to PTP register.
+
+  @return PTP CRB interface IdleByPass state.
+**/
+UINT8
+Tpm2GetIdleByPass (
+  IN VOID *Register
+  );
+
+/**
   Dump PTP register information.
 
   @param[in] Register                Pointer to PTP register.
@@ -54,7 +66,7 @@ DumpPtpInfo (
 
   @retval EFI_SUCCESS            The command byte stream was successfully sent to the device and a response was successfully received.
   @retval EFI_DEVICE_ERROR       The command was not successfully sent to the device or a response was not successfully received from the device.
-  @retval EFI_BUFFER_TOO_SMALL   The output parameter block is too small. 
+  @retval EFI_BUFFER_TOO_SMALL   The output parameter block is too small.
 **/
 EFI_STATUS
 EFIAPI
@@ -86,7 +98,7 @@ TPM2_DEVICE_INTERFACE  mDTpm2InternalTpm2Device = {
 
 /**
   The function register DTPM2.0 instance and caches current active TPM interface type.
-  
+
   @retval EFI_SUCCESS   DTPM2.0 instance is registered, or system dose not surpport registr DTPM2.0 instance
 **/
 EFI_STATUS
@@ -97,6 +109,7 @@ Tpm2InstanceLibDTpmConstructor (
 {
   EFI_STATUS               Status;
   TPM2_PTP_INTERFACE_TYPE  PtpInterface;
+  UINT8                    IdleByPass;
 
   Status = Tpm2RegisterTpm2DeviceLib (&mDTpm2InternalTpm2Device);
   if ((Status == EFI_SUCCESS) || (Status == EFI_UNSUPPORTED)) {
@@ -111,6 +124,12 @@ Tpm2InstanceLibDTpmConstructor (
         PtpInterface = Tpm2GetPtpInterface ((VOID *) (UINTN) PcdGet64 (PcdTpmBaseAddress));
         PcdSet8S(PcdActiveTpmInterfaceType, PtpInterface);
       }
+
+      if (PcdGet8(PcdActiveTpmInterfaceType) == Tpm2PtpInterfaceCrb && PcdGet8(PcdCRBIdleByPass) == 0xFF) {
+        IdleByPass = Tpm2GetIdleByPass((VOID *) (UINTN) PcdGet64 (PcdTpmBaseAddress));
+        PcdSet8S(PcdCRBIdleByPass, IdleByPass);
+      }
+
       DumpPtpInfo ((VOID *) (UINTN) PcdGet64 (PcdTpmBaseAddress));
     }
     return EFI_SUCCESS;

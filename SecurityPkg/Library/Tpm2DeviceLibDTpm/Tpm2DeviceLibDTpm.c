@@ -32,6 +32,18 @@ Tpm2GetPtpInterface (
   );
 
 /**
+  Return PTP CRB interface IdleByPass state.
+
+  @param[in] Register                Pointer to PTP register.
+
+  @return PTP CRB interface IdleByPass state.
+**/
+UINT8
+Tpm2GetIdleByPass (
+  IN VOID *Register
+  );
+
+/**
   This service enables the sending of commands to the TPM2.
 
   @param[in]      InputParameterBlockSize  Size of the TPM2 input parameter block.
@@ -41,7 +53,7 @@ Tpm2GetPtpInterface (
 
   @retval EFI_SUCCESS            The command byte stream was successfully sent to the device and a response was successfully received.
   @retval EFI_DEVICE_ERROR       The command was not successfully sent to the device or a response was not successfully received from the device.
-  @retval EFI_BUFFER_TOO_SMALL   The output parameter block is too small. 
+  @retval EFI_BUFFER_TOO_SMALL   The output parameter block is too small.
 **/
 EFI_STATUS
 EFIAPI
@@ -75,7 +87,7 @@ DTpm2RequestUseTpm (
 
   @retval EFI_SUCCESS            The command byte stream was successfully sent to the device and a response was successfully received.
   @retval EFI_DEVICE_ERROR       The command was not successfully sent to the device or a response was not successfully received from the device.
-  @retval EFI_BUFFER_TOO_SMALL   The output parameter block is too small. 
+  @retval EFI_BUFFER_TOO_SMALL   The output parameter block is too small.
 **/
 EFI_STATUS
 EFIAPI
@@ -130,7 +142,7 @@ Tpm2RegisterTpm2DeviceLib (
 
 /**
   The function caches current active TPM interface type.
-  
+
   @retval EFI_SUCCESS   DTPM2.0 instance is registered, or system dose not surpport registr DTPM2.0 instance
 **/
 EFI_STATUS
@@ -140,6 +152,7 @@ Tpm2DeviceLibConstructor (
   )
 {
   TPM2_PTP_INTERFACE_TYPE  PtpInterface;
+  UINT8                    IdleByPass;
 
   //
   // Cache current active TpmInterfaceType only when needed
@@ -148,5 +161,11 @@ Tpm2DeviceLibConstructor (
     PtpInterface = Tpm2GetPtpInterface ((VOID *) (UINTN) PcdGet64 (PcdTpmBaseAddress));
     PcdSet8S(PcdActiveTpmInterfaceType, PtpInterface);
   }
+
+  if (PcdGet8(PcdActiveTpmInterfaceType) == Tpm2PtpInterfaceCrb && PcdGet8(PcdCRBIdleByPass) == 0xFF) {
+    IdleByPass = Tpm2GetIdleByPass((VOID *) (UINTN) PcdGet64 (PcdTpmBaseAddress));
+    PcdSet8S(PcdCRBIdleByPass, IdleByPass);
+  }
+
   return EFI_SUCCESS;
 }

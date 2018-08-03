@@ -45,7 +45,7 @@ typedef struct {
 HANDLE_GUID_MAP      mCacheHandleGuidTable[CACHE_HANDLE_GUID_COUNT];
 UINTN                mCachePairCount = 0;
 
-UINT32               mPerformanceLength    = 0;
+UINT32               mPerformanceLength    = sizeof (SMM_BOOT_PERFORMANCE_TABLE);
 UINT32               mMaxPerformanceLength = 0;
 UINT32               mLoadImageCount       = 0;
 BOOLEAN              mFpdtDataIsReported   = FALSE;
@@ -100,15 +100,15 @@ GetFpdtRecordPtr (
     if (mPerformanceLength + RecordSize > mMaxPerformanceLength) {
       mSmmBootPerformanceTable = ReallocatePool (
                                    mPerformanceLength,
-                                   mPerformanceLength + sizeof (SMM_BOOT_PERFORMANCE_TABLE) + RecordSize + FIRMWARE_RECORD_BUFFER,
+                                   mPerformanceLength + RecordSize + FIRMWARE_RECORD_BUFFER,
                                    mSmmBootPerformanceTable
                               );
 
       if (mSmmBootPerformanceTable == NULL) {
         return EFI_OUT_OF_RESOURCES;
       }
-      mSmmBootPerformanceTable->Header.Length = sizeof (SMM_BOOT_PERFORMANCE_TABLE) + mPerformanceLength;
-      mMaxPerformanceLength = mPerformanceLength + sizeof (SMM_BOOT_PERFORMANCE_TABLE) + RecordSize + FIRMWARE_RECORD_BUFFER;
+      mSmmBootPerformanceTable->Header.Length = mPerformanceLength;
+      mMaxPerformanceLength = mPerformanceLength + RecordSize + FIRMWARE_RECORD_BUFFER;
     }
     //
     // Covert buffer to FPDT Ptr Union type.
@@ -649,14 +649,13 @@ InsertFpdtRecord (
   case PERF_EVENTSIGNAL_END_ID:
   case PERF_CALLBACK_START_ID:
   case PERF_CALLBACK_END_ID:
-    if (String == NULL) {
+    if (String == NULL || Guid == NULL) {
       return EFI_INVALID_PARAMETER;
     }
-    //
-    // Cache the event guid in string event record when PcdEdkiiFpdtStringRecordEnableOnly == TRUE
-    //
-    CopyGuid (&ModuleGuid, Guid);
     StringPtr = String;
+    if (AsciiStrLen (String) == 0) {
+      StringPtr = "unknown name";
+    }
     if (!PcdGetBool (PcdEdkiiFpdtStringRecordEnableOnly)) {
       FpdtRecordPtr.DualGuidStringEvent->Header.Type      = FPDT_DUAL_GUID_STRING_EVENT_TYPE;
       FpdtRecordPtr.DualGuidStringEvent->Header.Length    = sizeof (FPDT_DUAL_GUID_STRING_EVENT_RECORD);
@@ -734,7 +733,14 @@ InsertFpdtRecord (
     FpdtRecordPtr.DynamicStringEvent->Header.Revision   = FPDT_RECORD_REVISION_1;
     FpdtRecordPtr.DynamicStringEvent->ProgressID        = PerfId;
     FpdtRecordPtr.DynamicStringEvent->Timestamp         = TimeStamp;
-    CopyMem (&FpdtRecordPtr.DynamicStringEvent->Guid, &ModuleGuid, sizeof (FpdtRecordPtr.DynamicStringEvent->Guid));
+    if (Guid != NULL) {
+      //
+      // Cache the event guid in string event record.
+      //
+      CopyMem (&FpdtRecordPtr.DynamicStringEvent->Guid, Guid, sizeof (FpdtRecordPtr.DynamicStringEvent->Guid));
+    } else {
+      CopyMem (&FpdtRecordPtr.DynamicStringEvent->Guid, &ModuleGuid, sizeof (FpdtRecordPtr.DynamicStringEvent->Guid));
+    }
     if (AsciiStrLen (StringPtr) == 0) {
       StringPtr = "unknown name";
     }
