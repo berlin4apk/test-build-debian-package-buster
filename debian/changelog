@@ -1,3 +1,9 @@
+edk2 (0~20180812.cb5f4f45-1) UNRELEASED; urgency=medium
+
+  * New upstream release, based on edk2-stable201808 tag.
+
+ -- dann frazier <dannf@debian.org>  Wed, 05 Sep 2018 16:56:37 -0600
+
 edk2 (0~20180803.dd4cae4d-1) unstable; urgency=medium
 
   * New upstream release.
