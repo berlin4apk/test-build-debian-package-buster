@@ -933,7 +933,7 @@ class Build():
             if TAB_TOD_DEFINES_FAMILY not in ToolDefinition or Tool not in ToolDefinition[TAB_TOD_DEFINES_FAMILY] \
                or not ToolDefinition[TAB_TOD_DEFINES_FAMILY][Tool]:
                 EdkLogger.warn("build", "No tool chain family found in configuration for %s. Default to MSFT." % Tool)
-                ToolChainFamily.append("MSFT")
+                ToolChainFamily.append(TAB_COMPILER_MSFT)
             else:
                 ToolChainFamily.append(ToolDefinition[TAB_TOD_DEFINES_FAMILY][Tool])
         self.ToolChainFamily = ToolChainFamily
@@ -1006,7 +1006,7 @@ class Build():
         else:
             self.Db.InitDatabase()
             self.Db_Flag = True
-            Platform = self.Db._MapPlatform(str(self.PlatformFile))
+            Platform = self.Db.MapPlatform(str(self.PlatformFile))
             self.Prebuild = str(Platform.Prebuild)
         if self.Prebuild:
             PrebuildList = []
@@ -1045,7 +1045,7 @@ class Build():
         if 'POSTBUILD' in GlobalData.gCommandLineDefines:
             self.Postbuild = GlobalData.gCommandLineDefines.get('POSTBUILD')
         else:
-            Platform = self.Db._MapPlatform(str(self.PlatformFile))
+            Platform = self.Db.MapPlatform(str(self.PlatformFile))
             self.Postbuild = str(Platform.Postbuild)
         if self.Postbuild:
             PostbuildList = []

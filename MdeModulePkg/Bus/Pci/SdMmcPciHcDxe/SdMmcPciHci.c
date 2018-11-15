@@ -454,11 +454,11 @@ SdMmcHcReset (
   }
 
   PciIo   = Private->PciIo;
-  SwReset = 0xFF;
-  Status  = SdMmcHcRwMmio (PciIo, Slot, SD_MMC_HC_SW_RST, FALSE, sizeof (SwReset), &SwReset);
+  SwReset = BIT0;
+  Status  = SdMmcHcOrMmio (PciIo, Slot, SD_MMC_HC_SW_RST, sizeof (SwReset), &SwReset);
 
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "SdMmcHcReset: write full 1 fails: %r\n", Status));
+    DEBUG ((DEBUG_ERROR, "SdMmcHcReset: write SW Reset for All fails: %r\n", Status));
     return Status;
   }
 
@@ -467,7 +467,7 @@ SdMmcHcReset (
              Slot,
              SD_MMC_HC_SW_RST,
              sizeof (SwReset),
-             0xFF,
+             BIT0,
              0x00,
              SD_MMC_HC_GENERIC_TIMEOUT
              );
@@ -782,7 +782,8 @@ SdMmcHcClockSupply (
   //
   // Set SDCLK Frequency Select and Internal Clock Enable fields in Clock Control register.
   //
-  if ((ControllerVer & 0xFF) == 2) {
+  if (((ControllerVer & 0xFF) >= SD_MMC_HC_CTRL_VER_300) &&
+      ((ControllerVer & 0xFF) <= SD_MMC_HC_CTRL_VER_420)) {
     ASSERT (Divisor <= 0x3FF);
     ClockCtrl = ((Divisor & 0xFF) << 8) | ((Divisor & 0x300) >> 2);
   } else if (((ControllerVer & 0xFF) == 0) || ((ControllerVer & 0xFF) == 1)) {

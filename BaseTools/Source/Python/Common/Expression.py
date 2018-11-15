@@ -17,11 +17,13 @@ from __future__ import absolute_import
 from Common.GlobalData import *
 from CommonDataClass.Exceptions import BadExpression
 from CommonDataClass.Exceptions import WrnExpression
-from .Misc import GuidStringToGuidStructureString, ParseFieldValue, IsFieldValueAnArray
+from .Misc import GuidStringToGuidStructureString, ParseFieldValue
 import Common.EdkLogger as EdkLogger
 import copy
 from Common.DataType import *
 import sys
+from random import sample
+import string
 
 ERR_STRING_EXPR         = 'This operator cannot be used in string expression: [%s].'
 ERR_SNYTAX              = 'Syntax error, the rest of expression cannot be evaluated: [%s].'
@@ -29,7 +31,7 @@ ERR_MATCH               = 'No matching right parenthesis.'
 ERR_STRING_TOKEN        = 'Bad string token: [%s].'
 ERR_MACRO_TOKEN         = 'Bad macro token: [%s].'
 ERR_EMPTY_TOKEN         = 'Empty token is not allowed.'
-ERR_PCD_RESOLVE         = 'PCD token cannot be resolved: [%s].'
+ERR_PCD_RESOLVE         = 'The PCD should be FeatureFlag type or FixedAtBuild type: [%s].'
 ERR_VALID_TOKEN         = 'No more valid token found from rest of string: [%s].'
 ERR_EXPR_TYPE           = 'Different types found in expression.'
 ERR_OPERATOR_UNSUPPORT  = 'Unsupported operator: [%s]'
@@ -55,6 +57,8 @@ PcdPattern = re.compile(r'[_a-zA-Z][0-9A-Za-z_]*\.[_a-zA-Z][0-9A-Za-z_]*$')
 #
 def SplitString(String):
     # There might be escaped quote: "abc\"def\\\"ghi", 'abc\'def\\\'ghi'
+    RanStr = ''.join(sample(string.ascii_letters + string.digits, 8))
+    String = String.replace('\\\\', RanStr).strip()
     RetList = []
     InSingleQuote = False
     InDoubleQuote = False
@@ -87,11 +91,16 @@ def SplitString(String):
         raise BadExpression(ERR_STRING_TOKEN % Item)
     if Item:
         RetList.append(Item)
+    for i, ch in enumerate(RetList):
+        if RanStr in ch:
+            RetList[i] = ch.replace(RanStr,'\\\\')
     return RetList
 
 def SplitPcdValueString(String):
     # There might be escaped comma in GUID() or DEVICE_PATH() or " "
     # or ' ' or L' ' or L" "
+    RanStr = ''.join(sample(string.ascii_letters + string.digits, 8))
+    String = String.replace('\\\\', RanStr).strip()
     RetList = []
     InParenthesis = 0
     InSingleQuote = False
@@ -124,6 +133,9 @@ def SplitPcdValueString(String):
         raise BadExpression(ERR_STRING_TOKEN % Item)
     if Item:
         RetList.append(Item)
+    for i, ch in enumerate(RetList):
+        if RanStr in ch:
+            RetList[i] = ch.replace(RanStr,'\\\\')
     return RetList
 
 def IsValidCName(Str):
@@ -138,11 +150,11 @@ def BuildOptionValue(PcdValue, GuidDict):
         InputValue = 'L"' + PcdValue[1:] + '"'
     else:
         InputValue = PcdValue
-    if IsFieldValueAnArray(InputValue):
-        try:
-            PcdValue = ValueExpressionEx(InputValue, TAB_VOID, GuidDict)(True)
-        except:
-            pass
+    try:
+        PcdValue = ValueExpressionEx(InputValue, TAB_VOID, GuidDict)(True)
+    except:
+        pass
+
     return PcdValue
 
 ## ReplaceExprMacro
@@ -297,8 +309,8 @@ class ValueExpression(BaseExpression):
                 else:
                     raise BadExpression(ERR_EXPR_TYPE)
             if isinstance(Oprand1, type('')) and isinstance(Oprand2, type('')):
-                if (Oprand1.startswith('L"') and not Oprand2.startswith('L"')) or \
-                    (not Oprand1.startswith('L"') and Oprand2.startswith('L"')):
+                if ((Oprand1.startswith('L"') or Oprand1.startswith("L'")) and (not Oprand2.startswith('L"')) and (not Oprand2.startswith("L'"))) or \
+                        (((not Oprand1.startswith('L"')) and (not Oprand1.startswith("L'"))) and (Oprand2.startswith('L"') or Oprand2.startswith("L'"))):
                     raise BadExpression(ERR_STRING_CMP % (Oprand1, Operator, Oprand2))
             if 'in' in Operator and isinstance(Oprand2, type('')):
                 Oprand2 = Oprand2.split()
@@ -390,7 +402,7 @@ class ValueExpression(BaseExpression):
             elif not Val:
                 Val = False
                 RealVal = '""'
-            elif not Val.startswith('L"') and not Val.startswith('{') and not Val.startswith("L'"):
+            elif not Val.startswith('L"') and not Val.startswith('{') and not Val.startswith("L'") and not Val.startswith("'"):
                 Val = True
                 RealVal = '"' + RealVal + '"'
 
@@ -788,7 +800,7 @@ class ValueExpression(BaseExpression):
         OpToken = ''
         for Ch in Expr:
             if Ch in self.NonLetterOpLst:
-                if '!' == Ch and OpToken:
+                if Ch in ['!', '~'] and OpToken:
                     break
                 self._Idx += 1
                 OpToken += Ch
@@ -827,6 +839,8 @@ class ValueExpressionEx(ValueExpression):
                 PcdValue = PcdValue.strip()
                 if PcdValue.startswith('{') and PcdValue.endswith('}'):
                     PcdValue = SplitPcdValueString(PcdValue[1:-1])
+                if ERR_STRING_CMP.split(':')[0] in Value.message:
+                    raise BadExpression("Type: %s, Value: %s, %s" % (self.PcdType, PcdValue, Value))
                 if isinstance(PcdValue, type([])):
                     TmpValue = 0
                     Size = 0

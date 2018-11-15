@@ -27,9 +27,10 @@ from Common.StringUtils import *
 from .BuildEngine import *
 import Common.GlobalData as GlobalData
 from collections import OrderedDict
+from Common.DataType import TAB_COMPILER_MSFT
 
 ## Regular expression for finding header file inclusions
-gIncludePattern = re.compile(r"^[ \t]*#?[ \t]*include(?:[ \t]*(?:\\(?:\r\n|\r|\n))*[ \t]*)*(?:\(?[\"<]?[ \t]*)([-\w.\\/() \t]+)(?:[ \t]*[\">]?\)?)", re.MULTILINE | re.UNICODE | re.IGNORECASE)
+gIncludePattern = re.compile(r"^[ \t]*[#%]?[ \t]*include(?:[ \t]*(?:\\(?:\r\n|\r|\n))*[ \t]*)*(?:\(?[\"<]?[ \t]*)([-\w.\\/() \t]+)(?:[ \t]*[\">]?\)?)", re.MULTILINE | re.UNICODE | re.IGNORECASE)
 
 ## Regular expression for matching macro used in header file inclusion
 gMacroPattern = re.compile("([_A-Z][_A-Z0-9]*)[ \t]*\((.+)\)", re.UNICODE)
@@ -166,7 +167,7 @@ class BuildFile(object):
         "gmake" :   "include"
     }
 
-    _INC_FLAG_ = {"MSFT" : "/I", "GCC" : "-I", "INTEL" : "-I", "RVCT" : "-I"}
+    _INC_FLAG_ = {TAB_COMPILER_MSFT : "/I", "GCC" : "-I", "INTEL" : "-I", "RVCT" : "-I"}
 
     ## Constructor of BuildFile
     #
@@ -454,7 +455,8 @@ cleanlib:
         self.FfsOutputFileList = []
 
     # Compose a dict object containing information used to do replacement in template
-    def _CreateTemplateDict(self):
+    @property
+    def _TemplateDict(self):
         if self._FileType not in self._SEP_:
             EdkLogger.error("build", PARAMETER_INVALID, "Invalid Makefile type [%s]" % self._FileType,
                             ExtraData="[%s]" % str(self._AutoGenObject))
@@ -798,14 +800,14 @@ cleanlib:
                                     Tool = Flag
                                     break
                         if Tool:
-                            if 'PATH' not in self._AutoGenObject._BuildOption[Tool]:
+                            if 'PATH' not in self._AutoGenObject.BuildOption[Tool]:
                                 EdkLogger.error("build", AUTOGEN_ERROR, "%s_PATH doesn't exist in %s ToolChain and %s Arch." %(Tool, self._AutoGenObject.ToolChain, self._AutoGenObject.Arch), ExtraData="[%s]" % str(self._AutoGenObject))
-                            SingleCommandLength += len(self._AutoGenObject._BuildOption[Tool]['PATH'])
+                            SingleCommandLength += len(self._AutoGenObject.BuildOption[Tool]['PATH'])
                             for item in SingleCommandList[1:]:
                                 if FlagDict[Tool]['Macro'] in item:
-                                    if 'FLAGS' not in self._AutoGenObject._BuildOption[Tool]:
+                                    if 'FLAGS' not in self._AutoGenObject.BuildOption[Tool]:
                                         EdkLogger.error("build", AUTOGEN_ERROR, "%s_FLAGS doesn't exist in %s ToolChain and %s Arch." %(Tool, self._AutoGenObject.ToolChain, self._AutoGenObject.Arch), ExtraData="[%s]" % str(self._AutoGenObject))
-                                    Str = self._AutoGenObject._BuildOption[Tool]['FLAGS']
+                                    Str = self._AutoGenObject.BuildOption[Tool]['FLAGS']
                                     for Option in self._AutoGenObject.BuildOption:
                                         for Attr in self._AutoGenObject.BuildOption[Option]:
                                             if Str.find(Option + '_' + Attr) != -1:
@@ -820,7 +822,7 @@ cleanlib:
                                             break
                                     SingleCommandLength += len(Str)
                                 elif '$(INC)' in item:
-                                    SingleCommandLength += self._AutoGenObject.IncludePathLength + len(IncPrefix) * len(self._AutoGenObject._IncludePathList)
+                                    SingleCommandLength += self._AutoGenObject.IncludePathLength + len(IncPrefix) * len(self._AutoGenObject.IncludePathList)
                                 elif item.find('$(') != -1:
                                     Str = item
                                     for Option in self._AutoGenObject.BuildOption:
@@ -846,7 +848,7 @@ cleanlib:
                         Key = Flag + '_RESP'
                         RespMacro = FlagDict[Flag]['Macro'].replace('FLAGS', 'RESP')
                         Value = self._AutoGenObject.BuildOption[Flag]['FLAGS']
-                        for inc in self._AutoGenObject._IncludePathList:
+                        for inc in self._AutoGenObject.IncludePathList:
                             Value += ' ' + IncPrefix + inc
                         for Option in self._AutoGenObject.BuildOption:
                             for Attr in self._AutoGenObject.BuildOption[Option]:
@@ -1094,8 +1096,6 @@ cleanlib:
 
         return DependencyList
 
-    _TemplateDict = property(_CreateTemplateDict)
-
 ## CustomMakefile class
 #
 #  This class encapsules makefie and its generation for module. It uses template to generate
@@ -1204,7 +1204,8 @@ ${BEGIN}\t-@${create_directory_command}\n${END}\
         self.IntermediateDirectoryList = ["$(DEBUG_DIR)", "$(OUTPUT_DIR)"]
 
     # Compose a dict object containing information used to do replacement in template
-    def _CreateTemplateDict(self):
+    @property
+    def _TemplateDict(self):
         Separator = self._SEP_[self._FileType]
         MyAgo = self._AutoGenObject
         if self._FileType not in MyAgo.CustomMakefile:
@@ -1276,8 +1277,6 @@ ${BEGIN}\t-@${create_directory_command}\n${END}\
         }
 
         return MakefileTemplateDict
-
-    _TemplateDict = property(_CreateTemplateDict)
 
 ## PlatformMakefile class
 #
@@ -1395,7 +1394,8 @@ cleanlib:
         self.LibraryMakeCommandList = []
 
     # Compose a dict object containing information used to do replacement in template
-    def _CreateTemplateDict(self):
+    @property
+    def _TemplateDict(self):
         Separator = self._SEP_[self._FileType]
 
         MyAgo = self._AutoGenObject
@@ -1480,8 +1480,6 @@ cleanlib:
                 DirList.append(os.path.join(self._AutoGenObject.BuildDir, LibraryAutoGen.BuildDir))
         return DirList
 
-    _TemplateDict = property(_CreateTemplateDict)
-
 ## TopLevelMakefile class
 #
 #  This class encapsules makefie and its generation for entrance makefile. It
@@ -1501,7 +1499,8 @@ class TopLevelMakefile(BuildFile):
         self.IntermediateDirectoryList = []
 
     # Compose a dict object containing information used to do replacement in template
-    def _CreateTemplateDict(self):
+    @property
+    def _TemplateDict(self):
         Separator = self._SEP_[self._FileType]
 
         # any platform autogen object is ok because we just need common information
@@ -1620,8 +1619,6 @@ class TopLevelMakefile(BuildFile):
             if not LibraryAutoGen.IsBinaryModule:
                 DirList.append(os.path.join(self._AutoGenObject.BuildDir, LibraryAutoGen.BuildDir))
         return DirList
-
-    _TemplateDict = property(_CreateTemplateDict)
 
 # This acts like the main() function for the script, unless it is 'import'ed into another script.
 if __name__ == '__main__':

@@ -303,7 +303,7 @@
 #
 # The following information is for reference only and not required by the build tools.
 #
-#  VALID_ARCHITECTURES           = IA32 X64 IPF EBC
+#  VALID_ARCHITECTURES           = IA32 X64 EBC
 #
 
 [Sources]
@@ -331,6 +331,7 @@
 [Guids]
   gPcdDataBaseHobGuid                           ## SOMETIMES_CONSUMES  ## HOB
   gPcdDataBaseSignatureGuid                     ## CONSUMES  ## GUID  # PCD database signature GUID.
+  gEfiMdeModulePkgTokenSpaceGuid                ## SOMETIMES_CONSUMES  ## GUID
 
 [Protocols]
   gPcdProtocolGuid                              ## PRODUCES
@@ -342,7 +343,8 @@
   gEdkiiVariableLockProtocolGuid
 
 [Pcd]
-  gEfiMdeModulePkgTokenSpaceGuid.PcdVpdBaseAddress  ## SOMETIMES_CONSUMES
+  gEfiMdeModulePkgTokenSpaceGuid.PcdVpdBaseAddress      ## SOMETIMES_CONSUMES
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSetNvStoreDefaultId ## SOMETIMES_CONSUMES
 
 [Depex]
   TRUE

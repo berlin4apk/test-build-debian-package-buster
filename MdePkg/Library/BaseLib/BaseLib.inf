@@ -25,7 +25,7 @@
   LIBRARY_CLASS                  = BaseLib
 
 #
-#  VALID_ARCHITECTURES           = IA32 X64 IPF EBC ARM AARCH64
+#  VALID_ARCHITECTURES           = IA32 X64 EBC ARM AARCH64
 #
 
 [Sources]
@@ -68,6 +68,7 @@
 
 [Sources.Ia32]
   Ia32/WriteTr.nasm
+  Ia32/Lfence.nasm
 
   Ia32/Wbinvd.c | MSFT
   Ia32/WriteMm7.c | MSFT
@@ -346,6 +347,7 @@
   X64/EnableCache.nasm
   X64/DisableCache.nasm
   X64/WriteTr.nasm
+  X64/Lfence.nasm
 
   X64/CpuBreakpoint.c | MSFT
   X64/WriteMsr64.c | MSFT
@@ -537,39 +539,6 @@
   X64/RdRand.S | GCC
   ChkStkGcc.c  | GCC
 
-[Sources.IPF]
-  Ipf/AccessGp.s
-  Ipf/ReadCpuid.s
-  Ipf/ExecFc.s
-  Ipf/AsmPalCall.s
-  Ipf/AccessPsr.s
-  Ipf/AccessPmr.s
-  Ipf/AccessKr.s
-  Ipf/AccessKr7.s
-  Ipf/AccessGcr.s
-  Ipf/AccessEicr.s
-  Ipf/AccessDbr.s
-  Ipf/AccessMsr.s        | INTEL
-  Ipf/AccessMsr.s        | GCC
-  Ipf/AccessMsrDb.s      | MSFT
-  Ipf/InternalFlushCacheRange.s
-  Ipf/FlushCacheRange.c
-  Ipf/InternalSwitchStack.c
-  Ipf/GetInterruptState.s
-  Ipf/CpuPause.s
-  Ipf/CpuBreakpoint.c    | INTEL
-  Ipf/CpuBreakpointMsc.c | MSFT
-  Ipf/AsmCpuMisc.s       | GCC
-  Ipf/Unaligned.c
-  Ipf/SwitchStack.s
-  Ipf/LongJmp.s
-  Ipf/SetJmp.s
-  Ipf/ReadCr.s
-  Ipf/ReadAr.s
-  Ipf/Ia64gen.h
-  Ipf/Asm.h
-  Math64.c
-
 [Sources.EBC]
   Ebc/CpuBreakpoint.c
   Ebc/SetJumpLongJump.c
@@ -643,7 +612,6 @@
   gEfiMdePkgTokenSpaceGuid.PcdMaximumLinkedListLength      ## SOMETIMES_CONSUMES
   gEfiMdePkgTokenSpaceGuid.PcdMaximumAsciiStringLength     ## SOMETIMES_CONSUMES
   gEfiMdePkgTokenSpaceGuid.PcdMaximumUnicodeStringLength   ## SOMETIMES_CONSUMES
-  gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask            ## SOMETIMES_CONSUMES
 
 [FeaturePcd]
   gEfiMdePkgTokenSpaceGuid.PcdVerifyNodeInList  ## CONSUMES
