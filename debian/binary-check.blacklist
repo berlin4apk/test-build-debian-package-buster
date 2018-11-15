@@ -37,7 +37,6 @@ BaseTools/Bin/Darwin-i386/Arm/DEBUG_XCODE31/CompilerIntrinsicsLib.lib
 BaseTools/Bin/Darwin-i386/Arm/DEBUG_XCODE32/CompilerIntrinsicsLib.lib
 BaseTools/Bin/Darwin-i386/Arm/RELEASE_XCODE31/CompilerIntrinsicsLib.lib
 BaseTools/Bin/Darwin-i386/Arm/RELEASE_XCODE32/CompilerIntrinsicsLib.lib
-BaseTools/Source/Python/Common/PyUtility.pyd
 BaseTools/Source/Python/Eot/EfiCompressor.pyd
 BaseTools/Source/Python/Eot/LzmaCompressor.pyd
 BaseTools/Source/Python/UPT/Dll/sqlite3.dll
@@ -206,12 +205,6 @@ EdkShellBinPkg/MinimumShell/Arm/Shell.efi
 EdkShellBinPkg/MinimumShell/Ia32/Shell.efi
 EdkShellBinPkg/MinimumShell/Ipf/Shell.efi
 EdkShellBinPkg/MinimumShell/X64/Shell.efi
-FatBinPkg/EnhancedFatDxe/AArch64/Fat.efi
-FatBinPkg/EnhancedFatDxe/Arm/Fat.efi
-FatBinPkg/EnhancedFatDxe/Ebc/Fat.efi
-FatBinPkg/EnhancedFatDxe/Ia32/Fat.efi
-FatBinPkg/EnhancedFatDxe/Ipf/Fat.efi
-FatBinPkg/EnhancedFatDxe/X64/Fat.efi
 IntelFsp2Pkg/FspSecCore/Vtf0/Bin/ResetVec.ia32.raw
 IntelFspPkg/FspSecCore/Vtf0/Bin/ResetVec.ia32.raw
 ShellBinPkg/MinUefiShell/AArch64/Shell.efi
