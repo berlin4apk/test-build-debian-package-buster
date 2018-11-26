@@ -38,6 +38,10 @@ ifeq ($(DEB_HOST_ARCH),i386)
 	EDK2_HOST_ARCH=IA32
 endif
 
+COMMON_FLAGS = -DHTTP_BOOT_ENABLE=TRUE -DSECURE_BOOT_ENABLE=TRUE
+OVMF_FLAGS   = $(COMMON_FLAGS) -DFD_SIZE_2MB
+AAVMF_FLAGS  = $(COMMON_FLAGS) -DINTEL_BDS
+
 # Clear variables used internally by the edk2 build system
 undefine WORKSPACE
 undefine ECP_SOURCE
@@ -79,10 +83,7 @@ ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
-			-DHTTP_BOOT_ENABLE=TRUE \
-			-DSECURE_BOOT_ENABLE=TRUE \
-			-DFD_SIZE_2MB \
-			-b RELEASE
+			$(OVMF_FLAGS) -b RELEASE
 endif
 
 build-qemu-efi: setup-build
@@ -100,10 +101,7 @@ build-qemu-efi: setup-build
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p ArmVirtPkg/ArmVirtQemu.dsc \
-			-DHTTP_BOOT_ENABLE=TRUE \
-			-DSECURE_BOOT_ENABLE=TRUE \
-			-DINTEL_BDS \
-			-b RELEASE
+			$(AAVMF_FLAGS) -b RELEASE
 	dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/$(FW_NAME)_CODE.fd bs=1M seek=64 count=0
 	dd if=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/QEMU_EFI.fd of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/$(FW_NAME)_CODE.fd conv=notrunc
 	dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/$(FW_NAME)_VARS.fd bs=1M seek=64 count=0
