@@ -1,6 +1,7 @@
 edk2 (0~20181115.85588389-2) UNRELEASED; urgency=medium
 
   * debian/rules: Factor out common feature flags across builds.
+  * ovmf: Enable TPM2 device support. Closes: #914722.
 
  -- dann frazier <dannf@debian.org>  Mon, 26 Nov 2018 16:10:19 -0700
 
