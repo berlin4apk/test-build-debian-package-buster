@@ -1,0 +1,133 @@
+From 51bb05c7959521032214164d7fad6329488fd0f9 Mon Sep 17 00:00:00 2001
+From: Ard Biesheuvel <ard.biesheuvel@linaro.org>
+Date: Fri, 30 Nov 2018 12:28:29 +0100
+Subject: [PATCH 4/4] ArmVirtPkg/QemuVirtMemInfoLib: trim the MMIO region
+ mapping
+
+QEMU/mach-virt is rather unhelpful when it comes to tracking down
+NULL pointer dereferences that occur while running in UEFI: since
+we have NOR flash mapped at address 0x0, inadvertent reads go
+unnoticed, and even most writes are silently dropped, unless you're
+unlucky and the instruction in question is one that KVM cannot
+emulate, in which case you end up with a QEMU crash like this:
+
+  error: kvm run failed Function not implemented
+   PC=000000013f7ff804 X00=000000013f7ab108 X01=0000000000000064
+  X02=000000013f801988 X03=00000000800003c4 X04=0000000000000000
+  X05=0000000096000044 X06=fffffffffffd8270 X07=000000013f7ab4a0
+  X08=0000000000000001 X09=000000013f803b88 X10=000000013f7e88d0
+  X11=0000000000000009 X12=000000013f7ab554 X13=0000000000000008
+  X14=0000000000000002 X15=0000000000000000 X16=0000000000000000
+  X17=0000000000000000 X18=0000000000000000 X19=0000000000000000
+  X20=000000013f81c000 X21=000000013f7ab170 X22=000000013f81c000
+  X23=0000000009000018 X24=000000013f407020 X25=000000013f81c000
+  X26=000000013f803530 X27=000000013f802000 X28=000000013f7ab270
+  X29=000000013f7ab0d0 X30=000000013f7fee10  SP=000000013f7a6f30
+  PSTATE=800003c5 N--- EL1h
+
+and a warning in the host kernel log that load/store instruction
+decoding is not supported by KVM.
+
+Given that the first page of the flash device is not actually
+used anyway, let's reduce the mappings of the peripheral space
+and the flash device (both of which cover page #0) to only cover
+what is actually required:
+
+  ArmVirtQemu.fdf:
+  > 0x00001000|0x001ff000
+  > gArmTokenSpaceGuid.PcdFvBaseAddress|gArmTokenSpaceGuid.PcdFvSize
+
+  ArmVirtQemuKernel.fdf:
+  > 0x00008000|0x001f8000
+  > gArmTokenSpaceGuid.PcdFvBaseAddress|gArmTokenSpaceGuid.PcdFvSize
+
+For ArmVirtQemu, the resulting virtual mapping looks roughly like:
+- [0, 4K)       : flash, unmapped
+- [4K, 2M)      : flash, mapped as WB+X RAM
+- [2M, 64M)     : flash, unmapped
+- [64M, 128M)   : varstore flash, will be mapped by the NOR flash driver
+- [128M, 256M)  : peripherals, mapped as device
+- [256M, 1GB)   : 32-bit MMIO aperture, translated IO aperture, ECAM,
+                  will be mapped by the PCI host bridge driver
+- [1GB, ...)    : RAM, mapped.
+
+After this change, any inadvertent read or write from/to the first
+physical page will trigger a translation fault inside the guest,
+regardless of the nature of the instruction, without crashing QEMU.
+
+Contributed-under: TianoCore Contribution Agreement 1.1
+Signed-off-by: Ard Biesheuvel <ard.biesheuvel@linaro.org>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+[ dannf: Backported to edk2-stable201811 ]
+---
+ .../QemuVirtMemInfoLib/QemuVirtMemInfoLib.c   | 23 +++++++++++++------
+ .../QemuVirtMemInfoLib/QemuVirtMemInfoLib.inf |  4 ++--
+ .../QemuVirtMemInfoPeiLib.inf                 |  2 ++
+ 3 files changed, 20 insertions(+), 9 deletions(-)
+
+Index: edk2/ArmVirtPkg/Library/QemuVirtMemInfoLib/QemuVirtMemInfoLib.c
+===================================================================
+--- edk2.orig/ArmVirtPkg/Library/QemuVirtMemInfoLib/QemuVirtMemInfoLib.c
++++ edk2/ArmVirtPkg/Library/QemuVirtMemInfoLib/QemuVirtMemInfoLib.c
+@@ -26,6 +26,15 @@ ArmGetPhysAddrTop (
+   VOID
+   );
+ 
++//
++// mach-virt's core peripherals such as the UART, the GIC and the RTC are
++// all mapped in the 'miscellaneous device I/O' region, which we just map
++// in its entirety rather than device by device. Note that it does not
++// cover any of the NOR flash banks or PCI resource windows.
++//
++#define MACH_VIRT_PERIPH_BASE       0x08000000
++#define MACH_VIRT_PERIPH_SIZE       SIZE_128MB
++
+ /**
+   Return the Virtual Memory Map of your platform
+ 
+@@ -72,10 +81,10 @@ ArmVirtGetMemoryMap (
+       VirtualMemoryTable[0].VirtualBase,
+       VirtualMemoryTable[0].Length));
+ 
+-  // Peripheral space before DRAM
+-  VirtualMemoryTable[1].PhysicalBase = 0x0;
+-  VirtualMemoryTable[1].VirtualBase  = 0x0;
+-  VirtualMemoryTable[1].Length       = VirtualMemoryTable[0].PhysicalBase;
++  // Memory mapped peripherals (UART, RTC, GIC, virtio-mmio, etc)
++  VirtualMemoryTable[1].PhysicalBase = MACH_VIRT_PERIPH_BASE;
++  VirtualMemoryTable[1].VirtualBase  = MACH_VIRT_PERIPH_BASE;
++  VirtualMemoryTable[1].Length       = MACH_VIRT_PERIPH_SIZE;
+   VirtualMemoryTable[1].Attributes   = ARM_MEMORY_REGION_ATTRIBUTE_DEVICE;
+ 
+   // Peripheral space after DRAM
+@@ -87,10 +96,10 @@ ArmVirtGetMemoryMap (
+                                        VirtualMemoryTable[2].PhysicalBase;
+   VirtualMemoryTable[2].Attributes   = ARM_MEMORY_REGION_ATTRIBUTE_DEVICE;
+ 
+-  // Remap the FD region as normal executable memory
+-  VirtualMemoryTable[3].PhysicalBase = PcdGet64 (PcdFdBaseAddress);
++  // Map the FV region as normal executable memory
++  VirtualMemoryTable[3].PhysicalBase = PcdGet64 (PcdFvBaseAddress);
+   VirtualMemoryTable[3].VirtualBase  = VirtualMemoryTable[3].PhysicalBase;
+-  VirtualMemoryTable[3].Length       = FixedPcdGet32 (PcdFdSize);
++  VirtualMemoryTable[3].Length       = FixedPcdGet32 (PcdFvSize);
+   VirtualMemoryTable[3].Attributes   = ARM_MEMORY_REGION_ATTRIBUTE_WRITE_BACK;
+ 
+   // End of Table
+Index: edk2/ArmVirtPkg/Library/QemuVirtMemInfoLib/QemuVirtMemInfoPeiLib.inf
+===================================================================
+--- edk2.orig/ArmVirtPkg/Library/QemuVirtMemInfoLib/QemuVirtMemInfoPeiLib.inf
++++ edk2/ArmVirtPkg/Library/QemuVirtMemInfoLib/QemuVirtMemInfoPeiLib.inf
+@@ -49,10 +49,12 @@
+ 
+ [Pcd]
+   gArmTokenSpaceGuid.PcdFdBaseAddress
++  gArmTokenSpaceGuid.PcdFvBaseAddress
+   gArmTokenSpaceGuid.PcdSystemMemoryBase
+   gArmTokenSpaceGuid.PcdSystemMemorySize
+ 
+ [FixedPcd]
+   gArmTokenSpaceGuid.PcdFdSize
++  gArmTokenSpaceGuid.PcdFvSize
+   gArmVirtTokenSpaceGuid.PcdDeviceTreeInitialBaseAddress
+   gEmbeddedTokenSpaceGuid.PcdPrePiCpuMemorySize

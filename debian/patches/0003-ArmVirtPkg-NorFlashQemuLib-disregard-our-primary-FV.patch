@@ -1,0 +1,77 @@
+From 5e27deed438b9d74a6b08bde85f1c23f007e01c0 Mon Sep 17 00:00:00 2001
+From: Ard Biesheuvel <ard.biesheuvel@linaro.org>
+Date: Fri, 30 Nov 2018 12:28:28 +0100
+Subject: [PATCH 3/4] ArmVirtPkg/NorFlashQemuLib: disregard our primary FV
+
+The primary FV contains the firmware boot image, which is not
+runtime updatable in our case. So exposing it to the NOR flash
+driver is undesirable, since it may attempt to modify the NOR
+flash contents. It is also rather pointless, since we don't
+keep anything there that we care to expose. (the SEC and PEI
+phase modules are not executable from DXE context, and the
+contents of the embedded DXE phase FV are exposed by the DXE
+core directly via the FVB2 protocol)
+
+So let's disregard the NOR flash block that covers the primary
+FV.
+
+Contributed-under: TianoCore Contribution Agreement 1.1
+Signed-off-by: Ard Biesheuvel <ard.biesheuvel@linaro.org>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+---
+ .../Library/NorFlashQemuLib/NorFlashQemuLib.c       | 13 +++++++++++--
+ .../Library/NorFlashQemuLib/NorFlashQemuLib.inf     |  5 +++++
+ 2 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/ArmVirtPkg/Library/NorFlashQemuLib/NorFlashQemuLib.c b/ArmVirtPkg/Library/NorFlashQemuLib/NorFlashQemuLib.c
+index 2678f57eaa..d238e39a59 100644
+--- a/ArmVirtPkg/Library/NorFlashQemuLib/NorFlashQemuLib.c
++++ b/ArmVirtPkg/Library/NorFlashQemuLib/NorFlashQemuLib.c
+@@ -75,13 +75,22 @@ NorFlashPlatformGetDevices (
+       Size = SwapBytes64 (ReadUnaligned64 ((VOID *)&Reg[2]));
+       Reg += 4;
+ 
++      PropSize -= 4 * sizeof (UINT32);
++
++      //
++      // Disregard any flash devices that overlap with the primary FV.
++      // The firmware is not updatable from inside the guest anyway.
++      //
++      if ((PcdGet64 (PcdFvBaseAddress) + PcdGet32 (PcdFvSize) > Base) &&
++          (Base + Size) > PcdGet64 (PcdFvBaseAddress)) {
++        continue;
++      }
++
+       mNorFlashDevices[Num].DeviceBaseAddress = (UINTN)Base;
+       mNorFlashDevices[Num].RegionBaseAddress = (UINTN)Base;
+       mNorFlashDevices[Num].Size              = (UINTN)Size;
+       mNorFlashDevices[Num].BlockSize         = QEMU_NOR_BLOCK_SIZE;
+       Num++;
+-
+-      PropSize -= 4 * sizeof (UINT32);
+     }
+   }
+ 
+diff --git a/ArmVirtPkg/Library/NorFlashQemuLib/NorFlashQemuLib.inf b/ArmVirtPkg/Library/NorFlashQemuLib/NorFlashQemuLib.inf
+index d86ff36dbd..c5752a243e 100644
+--- a/ArmVirtPkg/Library/NorFlashQemuLib/NorFlashQemuLib.inf
++++ b/ArmVirtPkg/Library/NorFlashQemuLib/NorFlashQemuLib.inf
+@@ -28,6 +28,7 @@
+ [Packages]
+   MdePkg/MdePkg.dec
+   ArmPlatformPkg/ArmPlatformPkg.dec
++  ArmPkg/ArmPkg.dec
+   ArmVirtPkg/ArmVirtPkg.dec
+ 
+ [LibraryClasses]
+@@ -40,3 +41,7 @@
+ 
+ [Depex]
+   gFdtClientProtocolGuid
++
++[Pcd]
++  gArmTokenSpaceGuid.PcdFvBaseAddress
++  gArmTokenSpaceGuid.PcdFvSize
+-- 
+2.20.1
+

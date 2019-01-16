@@ -2,3 +2,11 @@ shell-efiapi.patch
 no-missing-braces.diff
 no-stack-protector-all-archs.diff
 shell-proper-valist.patch
+0001-ArmPlatformPkg-NorFlashDxe-prepare-for-devicepath-fo.patch
+0002-ArmPlatformPkg-NorFlashDxe-use-one-GUID-plus-index-t.patch
+0003-ArmVirtPkg-FdtClientDxe-take-DT-node-status-properti.patch
+0004-ArmVirtPkg-NorFlashQemuLib-discover-NOR-flash-banks-.patch
+0001-ArmPkg-ArmMmuLib-ARM-handle-unmapped-section-in-GetM.patch
+0002-ArmPkg-ArmMmuLib-ARM-handle-unmapped-sections-when-u.patch
+0003-ArmVirtPkg-NorFlashQemuLib-disregard-our-primary-FV.patch
+0004-ArmVirtPkg-QemuVirtMemInfoLib-trim-the-MMIO-region-m.patch

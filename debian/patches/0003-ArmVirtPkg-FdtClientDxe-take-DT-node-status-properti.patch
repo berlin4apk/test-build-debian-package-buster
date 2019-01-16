@@ -1,0 +1,95 @@
+From 32f5975770c309723ebb17642f89bbf9670955fd Mon Sep 17 00:00:00 2001
+From: Ard Biesheuvel <ard.biesheuvel@linaro.org>
+Date: Wed, 21 Nov 2018 12:58:26 +0100
+Subject: [PATCH 3/4] ArmVirtPkg/FdtClientDxe: take DT node 'status' properties
+ into account
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+DT has a [pseudo-]standardized 'status' property that can be set on
+any node, and which signifies that a node should be treated as
+absent unless it is set to 'ok' or 'okay'. So take this into account
+when iterating over nodes.
+
+Contributed-under: TianoCore Contribution Agreement 1.1
+Signed-off-by: Ard Biesheuvel <ard.biesheuvel@linaro.org>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Philippe Mathieu-Daudé <philmd@redhat.com>
+---
+ ArmVirtPkg/FdtClientDxe/FdtClientDxe.c | 38 ++++++++++++++++++++++----
+ 1 file changed, 33 insertions(+), 5 deletions(-)
+
+diff --git a/ArmVirtPkg/FdtClientDxe/FdtClientDxe.c b/ArmVirtPkg/FdtClientDxe/FdtClientDxe.c
+index fb6e0aeb92..5bfde381ec 100644
+--- a/ArmVirtPkg/FdtClientDxe/FdtClientDxe.c
++++ b/ArmVirtPkg/FdtClientDxe/FdtClientDxe.c
+@@ -78,6 +78,33 @@ SetNodeProperty (
+   return EFI_SUCCESS;
+ }
+ 
++STATIC
++BOOLEAN
++IsNodeEnabled (
++  INT32                       Node
++  )
++{
++  CONST CHAR8   *NodeStatus;
++  INT32         Len;
++
++  //
++  // A missing status property implies 'ok' so ignore any errors that
++  // may occur here. If the status property is present, check whether
++  // it is set to 'ok' or 'okay', anything else is treated as 'disabled'.
++  //
++  NodeStatus = fdt_getprop (mDeviceTreeBase, Node, "status", &Len);
++  if (NodeStatus == NULL) {
++    return TRUE;
++  }
++  if (Len >= 5 && AsciiStrCmp (NodeStatus, "okay") == 0) {
++    return TRUE;
++  }
++  if (Len >= 3 && AsciiStrCmp (NodeStatus, "ok") == 0) {
++    return TRUE;
++  }
++  return FALSE;
++}
++
+ STATIC
+ EFI_STATUS
+ EFIAPI
+@@ -101,6 +128,10 @@ FindNextCompatibleNode (
+       break;
+     }
+ 
++    if (!IsNodeEnabled (Next)) {
++      continue;
++    }
++
+     Type = fdt_getprop (mDeviceTreeBase, Next, "compatible", &Len);
+     if (Type == NULL) {
+       continue;
+@@ -210,7 +241,6 @@ FindNextMemoryNodeReg (
+ {
+   INT32          Prev, Next;
+   CONST CHAR8    *DeviceType;
+-  CONST CHAR8    *NodeStatus;
+   INT32          Len;
+   EFI_STATUS     Status;
+ 
+@@ -223,10 +253,8 @@ FindNextMemoryNodeReg (
+       break;
+     }
+ 
+-    NodeStatus = fdt_getprop (mDeviceTreeBase, Next, "status", &Len);
+-    if (NodeStatus != NULL && AsciiStrCmp (NodeStatus, "okay") != 0) {
+-      DEBUG ((DEBUG_WARN, "%a: ignoring memory node with status \"%a\"\n",
+-        __FUNCTION__, NodeStatus));
++    if (!IsNodeEnabled (Next)) {
++      DEBUG ((DEBUG_WARN, "%a: ignoring disabled memory node\n", __FUNCTION__));
+       continue;
+     }
+ 
+-- 
+2.20.1
+

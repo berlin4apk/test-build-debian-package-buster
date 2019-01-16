@@ -1,3 +1,21 @@
+edk2 (0~20181115.85588389-3) UNRELEASED; urgency=medium
+
+  * qemu-efi-{arm,aarch64}: Backport patches that avoid leaving the
+    NOR flash mapped at 0x0 so that buggy EFI code can no longer
+    make accesses to the first page. This was hiding bugs in EFI
+    applications, and could result in corruption of the backing
+    flash image file. LP: #1812093. Add:
+     - d/p/0001-ArmPlatformPkg-NorFlashDxe-prepare-for-devicepath-fo.patch
+     - d/p/0002-ArmPlatformPkg-NorFlashDxe-use-one-GUID-plus-index-t.patch
+     - d/p/0003-ArmVirtPkg-FdtClientDxe-take-DT-node-status-properti.patch
+     - d/p/0004-ArmVirtPkg-NorFlashQemuLib-discover-NOR-flash-banks-.patch
+     - d/p/0001-ArmPkg-ArmMmuLib-ARM-handle-unmapped-section-in-GetM.patch
+     - d/p/0002-ArmPkg-ArmMmuLib-ARM-handle-unmapped-sections-when-u.patch
+     - d/p/0003-ArmVirtPkg-NorFlashQemuLib-disregard-our-primary-FV.patch
+     - d/p/0004-ArmVirtPkg-QemuVirtMemInfoLib-trim-the-MMIO-region-m.patch
+
+ -- dann frazier <dannf@debian.org>  Wed, 16 Jan 2019 16:34:29 -0700
+
 edk2 (0~20181115.85588389-2) unstable; urgency=medium
 
   * debian/rules: Factor out common feature flags across builds.

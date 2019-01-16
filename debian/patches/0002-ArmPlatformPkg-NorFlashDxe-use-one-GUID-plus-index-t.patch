@@ -1,0 +1,86 @@
+From 8b9025345e65ccaeacd3fb5dc711f952650ad6a8 Mon Sep 17 00:00:00 2001
+From: Ard Biesheuvel <ard.biesheuvel@linaro.org>
+Date: Wed, 21 Nov 2018 12:58:25 +0100
+Subject: [PATCH 2/4] ArmPlatformPkg/NorFlashDxe: use one GUID plus index to
+ identify flash banks
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Currently, each flash bank controlled by ArmPlatformPkg/NorFlashDxe
+has its own VendorHw GUID, and instances of NorFlashPlatformLib
+describe each bank to the driver, along with the GUID for each.
+
+This works ok for bare metal platforms, but it would be useful for
+virtual platforms if we could obtain this information from a
+device tree, which would require us to invent GUIDs on the fly,
+given that the 'cfi-flash' binding does not include a GUID.
+
+So instead, let's switch to a single GUID for all flash banks,
+and update the driver's device path handling to include an index
+to identify each bank uniquely.
+
+Contributed-under: TianoCore Contribution Agreement 1.1
+Signed-off-by: Ard Biesheuvel <ard.biesheuvel@linaro.org>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Leif Lindholm <leif.lindholm@linaro.org>
+Reviewed-by: Philippe Mathieu-Daudé <philmd@redhat.com>
+Tested-by: Thomas Abraham <thomas.abraham@arm.com>
+---
+ ArmPlatformPkg/Drivers/NorFlashDxe/NorFlashDxe.c | 6 +++---
+ ArmPlatformPkg/Drivers/NorFlashDxe/NorFlashDxe.h | 1 +
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/ArmPlatformPkg/Drivers/NorFlashDxe/NorFlashDxe.c b/ArmPlatformPkg/Drivers/NorFlashDxe/NorFlashDxe.c
+index 53753a4721..af40a4c884 100644
+--- a/ArmPlatformPkg/Drivers/NorFlashDxe/NorFlashDxe.c
++++ b/ArmPlatformPkg/Drivers/NorFlashDxe/NorFlashDxe.c
+@@ -89,6 +89,7 @@ NOR_FLASH_INSTANCE  mNorFlashInstanceTemplate = {
+       },
+       { 0x0, 0x0, 0x0, { 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 } }, // GUID ... NEED TO BE FILLED
+     },
++    0, // Index
+     {
+       END_DEVICE_PATH_TYPE,
+       END_ENTIRE_DEVICE_PATH_SUBTYPE,
+@@ -105,7 +106,6 @@ NorFlashCreateInstance (
+   IN UINT32                 Index,
+   IN UINT32                 BlockSize,
+   IN BOOLEAN                SupportFvb,
+-  IN CONST GUID             *NorFlashGuid,
+   OUT NOR_FLASH_INSTANCE**  NorFlashInstance
+   )
+ {
+@@ -128,7 +128,8 @@ NorFlashCreateInstance (
+   Instance->Media.BlockSize = BlockSize;
+   Instance->Media.LastBlock = (NorFlashSize / BlockSize)-1;
+ 
+-  CopyGuid (&Instance->DevicePath.Vendor.Guid, NorFlashGuid);
++  CopyGuid (&Instance->DevicePath.Vendor.Guid, &gEfiCallerIdGuid);
++  Instance->DevicePath.Index = (UINT8)Index;
+ 
+   Instance->ShadowBuffer = AllocateRuntimePool (BlockSize);;
+   if (Instance->ShadowBuffer == NULL) {
+@@ -1314,7 +1315,6 @@ NorFlashInitialise (
+       Index,
+       NorFlashDevices[Index].BlockSize,
+       ContainVariableStorage,
+-      &NorFlashDevices[Index].Guid,
+       &mNorFlashInstances[Index]
+     );
+     if (EFI_ERROR(Status)) {
+diff --git a/ArmPlatformPkg/Drivers/NorFlashDxe/NorFlashDxe.h b/ArmPlatformPkg/Drivers/NorFlashDxe/NorFlashDxe.h
+index 4436fc4323..c0563f6d05 100644
+--- a/ArmPlatformPkg/Drivers/NorFlashDxe/NorFlashDxe.h
++++ b/ArmPlatformPkg/Drivers/NorFlashDxe/NorFlashDxe.h
+@@ -125,6 +125,7 @@ typedef struct _NOR_FLASH_INSTANCE                NOR_FLASH_INSTANCE;
+ #pragma pack (1)
+ typedef struct {
+   VENDOR_DEVICE_PATH                  Vendor;
++  UINT8                               Index;
+   EFI_DEVICE_PATH_PROTOCOL            End;
+ } NOR_FLASH_DEVICE_PATH;
+ #pragma pack ()
+-- 
+2.20.1
+

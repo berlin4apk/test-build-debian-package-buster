@@ -1,0 +1,43 @@
+From 36a87fec6879b4bd96de88a7234f9a98c69af8e1 Mon Sep 17 00:00:00 2001
+From: Ard Biesheuvel <ard.biesheuvel@linaro.org>
+Date: Fri, 30 Nov 2018 12:28:26 +0100
+Subject: [PATCH 1/4] ArmPkg/ArmMmuLib ARM: handle unmapped section in
+ GetMemoryRegion()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+GetMemoryRegion() is used to obtain the attributes of an existing
+mapping, to permit permission attribute changes to be optimized
+away if the attributes don't actually change.
+
+The current ARM code assumes that a section mapping or a page mapping
+exists for any region passed into GetMemoryRegion(), but the region
+may be unmapped entirely, in which case the code will crash. So check
+if a section mapping exists before dereferencing it.
+
+Contributed-under: TianoCore Contribution Agreement 1.1
+Signed-off-by: Ard Biesheuvel <ard.biesheuvel@linaro.org>
+Reviewed-by: Leif Lindholm <leif.lindholm@linaro.org>
+Reviewed-by: Philippe Mathieu-Daudé <philmd@redhat.com>
+---
+ ArmPkg/Drivers/CpuDxe/Arm/Mmu.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/ArmPkg/Drivers/CpuDxe/Arm/Mmu.c b/ArmPkg/Drivers/CpuDxe/Arm/Mmu.c
+index 12ca5b2667..3b29d33d0a 100644
+--- a/ArmPkg/Drivers/CpuDxe/Arm/Mmu.c
++++ b/ArmPkg/Drivers/CpuDxe/Arm/Mmu.c
+@@ -457,6 +457,9 @@ GetMemoryRegion (
+ 
+   // Get the section at the given index
+   SectionDescriptor = FirstLevelTable[TableIndex];
++  if (!SectionDescriptor) {
++    return EFI_NOT_FOUND;
++  }
+ 
+   // If 'BaseAddress' belongs to the section then round it to the section boundary
+   if (((SectionDescriptor & TT_DESCRIPTOR_SECTION_TYPE_MASK) == TT_DESCRIPTOR_SECTION_TYPE_SECTION) ||
+-- 
+2.20.1
+
