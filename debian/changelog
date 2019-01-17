@@ -13,6 +13,8 @@ edk2 (0~20181115.85588389-3) UNRELEASED; urgency=medium
      - d/p/0002-ArmPkg-ArmMmuLib-ARM-handle-unmapped-sections-when-u.patch
      - d/p/0003-ArmVirtPkg-NorFlashQemuLib-disregard-our-primary-FV.patch
      - d/p/0004-ArmVirtPkg-QemuVirtMemInfoLib-trim-the-MMIO-region-m.patch
+  * qemu-efi-{arm,aarch64}: Drop unsupported -DINTEL_BDS from build
+    flags. It became the default some time ago.
 
  -- dann frazier <dannf@debian.org>  Wed, 16 Jan 2019 16:34:29 -0700
 
