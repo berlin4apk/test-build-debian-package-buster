@@ -66,12 +66,7 @@ build-ovmf: EDK2_HOST_ARCH=X64
 build-ovmf: setup-build
 ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 	cd UefiCpuPkg/ResetVector/Vtf0 && python Build.py
-	mkdir FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
 	set -e; . ./edksetup.sh; \
-		build -a $(EDK2_HOST_ARCH) -p FatPkg/FatPkg.dsc -m FatPkg/EnhancedFatDxe/Fat.inf \
-			-b RELEASE -t $(EDK2_TOOLCHAIN); \
-		cp -a Build/Fat/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_ARCH_DIR)/Fat.efi \
-			FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)/Fat.efi; \
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
@@ -80,11 +75,6 @@ endif
 
 build-qemu-efi: setup-build
 	set -e; . ./edksetup.sh; \
-		build -a $(EDK2_HOST_ARCH) -p FatPkg/FatPkg.dsc \
-			-m FatPkg/EnhancedFatDxe/Fat.inf \
-			-t $(EDK2_TOOLCHAIN) -b RELEASE; \
-		cp -a Build/Fat/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_HOST_ARCH)/Fat.efi \
-			FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)/Fat.efi; \
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p ArmVirtPkg/ArmVirtQemu.dsc \

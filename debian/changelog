@@ -19,6 +19,10 @@ edk2 (0~20190309.89910a39-1) UNRELEASED; urgency=medium
     - qemu-efi-{arm,aarch64}: Don't explicitly build ShellPkg,
       ArmVirtPkg has been doing it since 2015 (da1ce6f8
       "ArmVirtualizationPkg: build UEFI shell from source").
+    - Don't explicitly build FatPkg, OvmfPkg & ArmVirtPkg have
+      included it since 2016 (aa47e529 "OvmfPkg: Convert to using
+      FatPkg in the EDK II tree"), (42e3d9eb "ArmVirtPkg: Convert to
+      build FatPkg from source").
 
  -- dann frazier <dannf@debian.org>  Fri, 15 Mar 2019 15:56:49 -0600
 
