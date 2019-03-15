@@ -5,6 +5,7 @@ edk2 (0~20190309.89910a39-1) UNRELEASED; urgency=medium
       Closes: #924615.
     - qemu-efi-*: Avoid silent corruption of firmware flash image
       by buggy EFI apps. Closes: #924620, LP: #1812093.
+    - d/binary-check.blacklist: Drop binaries removed upstream.
 
  -- dann frazier <dannf@debian.org>  Fri, 15 Mar 2019 15:56:49 -0600
 
