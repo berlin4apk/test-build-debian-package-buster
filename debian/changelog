@@ -24,6 +24,7 @@ edk2 (0~20190309.89910a39-1) UNRELEASED; urgency=medium
       FatPkg in the EDK II tree"), (42e3d9eb "ArmVirtPkg: Convert to
       build FatPkg from source").
     - d/p/no-missing-braces.diff: Forward port.
+    - d/p/no-stack-protector-all-archs.diff: Forward port.
 
  -- dann frazier <dannf@debian.org>  Fri, 15 Mar 2019 15:56:49 -0600
 
