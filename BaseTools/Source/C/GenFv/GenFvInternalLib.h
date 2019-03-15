@@ -34,7 +34,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include "EfiUtilityMsgs.h"
 
 //
-// Different file separater for Linux and Windows
+// Different file separator for Linux and Windows
 //
 #define FILE_SEP_CHAR '/'
 
@@ -172,16 +172,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 // Defines to calculate the offset for IA32 SEC CORE entry point
 //
 #define IA32_SEC_CORE_ENTRY_OFFSET     0xD
-
-//
-// Defines to calculate the FIT table
-//
-#define IPF_FIT_ADDRESS_OFFSET        0x20
-
-//
-// Defines to calculate the offset for SALE_ENTRY
-//
-#define IPF_SALE_ENTRY_ADDRESS_OFFSET 0x18
 
 //
 // Symbol file definitions, current max size if 512K

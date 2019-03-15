@@ -2,9 +2,9 @@
 # This Package provides all definitions, library classes and libraries instances.
 #
 # It also provides the definitions(including PPIs/PROTOCOLs/GUIDs) of
-# EFI1.10/UEFI2.7/PI1.6 and some Industry Standards.
+# EFI1.10/UEFI2.7/PI1.7 and some Industry Standards.
 #
-# Copyright (c) 2007 - 2018, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2019, Intel Corporation. All rights reserved.<BR>
 # Portions copyright (c) 2008 - 2009, Apple Inc. All rights reserved.<BR>
 # (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 #
@@ -242,6 +242,13 @@
   #                type conversion, addition, subtraction, and multiplication.
   ##
   SafeIntLib|Include/Library/SafeIntLib.h
+
+  ## @libraryclass Provides a service to retrieve a pointer to the Standalone MM Services Table.
+  #                Only available to MM_STANDALONE, SMM/DXE Combined and SMM module types.
+  MmServicesTableLib|Include/Library/MmServicesTableLib.h
+
+  ##  @libraryclass  Module entry point library for standalone MM drivers.
+  StandaloneMmDriverEntryPoint|Include/Library/StandaloneMmDriverEntryPoint.h
 
 [LibraryClasses.IA32, LibraryClasses.X64]
   ##  @libraryclass  Abstracts both S/W SMI generation and detection.
@@ -921,6 +928,13 @@
 
   ## Include/Ppi/SecHobData.h
   gEfiSecHobDataPpiGuid = { 0x3ebdaf20, 0x6667, 0x40d8, {0xb4, 0xee, 0xf5, 0x99, 0x9a, 0xc1, 0xb7, 0x1f } }
+
+  #
+  # PPIs defined in PI 1.7.
+  #
+
+  ## Include/Ppi/PeiCoreFvLocation.h
+  gEfiPeiCoreFvLocationPpiGuid   = { 0x52888eae, 0x5b10, 0x47d0, { 0xa8, 0x7f, 0xb8, 0x22, 0xab, 0xa0, 0xca, 0xf4 }}
 
 [Protocols]
   ## Include/Protocol/Pcd.h
@@ -2072,6 +2086,13 @@
   #  BIT31 - Error message.<BR>
   # @Prompt Fixed Debug Message Print Level.
   gEfiMdePkgTokenSpaceGuid.PcdFixedDebugPrintErrorLevel|0xFFFFFFFF|UINT32|0x30001016
+
+  ## Indicates the control flow enforcement enabling state.
+  #  If enabled, it uses control flow enforcement technology to prevent ROP or JOP.<BR><BR>
+  #   BIT0 - SMM CET Shadow Stack is enabled.<BR>
+  #   Other - reserved
+  # @Prompt Enable control flow enforcement.
+  gEfiMdePkgTokenSpaceGuid.PcdControlFlowEnforcementPropertyMask|0x0|UINT32|0x30001017
 
 [PcdsFixedAtBuild,PcdsPatchableInModule]
   ## Indicates the maximum length of unicode string used in the following

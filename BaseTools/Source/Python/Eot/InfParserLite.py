@@ -16,11 +16,12 @@
 #
 from __future__ import print_function
 from __future__ import absolute_import
+
 import Common.LongFilePathOs as os
 import Common.EdkLogger as EdkLogger
 from Common.DataType import *
 from CommonDataClass.DataClass import *
-from Common.Identification import *
+from Eot.Identification import Identification
 from Common.StringUtils import *
 from Eot.Parser import *
 from Eot import Database
@@ -40,8 +41,8 @@ class EdkInfParser(object):
     #  @param  Database: Eot database
     #  @param  SourceFileList: A list for all source file belonging this INF file
     #  @param  SourceOverridePath: Override path for source file
-    #  @param  Edk_Source: Envirnoment variable EDK_SOURCE
-    #  @param  Efi_Source: Envirnoment variable EFI_SOURCE
+    #  @param  Edk_Source: Environment variable EDK_SOURCE
+    #  @param  Efi_Source: Environment variable EFI_SOURCE
     #
     def __init__(self, Filename = None, Database = None, SourceFileList = None, SourceOverridePath = None, Edk_Source = None, Efi_Source = None):
         self.Identification = Identification()

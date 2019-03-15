@@ -255,8 +255,8 @@ def GenModuleUNIEncodeFile(ModuleObject, UniFileHeader='', Encoding=DT.TAB_ENCOD
         File = codecs.open(ContainerFile, 'wb', Encoding)
         File.write(u'\uFEFF' + Content)
         File.stream.close()
-    Md5Sigature = md5(__FileHookOpen__(str(ContainerFile), 'rb').read())
-    Md5Sum = Md5Sigature.hexdigest()
+    Md5Signature = md5(__FileHookOpen__(str(ContainerFile), 'rb').read())
+    Md5Sum = Md5Signature.hexdigest()
     if (ContainerFile, Md5Sum) not in ModuleObject.FileList:
         ModuleObject.FileList.append((ContainerFile, Md5Sum))
 
@@ -274,7 +274,7 @@ def GenDefines(ModuleObject):
         if not DefinesDict:
             continue
         for Statement in DefinesDict:
-            if Statement.split(DT.TAB_EQUAL_SPLIT) > 1:
+            if len(Statement.split(DT.TAB_EQUAL_SPLIT)) > 1:
                 Statement = (u'%s ' % Statement.split(DT.TAB_EQUAL_SPLIT, 1)[0]).ljust(LeftOffset) \
                              + u'= %s' % Statement.split(DT.TAB_EQUAL_SPLIT, 1)[1].lstrip()
             SortedArch = DT.TAB_ARCH_COMMON
@@ -409,7 +409,7 @@ def GenLibraryClasses(ModuleObject):
                 Statement += '|' + FFE
             ModuleList = LibraryClass.GetSupModuleList()
             ArchList = LibraryClass.GetSupArchList()
-            for Index in xrange(0, len(ArchList)):
+            for Index in range(0, len(ArchList)):
                 ArchList[Index] = ConvertArchForInstall(ArchList[Index])
             ArchList.sort()
             SortedArch = ' '.join(ArchList)
@@ -572,7 +572,7 @@ def GenUserExtensions(ModuleObject):
 #         if not Statement:
 #             continue
         ArchList = UserExtension.GetSupArchList()
-        for Index in xrange(0, len(ArchList)):
+        for Index in range(0, len(ArchList)):
             ArchList[Index] = ConvertArchForInstall(ArchList[Index])
         ArchList.sort()
         KeyList = []

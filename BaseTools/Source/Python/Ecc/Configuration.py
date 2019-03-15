@@ -34,7 +34,6 @@ _ConfigFileToInternalTranslation = {
     "CFunctionLayoutCheckFunctionBody":"CFunctionLayoutCheckFunctionBody",
     "CFunctionLayoutCheckFunctionName":"CFunctionLayoutCheckFunctionName",
     "CFunctionLayoutCheckFunctionPrototype":"CFunctionLayoutCheckFunctionPrototype",
-    "CFunctionLayoutCheckNoDeprecated":"CFunctionLayoutCheckNoDeprecated",
     "CFunctionLayoutCheckNoInitOfVariable":"CFunctionLayoutCheckNoInitOfVariable",
     "CFunctionLayoutCheckNoStatic":"CFunctionLayoutCheckNoStatic",
     "CFunctionLayoutCheckOptionalFunctionalModifier":"CFunctionLayoutCheckOptionalFunctionalModifier",
@@ -194,6 +193,8 @@ class Configuration(object):
         # Check if there is no trailing white space in one line.
         self.GeneralCheckTrailingWhiteSpaceLine = 1
 
+        self.CFunctionLayoutCheckNoDeprecated = 1
+
         ## Space Checking
         self.SpaceCheckAll = 1
 
@@ -243,8 +244,6 @@ class Configuration(object):
         self.CFunctionLayoutCheckNoInitOfVariable = 1
         # Check whether no use of STATIC for functions
         self.CFunctionLayoutCheckNoStatic = 1
-        # Check whether no use of Deprecated functions
-        self.CFunctionLayoutCheckNoDeprecated = 1
 
         ## Include Files Checking
         self.IncludeFileCheckAll = 0

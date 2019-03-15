@@ -19,6 +19,7 @@ from CommonDataClass.Exceptions import WrnExpression
 import uuid
 from Common.Expression import PcdPattern, BaseExpression
 from Common.DataType import *
+from re import compile
 
 ERR_STRING_EXPR = 'This operator cannot be used in string expression: [%s].'
 ERR_SNYTAX = 'Syntax error, the rest of expression cannot be evaluated: [%s].'
@@ -202,7 +203,7 @@ class RangeExpression(BaseExpression):
 
     NonLetterOpLst = ['+', '-', '&', '|', '^', '!', '=', '>', '<']
 
-    RangePattern = re.compile(r'[0-9]+ - [0-9]+')
+    RangePattern = compile(r'[0-9]+ - [0-9]+')
 
     def preProcessRangeExpr(self, expr):
         # convert hex to int
@@ -289,7 +290,7 @@ class RangeExpression(BaseExpression):
         return rangeid
 
 
-    def NegtiveRange(self, Oprand1):
+    def NegativeRange(self, Oprand1):
         rangeContainer1 = self.operanddict[Oprand1]
 
 
@@ -331,7 +332,7 @@ class RangeExpression(BaseExpression):
         if Operator in ["!", "NOT", "not"]:
             if not gGuidPattern.match(Oprand1.strip()):
                 raise BadExpression(ERR_STRING_EXPR % Operator)
-            return self.NegtiveRange(Oprand1)
+            return self.NegativeRange(Oprand1)
         else:
             if Operator in ["==", ">=", "<=", ">", "<", '^']:
                 return self.EvalRange(Operator, Oprand1)

@@ -21,7 +21,8 @@ import Eot.EotGlobalData as EotGlobalData
 from optparse import OptionParser
 from Common.StringUtils import NormPath
 from Common import BuildToolError
-from Common.Misc import GuidStructureStringToGuidString, sdict
+from Common.Misc import GuidStructureStringToGuidString
+from collections import OrderedDict as sdict
 from Eot.Parser import *
 from Eot.InfParserLite import EdkInfParser
 from Common.StringUtils import GetSplitValueList
@@ -390,7 +391,7 @@ class FirmwareVolume(Image):
         FfsDxeCoreGuid = None
         FfsPeiPrioriGuid = None
         FfsDxePrioriGuid = None
-        for FfsID in self.UnDispatchedFfsDict.keys():
+        for FfsID in list(self.UnDispatchedFfsDict.keys()):
             Ffs = self.UnDispatchedFfsDict[FfsID]
             if Ffs.Type == 0x03:
                 FfsSecCoreGuid = FfsID
@@ -496,7 +497,7 @@ class FirmwareVolume(Image):
     def DisPatchDxe(self, Db):
         IsInstalled = False
         ScheduleList = sdict()
-        for FfsID in self.UnDispatchedFfsDict.keys():
+        for FfsID in list(self.UnDispatchedFfsDict.keys()):
             CouldBeLoaded = False
             DepexString = ''
             FileDepex = None
@@ -561,7 +562,7 @@ class FirmwareVolume(Image):
 
     def DisPatchPei(self, Db):
         IsInstalled = False
-        for FfsID in self.UnDispatchedFfsDict.keys():
+        for FfsID in list(self.UnDispatchedFfsDict.keys()):
             CouldBeLoaded = True
             DepexString = ''
             FileDepex = None
@@ -929,8 +930,6 @@ class Ffs(Image):
     _SIZE_      = struct.Struct("20x 3B")
     _STATE_     = struct.Struct("23x 1B")
 
-    VTF_GUID = "1BA0062E-C779-4582-8566-336AE8F78F09"
-
     FFS_ATTRIB_FIXED              = 0x04
     FFS_ATTRIB_DATA_ALIGNMENT     = 0x38
     FFS_ATTRIB_CHECKSUM           = 0x40
@@ -1106,7 +1105,7 @@ class MultipleFv(FirmwareVolume):
             Fv.frombuffer(Buf, 0, len(Buf))
 
             self.BasicInfo.append([Fv.Name, Fv.FileSystemGuid, Fv.Size])
-            self.FfsDict.append(Fv.FfsDict)
+            self.FfsDict.update(Fv.FfsDict)
 
 ## Class Eot
 #
@@ -1516,7 +1515,7 @@ class Eot(object):
                             % (Identifier, '.NotifyPpi', '->NotifyPpi', MODEL_IDENTIFIER_FUNCTION_CALLING)
             SearchPpi(SqlCommand, Identifier, SourceFileID, SourceFileFullPath, ItemMode)
 
-            # Find Procotols
+            # Find Protocols
             ItemMode = 'Produced'
             SqlCommand = """select Value, Name, BelongsToFile, StartLine, EndLine from %s
                             where (Name like '%%%s%%' or Name like '%%%s%%' or Name like '%%%s%%' or Name like '%%%s%%') and Model = %s""" \

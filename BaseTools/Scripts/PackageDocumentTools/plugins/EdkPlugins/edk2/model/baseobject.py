@@ -10,10 +10,10 @@
 # THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
 # WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
-import plugins.EdkPlugins.basemodel.ini as ini
-import plugins.EdkPlugins.edk2.model.dsc as dsc
-import plugins.EdkPlugins.edk2.model.inf as inf
-import plugins.EdkPlugins.edk2.model.dec as dec
+from plugins.EdkPlugins.basemodel import ini
+from plugins.EdkPlugins.edk2.model import dsc
+from plugins.EdkPlugins.edk2.model import inf
+from plugins.EdkPlugins.edk2.model import dec
 import os
 from plugins.EdkPlugins.basemodel.message import *
 
@@ -25,7 +25,7 @@ class SurfaceObject(object):
         @return: instance of this class
 
         """
-        obj = object.__new__(cls, *args, **kwargs)
+        obj = object.__new__(cls)
         if "None" not in cls._objs:
             cls._objs["None"] = []
         cls._objs["None"].append(obj)
@@ -655,13 +655,13 @@ class Package(SurfaceObject):
         return self._pcds
 
     def GetPpis(self):
-        return self._ppis.values()
+        return list(self._ppis.values())
 
     def GetProtocols(self):
-        return self._protocols.values()
+        return list(self._protocols.values())
 
     def GetGuids(self):
-        return self._guids.values()
+        return list(self._guids.values())
 
     def Destroy(self):
         for pcd in self._pcds.values():
@@ -846,7 +846,7 @@ class SurfaceItem(object):
                 ErrorMsg("%s item is duplicated defined in packages: %s and %s" %
                          (name, parent.GetFilename(), cls._objs[name].GetParent().GetFilename()))
                 return None
-            obj = object.__new__(cls, *args, **kwargs)
+            obj = object.__new__(cls)
             cls._objs[name] = obj
             return obj
         elif issubclass(parent.__class__, Module):

@@ -2,7 +2,7 @@
   Provides string functions, linked list functions, math functions, synchronization
   functions, file path functions, and CPU architecture-specific functions.
 
-Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2019, Intel Corporation. All rights reserved.<BR>
 Portions copyright (c) 2008 - 2009, Apple Inc. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
@@ -31,6 +31,7 @@ typedef struct {
   UINT32                            Ebp;
   UINT32                            Esp;
   UINT32                            Eip;
+  UINT32                            Ssp;
 } BASE_LIBRARY_JUMP_BUFFER;
 
 #define BASE_LIBRARY_JUMP_BUFFER_ALIGNMENT 4
@@ -54,6 +55,7 @@ typedef struct {
   UINT64                            Rip;
   UINT64                            MxCsr;
   UINT8                             XmmBuffer[160]; ///< XMM6-XMM15.
+  UINT64                            Ssp;
 } BASE_LIBRARY_JUMP_BUFFER;
 
 #define BASE_LIBRARY_JUMP_BUFFER_ALIGNMENT 8
@@ -2721,6 +2723,102 @@ AsciiStrnToUnicodeStrS (
   );
 
 /**
+  Convert a Unicode character to upper case only if
+  it maps to a valid small-case ASCII character.
+
+  This internal function only deal with Unicode character
+  which maps to a valid small-case ASCII character, i.e.
+  L'a' to L'z'. For other Unicode character, the input character
+  is returned directly.
+
+  @param  Char  The character to convert.
+
+  @retval LowerCharacter   If the Char is with range L'a' to L'z'.
+  @retval Unchanged        Otherwise.
+
+**/
+CHAR16
+EFIAPI
+CharToUpper (
+  IN      CHAR16                    Char
+  );
+
+/**
+  Converts a lowercase Ascii character to upper one.
+
+  If Chr is lowercase Ascii character, then converts it to upper one.
+
+  If Value >= 0xA0, then ASSERT().
+  If (Value & 0x0F) >= 0x0A, then ASSERT().
+
+  @param  Chr   one Ascii character
+
+  @return The uppercase value of Ascii character
+
+**/
+CHAR8
+EFIAPI
+AsciiCharToUpper (
+  IN      CHAR8                     Chr
+  );
+
+/**
+  Convert binary data to a Base64 encoded ascii string based on RFC4648.
+
+  Produce a Null-terminated Ascii string in the output buffer specified by Destination and DestinationSize.
+  The Ascii string is produced by converting the data string specified by Source and SourceLength.
+
+  @param Source           Input UINT8 data
+  @param SourceLength     Number of UINT8 bytes of data
+  @param Destination      Pointer to output string buffer
+  @param DestinationSize  Size of ascii buffer. Set to 0 to get the size needed.
+                          Caller is responsible for passing in buffer of DestinationSize
+
+  @retval RETURN_SUCCESS             When ascii buffer is filled in.
+  @retval RETURN_INVALID_PARAMETER   If Source is NULL or DestinationSize is NULL.
+  @retval RETURN_INVALID_PARAMETER   If SourceLength or DestinationSize is bigger than (MAX_ADDRESS - (UINTN)Destination).
+  @retval RETURN_BUFFER_TOO_SMALL    If SourceLength is 0 and DestinationSize is <1.
+  @retval RETURN_BUFFER_TOO_SMALL    If Destination is NULL or DestinationSize is smaller than required buffersize.
+
+**/
+RETURN_STATUS
+EFIAPI
+Base64Encode (
+  IN  CONST UINT8  *Source,
+  IN        UINTN   SourceLength,
+  OUT       CHAR8  *Destination  OPTIONAL,
+  IN OUT    UINTN  *DestinationSize
+  );
+
+/**
+  Convert Base64 ascii string to binary data based on RFC4648.
+
+  Produce Null-terminated binary data in the output buffer specified by Destination and DestinationSize.
+  The binary data is produced by converting the Base64 ascii string specified by Source and SourceLength.
+
+  @param Source          Input ASCII characters
+  @param SourceLength    Number of ASCII characters
+  @param Destination     Pointer to output buffer
+  @param DestinationSize Caller is responsible for passing in buffer of at least DestinationSize.
+                         Set 0 to get the size needed. Set to bytes stored on return.
+
+  @retval RETURN_SUCCESS             When binary buffer is filled in.
+  @retval RETURN_INVALID_PARAMETER   If Source is NULL or DestinationSize is NULL.
+  @retval RETURN_INVALID_PARAMETER   If SourceLength or DestinationSize is bigger than (MAX_ADDRESS -(UINTN)Destination ).
+  @retval RETURN_INVALID_PARAMETER   If there is any invalid character in input stream.
+  @retval RETURN_BUFFER_TOO_SMALL    If buffer length is smaller than required buffer size.
+
+ **/
+RETURN_STATUS
+EFIAPI
+Base64Decode (
+  IN  CONST CHAR8  *Source,
+  IN        UINTN   SourceLength,
+  OUT       UINT8  *Destination  OPTIONAL,
+  IN OUT    UINTN  *DestinationSize
+  );
+
+/**
   Converts an 8-bit value to an 8-bit BCD value.
 
   Converts the 8-bit value specified by Value to BCD. The BCD value is
@@ -5110,6 +5208,21 @@ EFIAPI
 CpuDeadLoop (
   VOID
   );
+
+
+/**
+  Uses as a barrier to stop speculative execution.
+
+  Ensures that no later instruction will execute speculatively, until all prior
+  instructions have completed.
+
+**/
+VOID
+EFIAPI
+SpeculationBarrier (
+  VOID
+  );
+
 
 #if defined (MDE_CPU_IA32) || defined (MDE_CPU_X64)
 ///

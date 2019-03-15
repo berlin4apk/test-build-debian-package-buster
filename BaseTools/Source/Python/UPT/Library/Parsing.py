@@ -959,7 +959,7 @@ def MacroParser(Line, FileName, SectionType, FileLocalMacros):
 #                       INF, DEC specs
 # @param  SectionDict:  section statement dict, key is SectionAttrs(arch,
 #                       moduletype or platform may exist as needed) list
-#                       seperated by space,
+#                       separated by space,
 #                       value is statement
 #
 def GenSection(SectionName, SectionDict, SplitArch=True, NeedBlankLine=False):
@@ -974,7 +974,7 @@ def GenSection(SectionName, SectionDict, SplitArch=True, NeedBlankLine=False):
                     ArchList = GetSplitValueList(SectionAttrs, DataType.TAB_COMMENT_SPLIT)
                 else:
                     ArchList = [SectionAttrs]
-            for Index in xrange(0, len(ArchList)):
+            for Index in range(0, len(ArchList)):
                 ArchList[Index] = ConvertArchForInstall(ArchList[Index])
             Section = '[' + SectionName + '.' + (', ' + SectionName + '.').join(ArchList) + ']'
         else:

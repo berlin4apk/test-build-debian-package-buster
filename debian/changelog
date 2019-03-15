@@ -1,3 +1,9 @@
+edk2 (0~20190309.89910a39-1) UNRELEASED; urgency=medium
+
+  * New upstream release, based on edk2-stable201903 tag.
+
+ -- dann frazier <dannf@debian.org>  Fri, 15 Mar 2019 15:56:49 -0600
+
 edk2 (0~20181115.85588389-2) unstable; urgency=medium
 
   * debian/rules: Factor out common feature flags across builds.

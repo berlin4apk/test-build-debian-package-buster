@@ -32,7 +32,7 @@
 
 #if _MSC_EXTENSIONS
   //
-  // use Microsoft* C complier dependent integer width types
+  // use Microsoft* C compiler dependent integer width types
   //
   typedef unsigned __int64    UINT64;
   typedef __int64             INT64;
@@ -89,11 +89,6 @@ typedef INT64   INTN;
 /// A value of native width with the two highest bits set.
 ///
 #define MAX_2_BITS   0xC000000000000000
-
-///
-/// Maximum legal AARCH64  address
-///
-#define MAX_ADDRESS  0xFFFFFFFFFFFFFFFF
 
 ///
 /// The stack alignment required for AARCH64

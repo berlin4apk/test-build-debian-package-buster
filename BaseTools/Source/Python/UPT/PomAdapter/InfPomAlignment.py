@@ -133,7 +133,7 @@ class InfPomAlignment(ModuleObject):
         #
         # Should only have one ArchString Item.
         #
-        ArchString = RecordSet.keys()[0]
+        ArchString = list(RecordSet.keys())[0]
         ArchList = GetSplitValueList(ArchString, ' ')
         ArchList = ConvertArchList(ArchList)
         HasCalledFlag = False
@@ -293,7 +293,7 @@ class InfPomAlignment(ModuleObject):
             self.SetUserExtensionList(self.GetUserExtensionList() + [UserExtension])
         #
         # Get all meta-file header information
-        # the record is list of items formated:
+        # the record is list of items formatted:
         # [LineValue, Arch, StartLine, ID, Third]
         #
         InfHeaderObj = self.Parser.InfHeader

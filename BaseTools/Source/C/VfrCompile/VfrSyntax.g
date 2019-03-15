@@ -1,7 +1,7 @@
 /*++ @file
 Vfr Syntax
 
-Copyright (c) 2004 - 2017, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2018, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -64,7 +64,7 @@ VfrParserStart (
 //
 // Define a lexical class for parsing quoted strings. Basically
 // starts with a double quote, and ends with a double quote that
-// is not preceeded with a backslash.
+// is not preceded with a backslash.
 //
 #lexclass QUOTED_STRING
 #token TheString            "~[\"]*\"" << mode (START); >>
@@ -1214,7 +1214,7 @@ vfrStatementVarStoreNameValue :
   ;
 
 //
-// keep classDeinition and validClassNames for compatibility but not generate
+// keep classDefinition and validClassNames for compatibility but not generate
 // any IFR object
 //
 classDefinition[UINT16 & Class] :
@@ -4121,7 +4121,7 @@ vfrStatementExpression [UINT32 RootLevel, UINT32 ExpOpCount = 0] :
 
 //
 // Add new sub function for the sub expression extension to remember the ExpOpCount
-// This funciton is only called by sub expression.
+// This function is only called by sub expression.
 //
 vfrStatementExpressionSub [UINT32 RootLevel, UINT32 & ExpOpCount] :
   andTerm[$RootLevel, $ExpOpCount]
@@ -5322,7 +5322,7 @@ EfiVfrParser::_STOU8 (
     }
     if((IsHex && ((Value/16) != PreviousValue)) || (!IsHex && ((Value/10) != PreviousValue))) {
       sprintf(ErrorMsg, "Overflow: Value %s is too large to store in a UINT8", OrigString);
-      gCVfrErrorHandle.HandleWarning (VFR_WARNING_STRING_TO_UINT_OVERFLOW, LineNum, ErrorMsg);
+      mParserStatus = mParserStatus + gCVfrErrorHandle.HandleError (VFR_RETURN_STRING_TO_UINT_OVERFLOW, LineNum, ErrorMsg);
     }
   }
 
@@ -5359,7 +5359,7 @@ EfiVfrParser::_STOU16 (
     }
     if((IsHex && ((Value/16) != PreviousValue)) || (!IsHex && ((Value/10) != PreviousValue))) {
       sprintf(ErrorMsg, "Overflow: Value %s is too large to store in a UINT16", OrigString);
-      gCVfrErrorHandle.HandleWarning (VFR_WARNING_STRING_TO_UINT_OVERFLOW, LineNum, ErrorMsg);
+      mParserStatus = mParserStatus + gCVfrErrorHandle.HandleError (VFR_RETURN_STRING_TO_UINT_OVERFLOW, LineNum, ErrorMsg);
     }
   }
 
@@ -5396,7 +5396,7 @@ EfiVfrParser::_STOU32 (
     }
     if((IsHex && ((Value/16) != PreviousValue)) || (!IsHex && ((Value/10) != PreviousValue ))) {
       sprintf(ErrorMsg, "Overflow: Value %s is too large to store in a UINT32", OrigString);
-      gCVfrErrorHandle.HandleWarning (VFR_WARNING_STRING_TO_UINT_OVERFLOW, LineNum, ErrorMsg);
+      mParserStatus = mParserStatus + gCVfrErrorHandle.HandleError (VFR_RETURN_STRING_TO_UINT_OVERFLOW, LineNum, ErrorMsg);
     }
   }
 
@@ -5432,7 +5432,7 @@ EfiVfrParser::_STOU64 (
     }
     if((IsHex && ((Value/16) != PreviousValue)) || ((!IsHex && (Value/10) != PreviousValue))) {
       sprintf(ErrorMsg, "Overflow: Value %s is too large to store in a UINT64", OrigString);
-      gCVfrErrorHandle.HandleWarning (VFR_WARNING_STRING_TO_UINT_OVERFLOW, LineNum, ErrorMsg);
+      mParserStatus = mParserStatus + gCVfrErrorHandle.HandleError (VFR_RETURN_STRING_TO_UINT_OVERFLOW, LineNum, ErrorMsg);
     }
   }
 
@@ -5615,7 +5615,7 @@ EfiVfrParser::_DeclareDefaultFrameworkVarStore (
       VSEObj.SetAttributes (0x00000002); //hardcode EFI_VARIABLE_BOOTSERVICE_ACCESS attribute
       VSEObj.SetGuid (&pNode->mGuid);
       VSEObj.SetVarStoreId (pNode->mVarStoreId);
-      // Generate old efi varstore storage structure for compatiable with old "VarEqVal" opcode,
+      // Generate old efi varstore storage structure for compatible with old "VarEqVal" opcode,
       // which is 3 bytes less than new structure define in UEFI Spec 2.3.1.
       VSEObj.SetBinaryLength (sizeof (EFI_IFR_VARSTORE_EFI) - 3);
 #ifdef VFREXP_DEBUG

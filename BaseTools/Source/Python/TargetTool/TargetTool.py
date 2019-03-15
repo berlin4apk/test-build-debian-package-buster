@@ -143,14 +143,14 @@ def GetConfigureKeyValue(self, Key):
         if os.path.exists(dscFullPath):
             Line = "%-30s = %s\n" % (Key, self.Opt.DSCFILE)
         else:
-            EdkLogger.error("TagetTool", BuildToolError.FILE_NOT_FOUND,
+            EdkLogger.error("TargetTool", BuildToolError.FILE_NOT_FOUND,
                             "DSC file %s does not exist!" % self.Opt.DSCFILE, RaiseError=False)
     elif Key == TAB_TAT_DEFINES_TOOL_CHAIN_CONF and self.Opt.TOOL_DEFINITION_FILE is not None:
         tooldefFullPath = os.path.join(self.WorkSpace, self.Opt.TOOL_DEFINITION_FILE)
         if os.path.exists(tooldefFullPath):
             Line = "%-30s = %s\n" % (Key, self.Opt.TOOL_DEFINITION_FILE)
         else:
-            EdkLogger.error("TagetTool", BuildToolError.FILE_NOT_FOUND,
+            EdkLogger.error("TargetTool", BuildToolError.FILE_NOT_FOUND,
                             "Tooldef file %s does not exist!" % self.Opt.TOOL_DEFINITION_FILE, RaiseError=False)
 
     elif self.Opt.NUM >= 2:
@@ -203,8 +203,8 @@ def RangeCheckCallback(option, opt_str, value, parser):
 
 def MyOptionParser():
     parser = OptionParser(version=__version__, prog="TargetTool.exe", usage=__usage__, description=__copyright__)
-    parser.add_option("-a", "--arch", action="append", type="choice", choices=['IA32', 'X64', 'IPF', 'EBC', 'ARM', 'AARCH64', '0'], dest="TARGET_ARCH",
-        help="ARCHS is one of list: IA32, X64, IPF, ARM, AARCH64 or EBC, which replaces target.txt's TARGET_ARCH definition. To specify more archs, please repeat this option. 0 will clear this setting in target.txt and can't combine with other value.")
+    parser.add_option("-a", "--arch", action="append", type="choice", choices=['IA32', 'X64', 'EBC', 'ARM', 'AARCH64', '0'], dest="TARGET_ARCH",
+        help="ARCHS is one of list: IA32, X64, ARM, AARCH64 or EBC, which replaces target.txt's TARGET_ARCH definition. To specify more archs, please repeat this option. 0 will clear this setting in target.txt and can't combine with other value.")
     parser.add_option("-p", "--platform", action="callback", type="string", dest="DSCFILE", callback=SingleCheckCallback,
         help="Specify a DSC file, which replace target.txt's ACTIVE_PLATFORM definition. 0 will clear this setting in target.txt and can't combine with other value.")
     parser.add_option("-c", "--tooldef", action="callback", type="string", dest="TOOL_DEFINITION_FILE", callback=SingleCheckCallback,

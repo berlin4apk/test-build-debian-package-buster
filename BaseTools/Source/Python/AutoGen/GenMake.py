@@ -167,7 +167,7 @@ class BuildFile(object):
         "gmake" :   "include"
     }
 
-    _INC_FLAG_ = {TAB_COMPILER_MSFT : "/I", "GCC" : "-I", "INTEL" : "-I", "RVCT" : "-I"}
+    _INC_FLAG_ = {TAB_COMPILER_MSFT : "/I", "GCC" : "-I", "INTEL" : "-I", "RVCT" : "-I", "NASM" : "-I"}
 
     ## Constructor of BuildFile
     #
@@ -476,23 +476,16 @@ cleanlib:
         else:
             ModuleEntryPoint = "_ModuleEntryPoint"
 
-        # Intel EBC compiler enforces EfiMain
-        if MyAgo.AutoGenVersion < 0x00010005 and MyAgo.Arch == "EBC":
-            ArchEntryPoint = "EfiMain"
-        else:
-            ArchEntryPoint = ModuleEntryPoint
+        ArchEntryPoint = ModuleEntryPoint
 
         if MyAgo.Arch == "EBC":
             # EBC compiler always use "EfiStart" as entry point. Only applies to EdkII modules
             ImageEntryPoint = "EfiStart"
-        elif MyAgo.AutoGenVersion < 0x00010005:
-            # Edk modules use entry point specified in INF file
-            ImageEntryPoint = ModuleEntryPoint
         else:
             # EdkII modules always use "_ModuleEntryPoint" as entry point
             ImageEntryPoint = "_ModuleEntryPoint"
 
-        for k, v in MyAgo.Module.Defines.iteritems():
+        for k, v in MyAgo.Module.Defines.items():
             if k not in MyAgo.Macros:
                 MyAgo.Macros[k] = v
 
@@ -504,7 +497,7 @@ cleanlib:
             MyAgo.Macros['IMAGE_ENTRY_POINT'] = ImageEntryPoint
 
         PCI_COMPRESS_Flag = False
-        for k, v in MyAgo.Module.Defines.iteritems():
+        for k, v in MyAgo.Module.Defines.items():
             if 'PCI_COMPRESS' == k and 'TRUE' == v:
                 PCI_COMPRESS_Flag = True
 
@@ -555,8 +548,8 @@ cleanlib:
                 NewRespStr = ' '.join(NewStr)
                 SaveFileOnChange(RespFile, NewRespStr, False)
                 ToolsDef.append("%s = %s" % (Resp, UnexpandMacroStr + ' @' + RespFile))
-                RespFileListContent += '@' + RespFile + os.linesep
-                RespFileListContent += NewRespStr + os.linesep
+                RespFileListContent += '@' + RespFile + TAB_LINE_BREAK
+                RespFileListContent += NewRespStr + TAB_LINE_BREAK
             SaveFileOnChange(RespFileList, RespFileListContent, False)
         else:
             if os.path.exists(RespFileList):
@@ -596,6 +589,24 @@ cleanlib:
                                                 }
                                                 )
         FileMacroList.append(FileMacro)
+        # Add support when compiling .nasm source files
+        for File in self.FileCache.keys():
+            if not str(File).endswith('.nasm'):
+                continue
+            IncludePathList = []
+            for P in  MyAgo.IncludePathList:
+                IncludePath = self._INC_FLAG_['NASM'] + self.PlaceMacro(P, self.Macros)
+                if IncludePath.endswith(os.sep):
+                    IncludePath = IncludePath.rstrip(os.sep)
+                # When compiling .nasm files, need to add a literal backslash at each path
+                # To specify a literal backslash at the end of the line, precede it with a caret (^)
+                if P == MyAgo.IncludePathList[-1] and os.sep == '\\':
+                    IncludePath = ''.join([IncludePath, '^', os.sep])
+                else:
+                    IncludePath = os.path.join(IncludePath, '')
+                IncludePathList.append(IncludePath)
+            FileMacroList.append(self._FILE_MACRO_TEMPLATE.Replace({"macro_name": "NASM_INC", "source_file": IncludePathList}))
+            break
 
         # Generate macros used to represent files containing list of input files
         for ListFileMacro in self.ListFileMacros:
@@ -607,11 +618,6 @@ cleanlib:
                 False
                 )
 
-        # Edk modules need <BaseName>StrDefs.h for string ID
-        #if MyAgo.AutoGenVersion < 0x00010005 and len(MyAgo.UnicodeFileList) > 0:
-        #    BcTargetList = ['strdefs']
-        #else:
-        #    BcTargetList = []
         BcTargetList = []
 
         MakefileName = self._FILE_NAME_[self._FileType]
@@ -655,7 +661,7 @@ cleanlib:
             "module_relative_directory" : MyAgo.SourceDir,
             "module_dir"                : mws.join (self.Macros["WORKSPACE"], MyAgo.SourceDir),
             "package_relative_directory": package_rel_dir,
-            "module_extra_defines"      : ["%s = %s" % (k, v) for k, v in MyAgo.Module.Defines.iteritems()],
+            "module_extra_defines"      : ["%s = %s" % (k, v) for k, v in MyAgo.Module.Defines.items()],
 
             "architecture"              : MyAgo.Arch,
             "toolchain_tag"             : MyAgo.ToolChain,
@@ -669,8 +675,8 @@ cleanlib:
             "separator"                 : Separator,
             "module_tool_definitions"   : ToolsDef,
 
-            "shell_command_code"        : self._SHELL_CMD_[self._FileType].keys(),
-            "shell_command"             : self._SHELL_CMD_[self._FileType].values(),
+            "shell_command_code"        : list(self._SHELL_CMD_[self._FileType].keys()),
+            "shell_command"             : list(self._SHELL_CMD_[self._FileType].values()),
 
             "module_entry_point"        : ModuleEntryPoint,
             "image_entry_point"         : ImageEntryPoint,
@@ -953,7 +959,7 @@ cleanlib:
                     NewFile = self.PlaceMacro(str(F), self.Macros)
                     # In order to use file list macro as dependency
                     if T.GenListFile:
-                        # gnu tools need forward slash path separater, even on Windows
+                        # gnu tools need forward slash path separator, even on Windows
                         self.ListFileMacros[T.ListFileMacro].append(str(F).replace ('\\', '/'))
                         self.FileListMacros[T.FileListMacro].append(NewFile)
                     elif T.GenFileListMacro:
@@ -997,7 +1003,7 @@ cleanlib:
     ## Find dependencies for one source file
     #
     #  By searching recursively "#include" directive in file, find out all the
-    #  files needed by given source file. The dependecies will be only searched
+    #  files needed by given source file. The dependencies will be only searched
     #  in given search path list.
     #
     #   @param      File            The source file
@@ -1032,17 +1038,21 @@ cleanlib:
                 CurrentFileDependencyList = DepDb[F]
             else:
                 try:
-                    Fd = open(F.Path, 'r')
+                    Fd = open(F.Path, 'rb')
+                    FileContent = Fd.read()
+                    Fd.close()
                 except BaseException as X:
                     EdkLogger.error("build", FILE_OPEN_FAILURE, ExtraData=F.Path + "\n\t" + str(X))
-
-                FileContent = Fd.read()
-                Fd.close()
                 if len(FileContent) == 0:
                     continue
-
-                if FileContent[0] == 0xff or FileContent[0] == 0xfe:
-                    FileContent = unicode(FileContent, "utf-16")
+                try:
+                    if FileContent[0] == 0xff or FileContent[0] == 0xfe:
+                        FileContent = FileContent.decode('utf-16')
+                    else:
+                        FileContent = FileContent.decode()
+                except:
+                    # The file is not txt file. for example .mcb file
+                    continue
                 IncludedFileList = gIncludePattern.findall(FileContent)
 
                 for Inc in IncludedFileList:
@@ -1269,8 +1279,8 @@ ${BEGIN}\t-@${create_directory_command}\n${END}\
             "separator"                 : Separator,
             "module_tool_definitions"   : ToolsDef,
 
-            "shell_command_code"        : self._SHELL_CMD_[self._FileType].keys(),
-            "shell_command"             : self._SHELL_CMD_[self._FileType].values(),
+            "shell_command_code"        : list(self._SHELL_CMD_[self._FileType].keys()),
+            "shell_command"             : list(self._SHELL_CMD_[self._FileType].values()),
 
             "create_directory_command"  : self.GetCreateDirectoryCommand(self.IntermediateDirectoryList),
             "custom_makefile_content"   : CustomMakefile
@@ -1443,8 +1453,8 @@ cleanlib:
 
             "toolchain_tag"             : MyAgo.ToolChain,
             "build_target"              : MyAgo.BuildTarget,
-            "shell_command_code"        : self._SHELL_CMD_[self._FileType].keys(),
-            "shell_command"             : self._SHELL_CMD_[self._FileType].values(),
+            "shell_command_code"        : list(self._SHELL_CMD_[self._FileType].keys()),
+            "shell_command"             : list(self._SHELL_CMD_[self._FileType].values()),
             "build_architecture_list"   : MyAgo.Arch,
             "architecture"              : MyAgo.Arch,
             "separator"                 : Separator,
@@ -1519,13 +1529,9 @@ class TopLevelMakefile(BuildFile):
         if MyAgo.FdfFile is not None and MyAgo.FdfFile != "":
             FdfFileList = [MyAgo.FdfFile]
             # macros passed to GenFds
-            MacroList.append('"%s=%s"' % ("EFI_SOURCE", GlobalData.gEfiSource.replace('\\', '\\\\')))
-            MacroList.append('"%s=%s"' % ("EDK_SOURCE", GlobalData.gEdkSource.replace('\\', '\\\\')))
             MacroDict = {}
             MacroDict.update(GlobalData.gGlobalDefines)
             MacroDict.update(GlobalData.gCommandLineDefines)
-            MacroDict.pop("EFI_SOURCE", "dummy")
-            MacroDict.pop("EDK_SOURCE", "dummy")
             for MacroName in MacroDict:
                 if MacroDict[MacroName] != "":
                     MacroList.append('"%s=%s"' % (MacroName, MacroDict[MacroName].replace('\\', '\\\\')))
@@ -1579,8 +1585,8 @@ class TopLevelMakefile(BuildFile):
 
             "toolchain_tag"             : MyAgo.ToolChain,
             "build_target"              : MyAgo.BuildTarget,
-            "shell_command_code"        : self._SHELL_CMD_[self._FileType].keys(),
-            "shell_command"             : self._SHELL_CMD_[self._FileType].values(),
+            "shell_command_code"        : list(self._SHELL_CMD_[self._FileType].keys()),
+            "shell_command"             : list(self._SHELL_CMD_[self._FileType].values()),
             'arch'                      : list(MyAgo.ArchList),
             "build_architecture_list"   : ','.join(MyAgo.ArchList),
             "separator"                 : Separator,

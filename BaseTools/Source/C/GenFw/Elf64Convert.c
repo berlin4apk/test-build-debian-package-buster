@@ -74,7 +74,7 @@ CleanUp64 (
   );
 
 //
-// Rename ELF32 strucutres to common names to help when porting to ELF64.
+// Rename ELF32 structures to common names to help when porting to ELF64.
 //
 typedef Elf64_Shdr Elf_Shdr;
 typedef Elf64_Ehdr Elf_Ehdr;
@@ -486,7 +486,6 @@ ScanSections64 (
   mNtHdrOffset = mCoffOffset;
   switch (mEhdr->e_machine) {
   case EM_X86_64:
-  case EM_IA_64:
   case EM_AARCH64:
     mCoffOffset += sizeof (EFI_IMAGE_NT_HEADERS64);
   break;
@@ -581,7 +580,7 @@ ScanSections64 (
   mCoffOffset = CoffAlign(mCoffOffset);
 
   if (SectionCount > 1 && mOutImageType == FW_EFI_IMAGE) {
-    Warning (NULL, 0, 0, NULL, "Mulitple sections in %s are merged into 1 text section. Source level debug might not work correctly.", mInImageName);
+    Warning (NULL, 0, 0, NULL, "Multiple sections in %s are merged into 1 text section. Source level debug might not work correctly.", mInImageName);
   }
 
   //
@@ -635,7 +634,7 @@ ScanSections64 (
   }
 
   if (SectionCount > 1 && mOutImageType == FW_EFI_IMAGE) {
-    Warning (NULL, 0, 0, NULL, "Mulitple sections in %s are merged into 1 data section. Source level debug might not work correctly.", mInImageName);
+    Warning (NULL, 0, 0, NULL, "Multiple sections in %s are merged into 1 data section. Source level debug might not work correctly.", mInImageName);
   }
 
   //
@@ -691,10 +690,6 @@ ScanSections64 (
   switch (mEhdr->e_machine) {
   case EM_X86_64:
     NtHdr->Pe32Plus.FileHeader.Machine = EFI_IMAGE_MACHINE_X64;
-    NtHdr->Pe32Plus.OptionalHeader.Magic = EFI_IMAGE_NT_OPTIONAL_HDR64_MAGIC;
-    break;
-  case EM_IA_64:
-    NtHdr->Pe32Plus.FileHeader.Machine = EFI_IMAGE_MACHINE_IPF;
     NtHdr->Pe32Plus.OptionalHeader.Magic = EFI_IMAGE_NT_OPTIONAL_HDR64_MAGIC;
     break;
   case EM_AARCH64:
@@ -822,7 +817,7 @@ WriteSections64 (
 
       default:
         //
-        //  Ignore for unkown section type.
+        //  Ignore for unknown section type.
         //
         VerboseMsg ("%s unknown section type %x. We ignore this unknown section type.", mInImageName, (unsigned)Shdr->sh_type);
         break;

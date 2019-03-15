@@ -13,13 +13,7 @@
 import re
 
 gIsWindows = None
-
-gEdkCompatibilityPkg = "EdkCompatibilityPkg"
 gWorkspace = "."
-gEdkSource = "EdkCompatibilityPkg"
-gEfiSource = "."
-gEcpSource = "EdkCompatibilityPkg"
-
 gOptions = None
 gCaseInsensitive = False
 gAllFiles = None
@@ -109,7 +103,7 @@ MixedPcd = {}
 
 # Structure Pcd dict
 gStructurePcd = {}
-
+gPcdSkuOverrides={}
 # Pcd name for the Pcd which used in the Conditional directives
 gConditionalPcds = []
 

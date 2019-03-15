@@ -18,7 +18,7 @@ from Ecc.EccToolError import *
 from Common.MultipleWorkspace import MultipleWorkspace as mws
 from Ecc import EccGlobalData
 import re
-## Get the inlcude path list for a source file
+## Get the include path list for a source file
 #
 # 1. Find the source file belongs to which inf file
 # 2. Find the inf's package
@@ -113,7 +113,7 @@ def ParseHeaderCommentSection(CommentList, FileName = None):
     #
     Last = 0
     HeaderCommentStage = HEADER_COMMENT_NOT_STARTED
-    for Index in xrange(len(CommentList)-1, 0, -1):
+    for Index in range(len(CommentList) - 1, 0, -1):
         Line = CommentList[Index][0]
         if _IsCopyrightLine(Line):
             Last = Index

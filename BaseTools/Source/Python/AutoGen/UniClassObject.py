@@ -46,18 +46,6 @@ BACK_SLASH_PLACEHOLDER = u'\u0006'
 
 gIncludePattern = re.compile("^#include +[\"<]+([^\"< >]+)[>\"]+$", re.MULTILINE | re.UNICODE)
 
-## Convert a python unicode string to a normal string
-#
-# Convert a python unicode string to a normal string
-# UniToStr(u'I am a string') is 'I am a string'
-#
-# @param Uni:  The python unicode string
-#
-# @retval:     The formatted normal string
-#
-def UniToStr(Uni):
-    return repr(Uni)[2:-1]
-
 ## Convert a unicode string to a Hex list
 #
 # Convert a unicode string to a Hex list
@@ -111,12 +99,12 @@ LangConvTable = {'eng':'en', 'fra':'fr', \
 ## GetLanguageCode
 #
 # Check the language code read from .UNI file and convert ISO 639-2 codes to RFC 4646 codes if appropriate
-# ISO 639-2 language codes supported in compatiblity mode
+# ISO 639-2 language codes supported in compatibility mode
 # RFC 4646 language codes supported in native mode
 #
 # @param LangName:   Language codes read from .UNI file
 #
-# @retval LangName:  Valid lanugage code in RFC 4646 format or None
+# @retval LangName:  Valid language code in RFC 4646 format or None
 #
 def GetLanguageCode(LangName, IsCompatibleMode, File):
     length = len(LangName)
@@ -439,7 +427,7 @@ class UniFileClassObject(object):
                 if EndPos != -1 and EndPos - StartPos == 6 :
                     if g4HexChar.match(Line[StartPos + 2 : EndPos], re.UNICODE):
                         EndStr = Line[EndPos: ]
-                        UniStr = ('\u' + (Line[StartPos + 2 : EndPos])).decode('unicode_escape')
+                        UniStr = Line[StartPos + 2: EndPos]
                         if EndStr.startswith(u'\\x') and len(EndStr) >= 7:
                             if EndStr[6] == u'\\' and g4HexChar.match(EndStr[2 : 6], re.UNICODE):
                                 Line = Line[0 : StartPos] + UniStr + EndStr

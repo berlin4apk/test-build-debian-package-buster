@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #
 
-import plugins.EdkPlugins.basemodel.ini as ini
+from plugins.EdkPlugins.basemodel import ini
 import re, os
 from plugins.EdkPlugins.basemodel.message import *
 

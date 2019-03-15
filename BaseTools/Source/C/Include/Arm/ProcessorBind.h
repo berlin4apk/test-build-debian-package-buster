@@ -30,7 +30,7 @@
 
 #if _MSC_EXTENSIONS
   //
-  // use Microsoft* C complier dependent integer width types
+  // use Microsoft* C compiler dependent integer width types
   //
   typedef unsigned __int64    UINT64;
   typedef __int64             INT64;
@@ -87,11 +87,6 @@ typedef INT32   INTN;
 /// A value of native width with the two highest bits set.
 ///
 #define MAX_2_BITS   0xC0000000
-
-///
-/// Maximum legal ARM address
-///
-#define MAX_ADDRESS  0xFFFFFFFF
 
 ///
 /// The stack alignment required for ARM

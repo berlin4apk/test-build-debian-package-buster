@@ -68,9 +68,6 @@ class Ecc(object):
         self.ParseOption()
         EdkLogger.info(time.strftime("%H:%M:%S, %b.%d %Y ", time.localtime()) + "[00:00]" + "\n")
 
-        #
-        # Check EFI_SOURCE (Edk build convention). EDK_SOURCE will always point to ECP
-        #
         WorkspaceDir = os.path.normcase(os.path.normpath(os.environ["WORKSPACE"]))
         os.environ["WORKSPACE"] = WorkspaceDir
 
@@ -78,33 +75,9 @@ class Ecc(object):
         PackagesPath = os.getenv("PACKAGES_PATH")
         mws.setWs(WorkspaceDir, PackagesPath)
 
-        if "ECP_SOURCE" not in os.environ:
-            os.environ["ECP_SOURCE"] = mws.join(WorkspaceDir, GlobalData.gEdkCompatibilityPkg)
-        if "EFI_SOURCE" not in os.environ:
-            os.environ["EFI_SOURCE"] = os.environ["ECP_SOURCE"]
-        if "EDK_SOURCE" not in os.environ:
-            os.environ["EDK_SOURCE"] = os.environ["ECP_SOURCE"]
-
-        #
-        # Unify case of characters on case-insensitive systems
-        #
-        EfiSourceDir = os.path.normcase(os.path.normpath(os.environ["EFI_SOURCE"]))
-        EdkSourceDir = os.path.normcase(os.path.normpath(os.environ["EDK_SOURCE"]))
-        EcpSourceDir = os.path.normcase(os.path.normpath(os.environ["ECP_SOURCE"]))
-
-        os.environ["EFI_SOURCE"] = EfiSourceDir
-        os.environ["EDK_SOURCE"] = EdkSourceDir
-        os.environ["ECP_SOURCE"] = EcpSourceDir
-
         GlobalData.gWorkspace = WorkspaceDir
-        GlobalData.gEfiSource = EfiSourceDir
-        GlobalData.gEdkSource = EdkSourceDir
-        GlobalData.gEcpSource = EcpSourceDir
 
         GlobalData.gGlobalDefines["WORKSPACE"]  = WorkspaceDir
-        GlobalData.gGlobalDefines["EFI_SOURCE"] = EfiSourceDir
-        GlobalData.gGlobalDefines["EDK_SOURCE"] = EdkSourceDir
-        GlobalData.gGlobalDefines["ECP_SOURCE"] = EcpSourceDir
 
         EdkLogger.info("Loading ECC configuration ... done")
         # Generate checkpoints list
@@ -205,7 +178,7 @@ class Ecc(object):
         Op = open(EccGlobalData.gConfig.MetaDataFileCheckPathOfGenerateFileList, 'w+')
         #SkipDirs = Read from config file
         SkipDirs = EccGlobalData.gConfig.SkipDirList
-        SkipDirString = string.join(SkipDirs, '|')
+        SkipDirString = '|'.join(SkipDirs)
 #         p = re.compile(r'.*[\\/](?:%s)[\\/]?.*' % SkipDirString)
         p = re.compile(r'.*[\\/](?:%s^\S)[\\/]?.*' % SkipDirString)
         for scanFolder in ScanFolders:
@@ -236,7 +209,7 @@ class Ecc(object):
                         Op.write("%s\r" % Filename)
                         #Dsc(Filename, True, True, EccGlobalData.gWorkspace, EccGlobalData.gDb)
                         self.MetaFile = DscParser(PathClass(Filename, Root), MODEL_FILE_DSC, MetaFileStorage(EccGlobalData.gDb.TblDsc.Cur, Filename, MODEL_FILE_DSC, True))
-                        # alwasy do post-process, in case of macros change
+                        # always do post-process, in case of macros change
                         self.MetaFile.DoPostProcess()
                         self.MetaFile.Start()
                         self.MetaFile._PostProcess()
@@ -334,7 +307,7 @@ class Ecc(object):
         if Options.Workspace:
             os.environ["WORKSPACE"] = Options.Workspace
 
-        # Check workspace envirnoment
+        # Check workspace environment
         if "WORKSPACE" not in os.environ:
             EdkLogger.error("ECC", BuildToolError.ATTRIBUTE_NOT_AVAILABLE, "Environment variable not found",
                             ExtraData="WORKSPACE")
