@@ -11,6 +11,11 @@ edk2 (0~20190309.89910a39-1) UNRELEASED; urgency=medium
     - Bump openssl up to 1.1.0j.
     - qemu-efi-{arm,aarch64}: Drop -DINTEL_BDS from build flags.
       It became the default some time ago and was removed.
+    - ovmf: Stop cargo-culting the inclusion and build of external
+      EdkShell source. This is now no longer supported by upstream,
+      and is a no-op because it was replaced by the internal UEFI
+      shell back 2013 (9bef3cdc "OvmfPkg: Build and use the UEFI shell
+      by default").
 
  -- dann frazier <dannf@debian.org>  Fri, 15 Mar 2019 15:56:49 -0600
 

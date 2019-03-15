@@ -6,9 +6,6 @@ SHELL=/bin/bash
 OPENSSL_VER= 1.1.0j
 OPENSSL_SRC= openssl-$(OPENSSL_VER).tar.gz
 OPENSSL_URL= http://www.openssl.org/source/$(OPENSSL_SRC)
-SHELL_SRC  = https://svn.code.sf.net/p/efi-shell/code/trunk/Shell
-SHELL_REV  = 64
-
 
 # Only used for creating our build tools.
 DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
@@ -69,13 +66,8 @@ build-ovmf: EDK2_HOST_ARCH=X64
 build-ovmf: setup-build
 ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 	cd UefiCpuPkg/ResetVector/Vtf0 && python Build.py
-	mkdir -p EdkShellBinPkg/FullShell/$(EDK2_ARCH_DIR) \
-	         FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
+	mkdir FatBinPkg/EnhancedFatDxe/$(EDK2_ARCH_DIR)
 	set -e; . ./edksetup.sh; \
-		build -a $(EDK2_HOST_ARCH) -p EdkShellPkg/EdkShellPkg.dsc -m Shell/ShellFull.inf \
-			-b RELEASE -t $(EDK2_TOOLCHAIN); \
-		cp -a Build/EdkShellPkg/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_ARCH_DIR)/ShellFull.efi \
-			EdkShellBinPkg/FullShell/$(EDK2_ARCH_DIR)/Shell_Full.efi; \
 		build -a $(EDK2_HOST_ARCH) -p FatPkg/FatPkg.dsc -m FatPkg/EnhancedFatDxe/Fat.inf \
 			-b RELEASE -t $(EDK2_TOOLCHAIN); \
 		cp -a Build/Fat/RELEASE_$(EDK2_TOOLCHAIN)/$(EDK2_ARCH_DIR)/Fat.efi \
@@ -137,9 +129,6 @@ get-orig-source:
 	rm -rf edk2-$(ver)/CryptoPkg/Library/OpensslLib/openssl && \
 		ln -s openssl-$(OPENSSL_VER) \
 		edk2-$(ver)/CryptoPkg/Library/OpensslLib/openssl
-	# efi shell
-	svn export -r$(SHELL_REV) $(SHELL_SRC) edk2-$(ver)/Shell
-	cd edk2-$(ver)/Shell && patch -p1 < ../EdkShellPkg/ShellR$(SHELL_REV).patch 
 	tar Jcvf ../edk2_$(ver).orig.tar.xz edk2-$(ver)
 	rm -rf edk2-$(ver) $(OPENSSL_SRC)
 

@@ -1,7 +1,6 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: edk2
 Source: git://github.com/tianocore/edk2.git, http://www.openssl.org/source/,
- and https://efi-shell.svn.sourceforge.net/svnroot/efi-shell/trunk/Shell,
  with .efi binary files removed from the source at package generation time.
  See get-orig-source in debian/rules for details.
 
@@ -87,7 +86,7 @@ License: BSD-2-clause
 
 Files: ArmPkg/Library/CompilerIntrinsicsLib/AArch64/memcpy.S
        ArmPlatformPkg/ArmVExpressPkg/Scripts/uefi-aarch64-bootstrap/*
-       EdkCompatibilityPkg/* Shell/*
+       EdkCompatibilityPkg/*
        StdLibPrivateInternalFiles/Include/kfile.h StdLib/PosixLib/Glob/glob.c
        StdLib/PosixLib/Gen/readdir.c StdLib/PosixLib/Gen/utime.c
        StdLib/PosixLib/Gen/opendir.c StdLib/PosixLib/Gen/closedir.c
