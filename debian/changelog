@@ -9,6 +9,8 @@ edk2 (0~20190309.89910a39-1) UNRELEASED; urgency=medium
     - d/binary-check.whitelist: Add new files detected as binary
       that were hand-verified to be source.
     - Bump openssl up to 1.1.0j.
+    - qemu-efi-{arm,aarch64}: Drop -DINTEL_BDS from build flags.
+      It became the default some time ago and was removed.
 
  -- dann frazier <dannf@debian.org>  Fri, 15 Mar 2019 15:56:49 -0600
 
