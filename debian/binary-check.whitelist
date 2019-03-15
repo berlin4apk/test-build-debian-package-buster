@@ -50,6 +50,7 @@ BaseTools/BinWrappers/PosixLike/DevicePath
 BaseTools/BinWrappers/PosixLike/Ecc
 BaseTools/BinWrappers/PosixLike/EfiLdrImage
 BaseTools/BinWrappers/PosixLike/EfiRom
+BaseTools/BinWrappers/PosixLike/GenerateCapsule
 BaseTools/BinWrappers/PosixLike/GenCrc32
 BaseTools/BinWrappers/PosixLike/GenDepex
 BaseTools/BinWrappers/PosixLike/GenFds
@@ -86,6 +87,7 @@ BaseTools/Source/C/VfrCompile/Pccts/MPW_Read_Me
 BaseTools/Source/C/VfrCompile/Pccts/NOTES.bcc
 BaseTools/Source/C/VfrCompile/Pccts/NOTES.msvc
 BaseTools/Source/C/VfrCompile/Pccts/RIGHTS
+BaseTools/Source/Python/Ecc/CParser4/C.g4
 BaseTools/Source/Python/Pkcs7Sign/TestRoot.cer
 BaseTools/Source/Python/Rsa2048Sha256Sign/TestSigningPublicKey.bin
 BeagleBoardPkg/ConfigurationHeader.dat
@@ -93,6 +95,9 @@ EmulatorPkg/Unix/.gdbinit
 EmulatorPkg/Unix/GdbRun
 EmulatorPkg/Unix/Host/X11IncludeHack
 EmulatorPkg/Unix/lldbinit
+EmulatorPkg/Win/VS2017/Win.vcxproj
+EmulatorPkg/Win/VS2017/Win.vcxproj.filters
+EmulatorPkg/Win/VS2017/Win.vcxproj.user
 IntelFspWrapperPkg/FspWrapperSecCore/Vtf0/Bin/ResetVec.ia32.raw
 StandaloneMmPkg
 StdLib/Efi/StdLib/etc/host.conf
