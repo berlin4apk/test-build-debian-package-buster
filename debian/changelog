@@ -16,6 +16,9 @@ edk2 (0~20190309.89910a39-1) UNRELEASED; urgency=medium
       and is a no-op because it was replaced by the internal UEFI
       shell back 2013 (9bef3cdc "OvmfPkg: Build and use the UEFI shell
       by default").
+    - qemu-efi-{arm,aarch64}: Don't explicitly build ShellPkg,
+      ArmVirtPkg has been doing it since 2015 (da1ce6f8
+      "ArmVirtualizationPkg: build UEFI shell from source").
 
  -- dann frazier <dannf@debian.org>  Fri, 15 Mar 2019 15:56:49 -0600
 
