@@ -1,0 +1,59 @@
+From: Hao Wu <hao.a.wu@intel.com>
+Date: Fri, 9 Feb 2018 08:43:01 +0800
+Subject: [PATCH 1/2] MdeModulePkg/PartitionDxe: Ensure blocksize holds MBR
+ (CVE-2018-12180)
+
+REF:https://bugzilla.tianocore.org/show_bug.cgi?id=1134
+
+The commit adds checks for detecting GPT and MBR partitions.
+
+These checks will ensure that the device block size is big enough to hold
+an MBR (512 bytes).
+
+Cc: Jian J Wang <jian.j.wang@intel.com>
+Cc: Star Zeng <star.zeng@intel.com>
+Cc: Laszlo Ersek <lersek@redhat.com>
+Contributed-under: TianoCore Contribution Agreement 1.1
+Signed-off-by: Hao Wu <hao.a.wu@intel.com>
+Reviewed-by: Ray Ni <ray.ni@intel.com>
+
+Origin: https://github.com/tianocore/edk2/commit/fccdb88022c1f6d85c773fce506b10c879063f1d
+Bug-Debian: https://bugs.debian.org/924615
+Last-Update: 2019-03-18
+
+Index: edk2/MdeModulePkg/Universal/Disk/PartitionDxe/Gpt.c
+===================================================================
+--- edk2.orig/MdeModulePkg/Universal/Disk/PartitionDxe/Gpt.c
++++ edk2/MdeModulePkg/Universal/Disk/PartitionDxe/Gpt.c
+@@ -235,6 +235,13 @@ PartitionInstallGptChildHandles (
+   GptValidStatus = EFI_NOT_FOUND;
+ 
+   //
++  // Ensure the block size can hold the MBR
++  //
++  if (BlockSize < sizeof (MASTER_BOOT_RECORD)) {
++    return EFI_NOT_FOUND;
++  }
++
++  //
+   // Allocate a buffer for the Protective MBR
+   //
+   ProtectiveMbr = AllocatePool (BlockSize);
+Index: edk2/MdeModulePkg/Universal/Disk/PartitionDxe/Mbr.c
+===================================================================
+--- edk2.orig/MdeModulePkg/Universal/Disk/PartitionDxe/Mbr.c
++++ edk2/MdeModulePkg/Universal/Disk/PartitionDxe/Mbr.c
+@@ -148,6 +148,13 @@ PartitionInstallMbrChildHandles (
+   MediaId   = BlockIo->Media->MediaId;
+   LastBlock = BlockIo->Media->LastBlock;
+ 
++  //
++  // Ensure the block size can hold the MBR
++  //
++  if (BlockSize < sizeof (MASTER_BOOT_RECORD)) {
++    return EFI_NOT_FOUND;
++  }
++
+   Mbr = AllocatePool (BlockSize);
+   if (Mbr == NULL) {
+     return Found;

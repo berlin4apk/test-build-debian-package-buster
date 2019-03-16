@@ -1,3 +1,10 @@
+edk2 (0~20161202.7bbe0b3e-1+deb9u1) UNRELEASED; urgency=medium
+
+  * Security fixes (Closes: #924615):
+    - Fix buffer overflow in BlockIo service (CVE-2018-12180)
+
+ -- dann frazier <dannf@debian.org>  Fri, 15 Mar 2019 18:28:37 -0600
+
 edk2 (0~20161202.7bbe0b3e-1) unstable; urgency=medium
 
   * New upstream release.

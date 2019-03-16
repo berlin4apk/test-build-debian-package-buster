@@ -1,0 +1,92 @@
+From: Hao Wu <hao.a.wu@intel.com>
+Date: Wed, 7 Feb 2018 12:49:50 +0800
+Subject: [PATCH 2/2] MdeModulePkg/RamDiskDxe: Restrict on RAM disk size
+ (CVE-2018-12180)
+
+REF:https://bugzilla.tianocore.org/show_bug.cgi?id=1134
+
+Originally, the block size of created Ram disks is hard-coded to 512
+bytes. However, if the total size of the Ram disk is not a multiple of 512
+bytes, there will be potential memory access issues when dealing with the
+last block of the Ram disk.
+
+This commit will adjust the block size of the Ram disks to ensure that the
+total size is a multiple of the block size.
+
+Cc: Jian J Wang <jian.j.wang@intel.com>
+Cc: Star Zeng <star.zeng@intel.com>
+Cc: Laszlo Ersek <lersek@redhat.com>
+Contributed-under: TianoCore Contribution Agreement 1.1
+Signed-off-by: Hao Wu <hao.a.wu@intel.com>
+Reviewed-by: Ray Ni <ray.ni@intel.com>
+
+Origin: https://github.com/tianocore/edk2/commit/38c9fbdcaa0219eb86fe82d90e3f8cfb5a54be9f
+Bug-Debian: https://bugs.debian.org/924615
+Last-Update: 2019-03-18
+
+Index: edk2/MdeModulePkg/Universal/Disk/RamDiskDxe/RamDiskBlockIo.c
+===================================================================
+--- edk2.orig/MdeModulePkg/Universal/Disk/RamDiskDxe/RamDiskBlockIo.c
++++ edk2/MdeModulePkg/Universal/Disk/RamDiskDxe/RamDiskBlockIo.c
+@@ -54,6 +54,7 @@ RamDiskInitBlockIo (
+   EFI_BLOCK_IO_PROTOCOL           *BlockIo;
+   EFI_BLOCK_IO2_PROTOCOL          *BlockIo2;
+   EFI_BLOCK_IO_MEDIA              *Media;
++  UINT32                          Remainder;
+ 
+   BlockIo  = &PrivateData->BlockIo;
+   BlockIo2 = &PrivateData->BlockIo2;
+@@ -69,11 +70,18 @@ RamDiskInitBlockIo (
+   Media->LogicalPartition = FALSE;
+   Media->ReadOnly         = FALSE;
+   Media->WriteCaching     = FALSE;
+-  Media->BlockSize        = RAM_DISK_BLOCK_SIZE;
+-  Media->LastBlock        = DivU64x32 (
+-                              PrivateData->Size + RAM_DISK_BLOCK_SIZE - 1,
+-                              RAM_DISK_BLOCK_SIZE
+-                              ) - 1;
++
++  for (Media->BlockSize = RAM_DISK_DEFAULT_BLOCK_SIZE;
++       Media->BlockSize >= 1;
++       Media->BlockSize = Media->BlockSize >> 1) {
++    Media->LastBlock = DivU64x32Remainder (PrivateData->Size, Media->BlockSize, &Remainder) - 1;
++    if (Remainder == 0) {
++      break;
++    }
++  }
++  ASSERT (Media->BlockSize != 0);
++
++  return;
+ }
+ 
+ 
+Index: edk2/MdeModulePkg/Universal/Disk/RamDiskDxe/RamDiskImpl.h
+===================================================================
+--- edk2.orig/MdeModulePkg/Universal/Disk/RamDiskDxe/RamDiskImpl.h
++++ edk2/MdeModulePkg/Universal/Disk/RamDiskDxe/RamDiskImpl.h
+@@ -49,9 +49,9 @@
+ ///
+ 
+ //
+-// Block size for RAM disk
++// Default block size for RAM disk
+ //
+-#define RAM_DISK_BLOCK_SIZE 512
++#define RAM_DISK_DEFAULT_BLOCK_SIZE 512
+ 
+ //
+ // Iterate through the double linked list. NOT delete safe
+Index: edk2/MdeModulePkg/Universal/Disk/RamDiskDxe/RamDiskProtocol.c
+===================================================================
+--- edk2.orig/MdeModulePkg/Universal/Disk/RamDiskDxe/RamDiskProtocol.c
++++ edk2/MdeModulePkg/Universal/Disk/RamDiskDxe/RamDiskProtocol.c
+@@ -613,7 +613,8 @@ RamDiskRegister (
+   //
+   // Add check to prevent data read across the memory boundary
+   //
+-  if (RamDiskBase + RamDiskSize > ((UINTN) -1) - RAM_DISK_BLOCK_SIZE + 1) {
++  if ((RamDiskSize > MAX_UINTN) ||
++      (RamDiskBase > MAX_UINTN - RamDiskSize + 1)) {
+     return EFI_INVALID_PARAMETER;
+   }
+ 
