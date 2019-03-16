@@ -2,6 +2,7 @@ edk2 (0~20181115.85588389-3) UNRELEASED; urgency=medium
 
   * Security fixes (Closes: #924615):
     - Fix buffer overflow in BlockIo service (CVE-2018-12180)
+    - DNS: Check received packet size before using (CVE-2018-12178)
 
  -- dann frazier <dannf@debian.org>  Fri, 15 Mar 2019 18:28:37 -0600
 
