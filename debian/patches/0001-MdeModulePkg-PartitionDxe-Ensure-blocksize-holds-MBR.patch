@@ -1,0 +1,81 @@
+From fccdb88022c1f6d85c773fce506b10c879063f1d Mon Sep 17 00:00:00 2001
+From: Hao Wu <hao.a.wu@intel.com>
+Date: Fri, 9 Feb 2018 08:43:01 +0800
+Subject: [PATCH 1/2] MdeModulePkg/PartitionDxe: Ensure blocksize holds MBR
+ (CVE-2018-12180)
+
+REF:https://bugzilla.tianocore.org/show_bug.cgi?id=1134
+
+The commit adds checks for detecting GPT and MBR partitions.
+
+These checks will ensure that the device block size is big enough to hold
+an MBR (512 bytes).
+
+Cc: Jian J Wang <jian.j.wang@intel.com>
+Cc: Star Zeng <star.zeng@intel.com>
+Cc: Laszlo Ersek <lersek@redhat.com>
+Contributed-under: TianoCore Contribution Agreement 1.1
+Signed-off-by: Hao Wu <hao.a.wu@intel.com>
+Reviewed-by: Ray Ni <ray.ni@intel.com>
+---
+ MdeModulePkg/Universal/Disk/PartitionDxe/Gpt.c | 9 ++++++++-
+ MdeModulePkg/Universal/Disk/PartitionDxe/Mbr.c | 9 ++++++++-
+ 2 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/MdeModulePkg/Universal/Disk/PartitionDxe/Gpt.c b/MdeModulePkg/Universal/Disk/PartitionDxe/Gpt.c
+index fe87761bde..d679cc208b 100644
+--- a/MdeModulePkg/Universal/Disk/PartitionDxe/Gpt.c
++++ b/MdeModulePkg/Universal/Disk/PartitionDxe/Gpt.c
+@@ -14,7 +14,7 @@
+   partition content and validate the GPT table and GPT entry.
+ 
+ Copyright (c) 2018 Qualcomm Datacenter Technologies, Inc.
+-Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
++Copyright (c) 2006 - 2019, Intel Corporation. All rights reserved.<BR>
+ This program and the accompanying materials
+ are licensed and made available under the terms and conditions of the BSD License
+ which accompanies this distribution.  The full text of the license may be found at
+@@ -236,6 +236,13 @@ PartitionInstallGptChildHandles (
+ 
+   GptValidStatus = EFI_NOT_FOUND;
+ 
++  //
++  // Ensure the block size can hold the MBR
++  //
++  if (BlockSize < sizeof (MASTER_BOOT_RECORD)) {
++    return EFI_NOT_FOUND;
++  }
++
+   //
+   // Allocate a buffer for the Protective MBR
+   //
+diff --git a/MdeModulePkg/Universal/Disk/PartitionDxe/Mbr.c b/MdeModulePkg/Universal/Disk/PartitionDxe/Mbr.c
+index b1a99ee85b..419f8a17a7 100644
+--- a/MdeModulePkg/Universal/Disk/PartitionDxe/Mbr.c
++++ b/MdeModulePkg/Universal/Disk/PartitionDxe/Mbr.c
+@@ -13,7 +13,7 @@
+ 
+ Copyright (c) 2018 Qualcomm Datacenter Technologies, Inc.
+ Copyright (c) 2014, Hewlett-Packard Development Company, L.P.<BR>
+-Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
++Copyright (c) 2006 - 2019, Intel Corporation. All rights reserved.<BR>
+ This program and the accompanying materials
+ are licensed and made available under the terms and conditions of the BSD License
+ which accompanies this distribution.  The full text of the license may be found at
+@@ -150,6 +150,13 @@ PartitionInstallMbrChildHandles (
+   MediaId   = BlockIo->Media->MediaId;
+   LastBlock = BlockIo->Media->LastBlock;
+ 
++  //
++  // Ensure the block size can hold the MBR
++  //
++  if (BlockSize < sizeof (MASTER_BOOT_RECORD)) {
++    return EFI_NOT_FOUND;
++  }
++
+   Mbr = AllocatePool (BlockSize);
+   if (Mbr == NULL) {
+     return Found;
+-- 
+2.20.1
+

@@ -2,3 +2,5 @@ shell-efiapi.patch
 no-missing-braces.diff
 no-stack-protector-all-archs.diff
 shell-proper-valist.patch
+0001-MdeModulePkg-PartitionDxe-Ensure-blocksize-holds-MBR.patch
+0002-MdeModulePkg-RamDiskDxe-Restrict-on-RAM-disk-size-CV.patch
