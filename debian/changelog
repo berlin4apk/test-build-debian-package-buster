@@ -28,6 +28,15 @@ edk2 (0~20190309.89910a39-1) UNRELEASED; urgency=medium
 
  -- dann frazier <dannf@debian.org>  Fri, 15 Mar 2019 15:56:49 -0600
 
+edk2 (0~20181115.85588389-3) unstable; urgency=medium
+
+  * Security fixes (Closes: #924615):
+    - Fix buffer overflow in BlockIo service (CVE-2018-12180)
+    - DNS: Check received packet size before using (CVE-2018-12178)
+    - Fix stack overflow with corrupted BMP (CVE-2018-12181)
+
+ -- dann frazier <dannf@debian.org>  Fri, 15 Mar 2019 18:37:44 -0600
+
 edk2 (0~20181115.85588389-2) unstable; urgency=medium
 
   * debian/rules: Factor out common feature flags across builds.
