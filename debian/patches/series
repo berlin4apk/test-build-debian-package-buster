@@ -6,3 +6,6 @@ arm64-no-pie-for-you.diff
 0001-MdeModulePkg-PartitionDxe-Ensure-blocksize-holds-MBR.patch
 0002-MdeModulePkg-RamDiskDxe-Restrict-on-RAM-disk-size-CV.patch
 NetworkPkg-DnsDxe-CVE-2018-12178-Check-the-received-.patch
+0000-MdeModulePkg-HiiDB-Avoid-incorrect-results-of-multip.patch
+0001-MdeModulePkg-HiiDatabase-Fix-potential-integer-overf.patch
+0002-MdeModulePkg-HiiImage-Fix-stack-overflow-when-corrup.patch
