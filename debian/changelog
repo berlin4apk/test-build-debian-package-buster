@@ -1,4 +1,4 @@
-edk2 (0~20190309.89910a39-1) UNRELEASED; urgency=medium
+edk2 (0~20190309.89910a39-1) experimental; urgency=medium
 
   * New upstream release, based on edk2-stable201903 tag.
     - Fixes for CVE-2018-12178, CVE-2018-12180 and CVE-2018-12181
@@ -26,7 +26,7 @@ edk2 (0~20190309.89910a39-1) UNRELEASED; urgency=medium
     - d/p/no-missing-braces.diff: Forward port.
     - d/p/no-stack-protector-all-archs.diff: Forward port.
 
- -- dann frazier <dannf@debian.org>  Fri, 15 Mar 2019 15:56:49 -0600
+ -- dann frazier <dannf@debian.org>  Mon, 18 Mar 2019 15:38:21 -0600
 
 edk2 (0~20181115.85588389-3) unstable; urgency=medium
 
