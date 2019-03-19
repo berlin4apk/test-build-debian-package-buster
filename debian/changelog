@@ -1,6 +1,8 @@
 edk2 (0~20190309.89910a39-2) UNRELEASED; urgency=medium
 
   * debian/control: Fold and sort Build-Depends line.
+  * debian/control: Add bc to Build-Depends, as it is now used by
+    edksetup.sh.
 
  -- dann frazier <dannf@debian.org>  Mon, 18 Mar 2019 18:43:44 -0600
 
