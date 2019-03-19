@@ -3,6 +3,10 @@ edk2 (0~20190309.89910a39-2) UNRELEASED; urgency=medium
   * debian/control: Fold and sort Build-Depends line.
   * debian/control: Add bc to Build-Depends, as it is now used by
     edksetup.sh.
+  * debian/control: Add python3-distutils to Build-Depends. Part of
+    the build will now use python3 instead of python if found at build-time.
+    However, the build requires distutils, and upstream only embeds the
+    python(2) version of that.
 
  -- dann frazier <dannf@debian.org>  Mon, 18 Mar 2019 18:43:44 -0600
 
