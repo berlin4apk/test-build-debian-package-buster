@@ -2,6 +2,8 @@ edk2 (0~20190606.20d2e5a1-1) UNRELEASED; urgency=medium
 
   * New upstream release, based on edk2-stable201905 tag.
     - d/binary-check.blacklist: Drop binaries removed upstream.
+    - Remove unused embedded copy of BrotliCompress to avoid
+      security scanner false-positives.
   * debian/control: Fold and sort Build-Depends line.
   * debian/control: Add bc to Build-Depends, as it is now used by
     edksetup.sh.

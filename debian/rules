@@ -103,6 +103,8 @@ get-orig-source:
 	git clone . edk2-$(ver)
 	rm -rf edk2-$(ver)/.git
 	ln -s ../debian edk2-$(ver)
+	# Remove unused embedded source, requested by Ubuntu security team
+	rm -r edk2-$(ver)/BaseTools/Source/C/BrotliCompress
 	# Remove known-binary files
 	cd edk2-$(ver) && python3 ./debian/remove-binaries.py
 	# Look for possible unknown binary files
