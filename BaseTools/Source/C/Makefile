@@ -2,13 +2,7 @@
 # Windows makefile for C tools build.
 #
 # Copyright (c) 2009 - 2018, Intel Corporation. All rights reserved.<BR>
-# This program and the accompanying materials
-# are licensed and made available under the terms and conditions of the BSD License
-# which accompanies this distribution.  The full text of the license may be found at
-# http://opensource.org/licenses/bsd-license.php
-#
-# THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
-# WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+# SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 HOST_ARCH = IA32
 
@@ -67,8 +61,8 @@ clean:
 
 .PHONY: cleanall
 cleanall:
-  @if defined PYTHON_COMMAND $(PYTHON_COMMAND) $(PYTHON_COMMAND) Makefiles\NmakeSubdirs.py cleanall $(LIBRARIES) $(APPLICATIONS)
-  @if not defined PYTHON_COMMAND $(PYTHON_HOME)\python.exe $(PYTHON_COMMAND) Makefiles\NmakeSubdirs.py cleanall $(LIBRARIES) $(APPLICATIONS)
+  @if defined PYTHON_COMMAND $(PYTHON_COMMAND) Makefiles\NmakeSubdirs.py cleanall $(LIBRARIES) $(APPLICATIONS)
+  @if not defined PYTHON_COMMAND $(PYTHON_HOME)\python.exe Makefiles\NmakeSubdirs.py cleanall $(LIBRARIES) $(APPLICATIONS)
 
 !INCLUDE Makefiles\ms.rule
 

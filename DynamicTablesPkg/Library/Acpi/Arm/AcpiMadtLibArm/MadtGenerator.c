@@ -2,13 +2,7 @@
   MADT Table Generator
 
   Copyright (c) 2017 - 2019, ARM Limited. All rights reserved.
-  This program and the accompanying materials
-  are licensed and made available under the terms and conditions of the BSD License
-  which accompanies this distribution.  The full text of the license may be found at
-  http://opensource.org/licenses/bsd-license.php
-
-  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
-  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 
   @par Reference(s):
   - ACPI 6.2 Specification - Errata A, September 2017
@@ -192,7 +186,9 @@ AddGICD (
   // UINT16 Reserved
   Gicd->Reserved1 = EFI_ACPI_RESERVED_WORD;
   // UINT32 Identifier
-  Gicd->GicId = GicDInfo->GicId;
+  // One, and only one, GIC distributor structure must be present
+  // in the MADT for an ARM based system
+  Gicd->GicId = 0;
   // UINT64 PhysicalBaseAddress
   Gicd->PhysicalBaseAddress = GicDInfo->PhysicalBaseAddress;
   // UINT32 VectorBase
@@ -569,7 +565,7 @@ BuildMadtTable (
              CfgMgrProtocol,
              This,
              &Madt->Header,
-             AcpiTableInfo->AcpiTableRevision,
+             AcpiTableInfo,
              TableSize
              );
   if (EFI_ERROR (Status)) {

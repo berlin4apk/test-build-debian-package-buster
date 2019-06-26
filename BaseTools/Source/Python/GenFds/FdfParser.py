@@ -4,13 +4,7 @@
 #  Copyright (c) 2007 - 2018, Intel Corporation. All rights reserved.<BR>
 #  Copyright (c) 2015, Hewlett Packard Enterprise Development, L.P.<BR>
 #
-#  This program and the accompanying materials
-#  are licensed and made available under the terms and conditions of the BSD License
-#  which accompanies this distribution.  The full text of the license may be found at
-#  http://opensource.org/licenses/bsd-license.php
-#
-#  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 
 ##
@@ -3611,7 +3605,12 @@ class FdfParser:
 
         if not self._IsKeyword("$(NAMED_GUID)"):
             if not self._GetNextWord():
-                raise Warning.Expected("$(NAMED_GUID)", self.FileName, self.CurrentLineNumber)
+                NamedGuid = self._CurrentLine()[self.CurrentOffsetWithinLine:].split()[0].strip()
+                if GlobalData.gGuidPatternEnd.match(NamedGuid):
+                    self.CurrentOffsetWithinLine += len(NamedGuid)
+                    self._Token = NamedGuid
+                else:
+                    raise Warning.Expected("$(NAMED_GUID)", self.FileName, self.CurrentLineNumber)
             if self._Token == 'PCD':
                 if not self._IsToken("("):
                     raise Warning.Expected("'('", self.FileName, self.CurrentLineNumber)

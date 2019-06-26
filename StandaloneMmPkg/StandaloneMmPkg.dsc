@@ -4,13 +4,7 @@
 # Copyright (c) 2015, Intel Corporation. All rights reserved.<BR>
 # Copyright (c) 2016 - 2018, ARM Limited. All rights reserved.<BR>
 #
-#    This program and the accompanying materials
-#    are licensed and made available under the terms and conditions of the BSD License
-#    which accompanies this distribution. The full text of the license may be found at
-#    http://opensource.org/licenses/bsd-license.php
-#
-#    THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
-#    WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+#    SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 ##
 
@@ -43,7 +37,7 @@
   #
   BaseLib|MdePkg/Library/BaseLib/BaseLib.inf
   BaseMemoryLib|MdePkg/Library/BaseMemoryLib/BaseMemoryLib.inf
-  DebugLib|MdePkg/Library/BaseDebugLibSerialPort/BaseDebugLibSerialPort.inf
+  DebugLib|MdePkg/Library/BaseDebugLibNull/BaseDebugLibNull.inf
   DebugPrintErrorLevelLib|MdePkg/Library/BaseDebugPrintErrorLevelLib/BaseDebugPrintErrorLevelLib.inf
   FvLib|StandaloneMmPkg/Library/FvLib/FvLib.inf
   HobLib|StandaloneMmPkg/Library/StandaloneMmCoreHobLib/StandaloneMmCoreHobLib.inf
@@ -66,10 +60,6 @@
   ArmSvcLib|ArmPkg/Library/ArmSvcLib/ArmSvcLib.inf
   CacheMaintenanceLib|ArmPkg/Library/ArmCacheMaintenanceLib/ArmCacheMaintenanceLib.inf
   PeCoffExtraActionLib|StandaloneMmPkg/Library/StandaloneMmPeCoffExtraActionLib/StandaloneMmPeCoffExtraActionLib.inf
-  PL011UartLib|ArmPlatformPkg/Library/PL011UartLib/PL011UartLib.inf
-  PL011UartClockLib|ArmPlatformPkg/Library/PL011UartClockLib/PL011UartClockLib.inf
-  # ARM PL011 UART Driver
-  SerialPortLib|ArmPlatformPkg/Library/PL011SerialPortLib/PL011SerialPortLib.inf
 
   StandaloneMmCoreEntryPoint|StandaloneMmPkg/Library/StandaloneMmCoreEntryPoint/StandaloneMmCoreEntryPoint.inf
 
@@ -78,18 +68,10 @@
 # Pcd Section - list of all EDK II PCD Entries defined by this Platform
 #
 ################################################################################
-[PcdsFeatureFlag]
-  gStandaloneMmPkgTokenSpaceGuid.PcdStandaloneMmEnable|TRUE
-
 [PcdsFixedAtBuild]
   gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x800000CF
   gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask|0xff
   gEfiMdePkgTokenSpaceGuid.PcdReportStatusCodePropertyMask|0x0f
-
-[PcdsFixedAtBuild.AARCH64]
-  ## PL011 - Serial Terminal
-  gEfiMdeModulePkgTokenSpaceGuid.PcdSerialRegisterBase|0x1c0b0000
-  gEfiMdePkgTokenSpaceGuid.PcdUartDefaultBaudRate|115200
 
 ###################################################################################################
 #

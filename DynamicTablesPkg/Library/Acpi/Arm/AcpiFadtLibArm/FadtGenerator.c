@@ -2,13 +2,7 @@
   FADT Table Generator
 
   Copyright (c) 2017 - 2019, ARM Limited. All rights reserved.
-  This program and the accompanying materials
-  are licensed and made available under the terms and conditions of the BSD License
-  which accompanies this distribution.  The full text of the license may be found at
-  http://opensource.org/licenses/bsd-license.php
-
-  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
-  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 
   @par Reference(s):
   - ACPI 6.2 Specification - Errata A, September 2017
@@ -537,7 +531,7 @@ BuildFadtTable (
              CfgMgrProtocol,
              This,
              (EFI_ACPI_DESCRIPTION_HEADER*)&AcpiFadt,
-             AcpiTableInfo->AcpiTableRevision,
+             AcpiTableInfo,
              sizeof (EFI_ACPI_6_2_FIXED_ACPI_DESCRIPTION_TABLE)
              );
   if (EFI_ERROR (Status)) {

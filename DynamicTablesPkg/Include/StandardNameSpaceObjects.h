@@ -2,13 +2,7 @@
 
   Copyright (c) 2017 - 2019, ARM Limited. All rights reserved.
 
-  This program and the accompanying materials
-  are licensed and made available under the terms and conditions of the BSD License
-  which accompanies this distribution.  The full text of the license may be found at
-  http://opensource.org/licenses/bsd-license.php
-
-  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
-  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 
   @par Glossary:
     - Cm or CM   - Configuration Manager
@@ -93,6 +87,24 @@ typedef struct CmAStdObjAcpiTableInfo {
   /// Optional pointer to the ACPI table data
   EFI_ACPI_DESCRIPTION_HEADER  * AcpiTableData;
 
+  /// An OEM-supplied string that the OEM uses to identify the particular
+  /// data table. This field is particularly useful when defining a definition
+  /// block to distinguish definition block functions. The OEM assigns each
+  /// dissimilar table a new OEM Table ID.
+  /// This field could be constructed using the SIGNATURE_64() macro.
+  ///   e.g. SIGNATURE_64 ('A','R','M','H','G','T','D','T')
+  /// Note: If this field is not populated (has value of Zero), then the
+  /// Generators shall populate this information using part of the
+  /// CM_STD_OBJ_CONFIGURATION_MANAGER_INFO.OemId field and the
+  /// ACPI table signature.
+  UINT64                         OemTableId;
+
+  /// An OEM-supplied revision number. Larger numbers are assumed to be
+  /// newer revisions.
+  /// Note: If this field is not populated (has value of Zero), then the
+  /// Generators shall populate this information using the revision of the
+  /// Configuration Manager (CM_STD_OBJ_CONFIGURATION_MANAGER_INFO.Revision).
+  UINT32                         OemRevision;
 } CM_STD_OBJ_ACPI_TABLE_INFO;
 
 /** A structure used to describe the SMBIOS table generators to be invoked.

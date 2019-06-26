@@ -4,14 +4,8 @@
   primitives (Hash Serials, HMAC, RSA, Diffie-Hellman, etc) for UEFI security
   functionality enabling.
 
-Copyright (c) 2009 - 2018, Intel Corporation. All rights reserved.<BR>
-This program and the accompanying materials
-are licensed and made available under the terms and conditions of the BSD License
-which accompanies this distribution.  The full text of the license may be found at
-http://opensource.org/licenses/bsd-license.php
-
-THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
-WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+Copyright (c) 2009 - 2019, Intel Corporation. All rights reserved.<BR>
+SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
 
@@ -2207,6 +2201,41 @@ X509GetCommonName (
   );
 
 /**
+  Retrieve the organization name (O) string from one X.509 certificate.
+
+  @param[in]      Cert             Pointer to the DER-encoded X509 certificate.
+  @param[in]      CertSize         Size of the X509 certificate in bytes.
+  @param[out]     NameBuffer       Buffer to contain the retrieved certificate organization
+                                   name string. At most NameBufferSize bytes will be
+                                   written and the string will be null terminated. May be
+                                   NULL in order to determine the size buffer needed.
+  @param[in,out]  NameBufferSize   The size in bytes of the Name buffer on input,
+                                   and the size of buffer returned Name on output.
+                                   If NameBuffer is NULL then the amount of space needed
+                                   in buffer (including the final null) is returned.
+
+  @retval RETURN_SUCCESS           The certificate Organization Name retrieved successfully.
+  @retval RETURN_INVALID_PARAMETER If Cert is NULL.
+                                   If NameBufferSize is NULL.
+                                   If NameBuffer is not NULL and *CommonNameSize is 0.
+                                   If Certificate is invalid.
+  @retval RETURN_NOT_FOUND         If no Organization Name entry exists.
+  @retval RETURN_BUFFER_TOO_SMALL  If the NameBuffer is NULL. The required buffer size
+                                   (including the final null) is returned in the
+                                   CommonNameSize parameter.
+  @retval RETURN_UNSUPPORTED       The operation is not supported.
+
+**/
+RETURN_STATUS
+EFIAPI
+X509GetOrganizationName (
+  IN      CONST UINT8   *Cert,
+  IN      UINTN         CertSize,
+  OUT     CHAR8         *NameBuffer,  OPTIONAL
+  IN OUT  UINTN         *NameBufferSize
+  );
+
+/**
   Verify one X509 certificate was issued by the trusted CA.
 
   If Cert is NULL, then return FALSE.
@@ -2374,6 +2403,48 @@ Pkcs5HashPassword (
   IN  UINTN        DigestSize,
   IN  UINTN        KeyLength,
   OUT UINT8        *OutKey
+  );
+
+/**
+  Encrypts a blob using PKCS1v2 (RSAES-OAEP) schema. On success, will return the
+  encrypted message in a newly allocated buffer.
+
+  Things that can cause a failure include:
+  - X509 key size does not match any known key size.
+  - Fail to parse X509 certificate.
+  - Fail to allocate an intermediate buffer.
+  - Null pointer provided for a non-optional parameter.
+  - Data size is too large for the provided key size (max size is a function of key size
+    and hash digest size).
+
+  @param[in]  PublicKey           A pointer to the DER-encoded X509 certificate that
+                                  will be used to encrypt the data.
+  @param[in]  PublicKeySize       Size of the X509 cert buffer.
+  @param[in]  InData              Data to be encrypted.
+  @param[in]  InDataSize          Size of the data buffer.
+  @param[in]  PrngSeed            [Optional] If provided, a pointer to a random seed buffer
+                                  to be used when initializing the PRNG. NULL otherwise.
+  @param[in]  PrngSeedSize        [Optional] If provided, size of the random seed buffer.
+                                  0 otherwise.
+  @param[out] EncryptedData       Pointer to an allocated buffer containing the encrypted
+                                  message.
+  @param[out] EncryptedDataSize   Size of the encrypted message buffer.
+
+  @retval     TRUE                Encryption was successful.
+  @retval     FALSE               Encryption failed.
+
+**/
+BOOLEAN
+EFIAPI
+Pkcs1v2Encrypt (
+  IN   CONST UINT8  *PublicKey,
+  IN   UINTN        PublicKeySize,
+  IN   UINT8        *InData,
+  IN   UINTN        InDataSize,
+  IN   CONST UINT8  *PrngSeed,  OPTIONAL
+  IN   UINTN        PrngSeedSize,  OPTIONAL
+  OUT  UINT8        **EncryptedData,
+  OUT  UINTN        *EncryptedDataSize
   );
 
 /**
@@ -2562,6 +2633,48 @@ Pkcs7Verify (
   IN  UINTN        CertLength,
   IN  CONST UINT8  *InData,
   IN  UINTN        DataLength
+  );
+
+/**
+  This function receives a PKCS7 formatted signature, and then verifies that
+  the specified Enhanced or Extended Key Usages (EKU's) are present in the end-entity
+  leaf signing certificate.
+  Note that this function does not validate the certificate chain.
+
+  Applications for custom EKU's are quite flexible. For example, a policy EKU
+  may be present in an Issuing Certificate Authority (CA), and any sub-ordinate
+  certificate issued might also contain this EKU, thus constraining the
+  sub-ordinate certificate.  Other applications might allow a certificate
+  embedded in a device to specify that other Object Identifiers (OIDs) are
+  present which contains binary data specifying custom capabilities that
+  the device is able to do.
+
+  @param[in]  Pkcs7Signature       The PKCS#7 signed information content block. An array
+                                   containing the content block with both the signature,
+                                   the signer's certificate, and any necessary intermediate
+                                   certificates.
+  @param[in]  Pkcs7SignatureSize   Number of bytes in Pkcs7Signature.
+  @param[in]  RequiredEKUs         Array of null-terminated strings listing OIDs of
+                                   required EKUs that must be present in the signature.
+  @param[in]  RequiredEKUsSize     Number of elements in the RequiredEKUs string array.
+  @param[in]  RequireAllPresent    If this is TRUE, then all of the specified EKU's
+                                   must be present in the leaf signer.  If it is
+                                   FALSE, then we will succeed if we find any
+                                   of the specified EKU's.
+
+  @retval EFI_SUCCESS              The required EKUs were found in the signature.
+  @retval EFI_INVALID_PARAMETER    A parameter was invalid.
+  @retval EFI_NOT_FOUND            One or more EKU's were not found in the signature.
+
+**/
+RETURN_STATUS
+EFIAPI
+VerifyEKUsInPkcs7Signature (
+  IN  CONST UINT8   *Pkcs7Signature,
+  IN  CONST UINT32  SignatureSize,
+  IN  CONST CHAR8   *RequiredEKUs[],
+  IN  CONST UINT32  RequiredEKUsSize,
+  IN  BOOLEAN       RequireAllPresent
   );
 
 /**
