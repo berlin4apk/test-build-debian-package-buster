@@ -51,10 +51,6 @@ override_dh_auto_build: build-qemu-efi-aarch64 build-qemu-efi-arm build-ovmf
 
 setup-build:
 	make -C BaseTools ARCH=$(EDK2_BUILD_ARCH)
-	# We call this twice because it modifies the shell environment,
-	# and it's excessively awkward to do all the subsequent work in a
-	# single shell invocation
-	. ./edksetup.sh
 
 build-ovmf: EDK2_ARCH_DIR=X64
 build-ovmf: EDK2_HOST_ARCH=X64

@@ -15,6 +15,8 @@ edk2 (0~20190606.20d2e5a1-1) UNRELEASED; urgency=medium
     python(2) version of that.
   * Revert "Adjust debian/rules to only build ovmf when building with -b"
     commit, as Debian now has the necessary cross-compilers.
+  * Remove unnecessary sourcing of edksetup.sh. It only needs to be
+    sourced in targets that need to inherent its environment.
 
  -- dann frazier <dannf@debian.org>  Mon, 24 Jun 2019 17:21:37 -0600
 
