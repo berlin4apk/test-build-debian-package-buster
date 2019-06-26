@@ -13,6 +13,8 @@ edk2 (0~20190606.20d2e5a1-1) UNRELEASED; urgency=medium
     the build will now use python3 instead of python if found at build-time.
     However, the build requires distutils, and upstream only embeds the
     python(2) version of that.
+  * Revert "Adjust debian/rules to only build ovmf when building with -b"
+    commit, as Debian now has the necessary cross-compilers.
 
  -- dann frazier <dannf@debian.org>  Mon, 24 Jun 2019 17:21:37 -0600
 

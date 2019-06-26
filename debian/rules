@@ -59,14 +59,12 @@ setup-build:
 build-ovmf: EDK2_ARCH_DIR=X64
 build-ovmf: EDK2_HOST_ARCH=X64
 build-ovmf: setup-build
-ifneq (,$(findstring ovmf, $(shell dh_listpackages)))
 	cd UefiCpuPkg/ResetVector/Vtf0 && python Build.py
 	set -e; . ./edksetup.sh; \
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
 			$(OVMF_FLAGS) -b RELEASE
-endif
 
 build-qemu-efi: setup-build
 	set -e; . ./edksetup.sh; \
