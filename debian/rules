@@ -2,11 +2,6 @@
 
 SHELL=/bin/bash
 
-# various bits that have to be pulled in to create the full source tarball
-OPENSSL_VER= 1.1.0j
-OPENSSL_SRC= openssl-$(OPENSSL_VER).tar.gz
-OPENSSL_URL= http://www.openssl.org/source/$(OPENSSL_SRC)
-
 # Only used for creating our build tools.
 DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
 DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
@@ -101,7 +96,9 @@ get-orig-source:
 	# Should be executed on a checkout of the upstream master branch,
 	# with the debian/ directory manually copied in.
 	git clone . edk2-$(ver)
-	rm -rf edk2-$(ver)/.git
+	# Don't recurse, openssl will ring in MBs of stuff we don't need
+	cd edk2-$(ver) && git submodule update --init
+	find edk2-$(ver) -name .git | xargs rm -rf
 	ln -s ../debian edk2-$(ver)
 	# Remove unused embedded source, requested by Ubuntu security team
 	rm -r edk2-$(ver)/BaseTools/Source/C/BrotliCompress
@@ -110,13 +107,7 @@ get-orig-source:
 	# Look for possible unknown binary files
 	cd edk2-$(ver) && python3 ./debian/find-binaries.py
 	rm edk2-$(ver)/debian
-	# openssl
-	wget $(OPENSSL_URL)
-	tar zxvf $(OPENSSL_SRC) -C edk2-$(ver)/CryptoPkg/Library/OpensslLib
-	rm -rf edk2-$(ver)/CryptoPkg/Library/OpensslLib/openssl && \
-		ln -s openssl-$(OPENSSL_VER) \
-		edk2-$(ver)/CryptoPkg/Library/OpensslLib/openssl
 	tar Jcvf ../edk2_$(ver).orig.tar.xz edk2-$(ver)
-	rm -rf edk2-$(ver) $(OPENSSL_SRC)
+	rm -rf edk2-$(ver)
 
 .PHONY: setup-build build-ovmf build-qemu-efi
