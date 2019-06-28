@@ -1,4 +1,4 @@
-edk2 (0~20190606.20d2e5a1-1) UNRELEASED; urgency=medium
+edk2 (0~20190606.20d2e5a1-1) experimental; urgency=medium
 
   * New upstream release, based on edk2-stable201905 tag.
     - d/binary-check.blacklist: Drop binaries removed upstream.
@@ -22,7 +22,7 @@ edk2 (0~20190606.20d2e5a1-1) UNRELEASED; urgency=medium
   * Include /usr/share/dpkg/architecture.mk instead of manually defining
     equivalent variables.
 
- -- dann frazier <dannf@debian.org>  Mon, 24 Jun 2019 17:21:37 -0600
+ -- dann frazier <dannf@debian.org>  Fri, 28 Jun 2019 16:07:10 -0600
 
 edk2 (0~20190309.89910a39-1) experimental; urgency=medium
 
