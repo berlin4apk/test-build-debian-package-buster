@@ -17,6 +17,8 @@ edk2 (0~20190606.20d2e5a1-1) UNRELEASED; urgency=medium
     commit, as Debian now has the necessary cross-compilers.
   * Remove unnecessary sourcing of edksetup.sh. It only needs to be
     sourced in targets that need to inherent its environment.
+  * Add a set of autopkgtests that verify each image type boots to a
+    UEFI shell prompt in QEMU.
 
  -- dann frazier <dannf@debian.org>  Mon, 24 Jun 2019 17:21:37 -0600
 
