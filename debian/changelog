@@ -19,6 +19,8 @@ edk2 (0~20190606.20d2e5a1-1) UNRELEASED; urgency=medium
     sourced in targets that need to inherent its environment.
   * Add a set of autopkgtests that verify each image type boots to a
     UEFI shell prompt in QEMU.
+  * Include /usr/share/dpkg/architecture.mk instead of manually defining
+    equivalent variables.
 
  -- dann frazier <dannf@debian.org>  Mon, 24 Jun 2019 17:21:37 -0600
 
