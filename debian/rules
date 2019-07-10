@@ -87,7 +87,7 @@ get-orig-source:
 	# Should be executed on a checkout of the upstream master branch,
 	# with the debian/ directory manually copied in.
 	git clone . edk2-$(ver)
-	# Don't recurse, openssl will ring in MBs of stuff we don't need
+	# Don't recurse, openssl will bring in MBs of stuff we don't need
 	cd edk2-$(ver) && git submodule update --init
 	find edk2-$(ver) -name .git | xargs rm -rf
 	ln -s ../debian edk2-$(ver)
