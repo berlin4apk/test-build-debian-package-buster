@@ -1,8 +1,8 @@
 Test-Command: python3 debian/tests/shell.py --arch AARCH64
-Depends: qemu-system-arm, python3-pexpect
+Depends: qemu-efi-aarch64, qemu-system-arm, python3-pexpect
 
 Test-Command: python3 debian/tests/shell.py --arch ARM
-Depends: qemu-system-arm, python3-pexpect
+Depends: qemu-efi-arm, qemu-system-arm, python3-pexpect
 
 Test-Command: python3 debian/tests/shell.py --arch X64
-Depends: qemu-system-x86, python3-pexpect
+Depends: ovmf, qemu-system-x86, python3-pexpect
