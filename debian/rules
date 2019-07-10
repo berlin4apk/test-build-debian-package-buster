@@ -46,12 +46,13 @@ ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
 
 override_dh_auto_build: build-qemu-efi-aarch64 build-qemu-efi-arm build-ovmf
 
-setup-build:
+debian/setup-build-stamp:
 	make -C BaseTools ARCH=$(EDK2_BUILD_ARCH)
+	touch $@
 
 build-ovmf: EDK2_ARCH_DIR=X64
 build-ovmf: EDK2_HOST_ARCH=X64
-build-ovmf: setup-build
+build-ovmf: debian/setup-build-stamp
 	cd UefiCpuPkg/ResetVector/Vtf0 && python Build.py
 	set -e; . ./edksetup.sh; \
 		build -a $(EDK2_HOST_ARCH) \
@@ -59,7 +60,7 @@ build-ovmf: setup-build
 			-p OvmfPkg/OvmfPkgX64.dsc \
 			$(OVMF_FLAGS) -b RELEASE
 
-build-qemu-efi: setup-build
+build-qemu-efi: debian/setup-build-stamp
 	set -e; . ./edksetup.sh; \
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
@@ -82,6 +83,7 @@ override_dh_auto_clean:
 		make -C BaseTools clean; \
 	fi
 	rm -rf Conf/.cache Build .pc-post
+	rm -f debian/setup-build-stamp
 
 get-orig-source:
 	# Should be executed on a checkout of the upstream master branch,
@@ -101,4 +103,4 @@ get-orig-source:
 	tar Jcvf ../edk2_$(ver).orig.tar.xz edk2-$(ver)
 	rm -rf edk2-$(ver)
 
-.PHONY: setup-build build-ovmf build-qemu-efi
+.PHONY: build-ovmf build-qemu-efi
