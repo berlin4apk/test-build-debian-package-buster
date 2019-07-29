@@ -1,3 +1,3 @@
-Build/OvmfX64/RELEASE_*GCC*/FV/OVMF.fd		/usr/share/ovmf
-Build/OvmfX64/RELEASE_*GCC*/FV/OVMF_CODE.fd	/usr/share/OVMF
-Build/OvmfX64/RELEASE_*GCC*/FV/OVMF_VARS.fd	/usr/share/OVMF
+Build/OvmfX64/RELEASE_*GCC*/FV/OVMF.fd	/usr/share/ovmf
+debian/ovmf-install/OVMF_CODE*.fd	/usr/share/OVMF
+debian/ovmf-install/OVMF_VARS*.fd	/usr/share/OVMF

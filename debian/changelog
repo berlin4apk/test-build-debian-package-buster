@@ -5,6 +5,15 @@ edk2 (0~20190606.20d2e5a1-2) UNRELEASED; urgency=medium
   * debian/rules: Fix a comment typo in the get-orig-source rules.
   * debian/rules: Introduce a setup-build-stamp to avoid unnecessary
     BuildTools rebuilds.
+  * ovmf: Add SecureBoot enabled variant:
+    - debian/control: add xorriso, qemu-utils, qemu-system-x86, python3 to
+      Build-Depends for the automatic key enrollment process.
+    - debian/rules:
+      - build a SecureBoot/SMM enabled variant of OVMF_CODE too.
+      - build OVMF_VARS.ms.fd with embedded Microsoft keys from the binary
+        EnrollDefaultKeys.efi
+    - debian/ovmf.links: add OVMF_CODE.ms.fd.
+    - debian/ovmf.install: install OVMF_VARS.ms.fd.
 
  -- dann frazier <dannf@debian.org>  Wed, 10 Jul 2019 14:50:29 -0600
 
