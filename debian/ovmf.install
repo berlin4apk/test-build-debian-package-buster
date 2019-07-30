@@ -1,3 +1,5 @@
 Build/OvmfX64/RELEASE_*GCC*/FV/OVMF.fd	/usr/share/ovmf
 debian/ovmf-install/OVMF_CODE*.fd	/usr/share/OVMF
 debian/ovmf-install/OVMF_VARS*.fd	/usr/share/OVMF
+debian/descriptors/50-edk2-x86_64-secure.json	/usr/share/qemu/firmware
+debian/descriptors/60-edk2-x86_64.json		/usr/share/qemu/firmware

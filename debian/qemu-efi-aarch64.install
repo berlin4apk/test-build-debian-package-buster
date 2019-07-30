@@ -1,2 +1,3 @@
 Build/ArmVirtQemu-AARCH64/RELEASE_*GCC*/FV/QEMU_EFI.fd /usr/share/qemu-efi-aarch64
 Build/ArmVirtQemu-AARCH64/RELEASE_*GCC*/FV/AAVMF_*.fd /usr/share/AAVMF
+debian/descriptors/60-edk2-aarch64.json	/usr/share/qemu/firmware

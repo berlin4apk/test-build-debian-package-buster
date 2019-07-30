@@ -18,6 +18,7 @@ edk2 (0~20190606.20d2e5a1-2) UNRELEASED; urgency=medium
       passing in the PK/KEK via QEMU's --oemstring.
   * Reenable HTTP Boot, which was accidentally disabled due to an upstream
     macro rename.
+  * Add firmware descriptor files. Closes: #932269, LP: #1836859.
 
  -- dann frazier <dannf@debian.org>  Wed, 10 Jul 2019 14:50:29 -0600
 
