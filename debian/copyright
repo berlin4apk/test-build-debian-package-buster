@@ -8,7 +8,7 @@ Files: *
 Copyright: 1999-2013, Intel Corporation
 License: BSD-2-clause
 
-Files: debian/ovmf-vars-generator
+Files: qemu-ovmf-secureboot-*
 Copyright: 2017 Red Hat
 License: MIT
 
