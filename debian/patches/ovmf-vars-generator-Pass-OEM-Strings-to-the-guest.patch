@@ -1,0 +1,69 @@
+From f158f12be75482489b64330f7c5ee8b8138f04c7 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Fri, 17 May 2019 11:56:55 +0200
+Subject: [PATCH] Pass OEM Strings to the guest
+
+Fixes #25
+
+As a stop-gap solution to #25, expose the feature added in QEMU commit
+2d6dcbf93fb0 ("smbios: support setting OEM strings table", 2017-12-05)
+with the new option "--oemstring".
+
+The caller of "ovmf-vars-generator" can format the PK/KEK1 certificate
+that is the subject of #25 as a base64-encoded string, preceded by an
+application prefix. This string can now be passed to
+"EnrollDefaultKeys.efi" with "--oemstring".
+
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+---
+ ovmf-vars-generator | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/ovmf-vars-generator b/ovmf-vars-generator
+index d63e4cf..e677b65 100755
+--- a/qemu-ovmf-secureboot-1-1-3/ovmf-vars-generator
++++ b/qemu-ovmf-secureboot-1-1-3/ovmf-vars-generator
+@@ -32,6 +32,16 @@ def generate_qemu_cmd(args, readonly, *extra_args):
+     else:
+         machinetype = 'q35,smm=on'
+     machinetype += ',accel=%s' % ('kvm' if args.enable_kvm else 'tcg')
++
++    if args.oem_string is None:
++        oemstrings = []
++    else:
++        oemstring_values = [
++            ",value=" + s.replace(",", ",,") for s in args.oem_string ]
++        oemstrings = [
++            '-smbios',
++            "type=11" + ''.join(oemstring_values) ]
++
+     return [
+         args.qemu_binary,
+         '-machine', machinetype,
+@@ -50,7 +60,7 @@ def generate_qemu_cmd(args, readonly, *extra_args):
+         '-drive',
+         'file=%s,if=pflash,format=raw,unit=1,readonly=%s' % (
+             args.out_temp, 'on' if readonly else 'off'),
+-        '-serial', 'stdio'] + list(extra_args)
++        '-serial', 'stdio'] + oemstrings + list(extra_args)
+ 
+ 
+ def download(url, target, suffix, no_download):
+@@ -213,6 +223,14 @@ def parse_args():
+                               'used for testing, could undermine Secure '
+                               'Boot.'),
+                         action='store_true')
++    parser.add_argument('--oem-string',
++                        help=('Pass the argument to the guest as a string in '
++                              'the SMBIOS Type 11 (OEM Strings) table. '
++                              'Multiple occurrences of this option are '
++                              'collected into a single SMBIOS Type 11 table. '
++                              'A pure ASCII string argument is strongly '
++                              'suggested.'),
++                        action='append')
+     args = parser.parse_args()
+     args.kernel_url = args.kernel_url % {'version': args.fedora_version}
+ 
+-- 
+2.22.0
+
