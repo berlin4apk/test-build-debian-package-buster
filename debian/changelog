@@ -16,6 +16,8 @@ edk2 (0~20190606.20d2e5a1-2) UNRELEASED; urgency=medium
     - debian/ovmf.install: install OVMF_VARS.ms.fd.
     - d/p/ovmf-vars-generator-Pass-OEM-Strings-to-the-guest.patch: Support
       passing in the PK/KEK via QEMU's --oemstring.
+  * Reenable HTTP Boot, which was accidentally disabled due to an upstream
+    macro rename.
 
  -- dann frazier <dannf@debian.org>  Wed, 10 Jul 2019 14:50:29 -0600
 
