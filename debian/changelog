@@ -1,3 +1,11 @@
+edk2 (0~20190606.20d2e5a1-3) UNRELEASED; urgency=medium
+
+  * d/p/ovmf-vars-generator-ignore-qemu-warnings.patch: Avoid build
+    hang in Ubuntu resulting from unexpected QEMU warnings in output
+    while enrolling keys.
+
+ -- dann frazier <dannf@debian.org>  Fri, 02 Aug 2019 09:49:35 -0600
+
 edk2 (0~20190606.20d2e5a1-2) unstable; urgency=medium
 
   * debian/tests/control: Add missing dependencies on ovmf,
