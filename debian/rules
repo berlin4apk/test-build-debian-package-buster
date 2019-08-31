@@ -65,7 +65,7 @@ build-ovmf: $(OVMF_BINARIES) debian/ovmf-install/OVMF_VARS.ms.fd
 $(OVMF_BINARIES): EDK2_ARCH_DIR=X64
 $(OVMF_BINARIES): EDK2_HOST_ARCH=X64
 $(OVMF_BINARIES): debian/setup-build-stamp
-	cd UefiCpuPkg/ResetVector/Vtf0 && python Build.py
+	cd UefiCpuPkg/ResetVector/Vtf0 && python3 Build.py
 	rm -rf debian/ovmf-install
 	mkdir debian/ovmf-install
 	set -e; . ./edksetup.sh; \
