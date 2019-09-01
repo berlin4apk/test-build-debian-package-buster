@@ -1,8 +1,8 @@
-edk2 (0~20190606.20d2e5a1-4) UNRELEASED; urgency=medium
+edk2 (0~20190606.20d2e5a1-4) unstable; urgency=medium
 
   * Fix up remaining references to python.
 
- -- Steve Langasek <vorlon@debian.org>  Sun, 01 Sep 2019 05:08:20 +0000
+ -- Steve Langasek <vorlon@debian.org>  Sun, 01 Sep 2019 05:31:40 +0000
 
 edk2 (0~20190606.20d2e5a1-3) unstable; urgency=medium
 
