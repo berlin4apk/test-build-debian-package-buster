@@ -7,7 +7,7 @@ Index: edk2/UefiCpuPkg/ResetVector/Vtf0/Build.py
 ===================================================================
 --- edk2.orig/UefiCpuPkg/ResetVector/Vtf0/Build.py
 +++ edk2/UefiCpuPkg/ResetVector/Vtf0/Build.py
-@@ -33,7 +33,7 @@
+@@ -33,15 +33,15 @@
              'Vtf0.nasmb',
              )
          ret = RunCommand(commandLine)
@@ -16,7 +16,8 @@ Index: edk2/UefiCpuPkg/ResetVector/Vtf0/Build.py
          if ret != 0: sys.exit(ret)
  
          commandLine = (
-@@ -41,7 +41,7 @@
+-            'python',
++            'python3',
              'Tools/FixupForRawSection.py',
              output,
              )
@@ -25,3 +26,15 @@ Index: edk2/UefiCpuPkg/ResetVector/Vtf0/Build.py
          ret = RunCommand(commandLine)
          if ret != 0: sys.exit(ret)
  
+Index: edk2/UefiCpuPkg/ResetVector/Vtf0/Tools/FixupForRawSection.py
+===================================================================
+--- edk2.orig/UefiCpuPkg/ResetVector/Vtf0/Tools/FixupForRawSection.py
++++ edk2/UefiCpuPkg/ResetVector/Vtf0/Tools/FixupForRawSection.py
+@@ -15,6 +15,6 @@
+ if c > len(d):
+     c -= len(d)
+     f = open(sys.argv[1], 'wb')
+-    f.write('\x90' * c)
++    f.write(b'\x90' * c)
+     f.write(d)
+     f.close()

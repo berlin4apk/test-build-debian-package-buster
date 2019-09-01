@@ -10,6 +10,8 @@ EDK2_TOOLCHAIN = GCC49
 export $(EDK2_TOOLCHAIN)_AARCH64_PREFIX=aarch64-linux-gnu-
 export $(EDK2_TOOLCHAIN)_ARM_PREFIX=arm-linux-gnueabihf-
 
+export PYTHON3_ENABLE=TRUE
+
 ifeq ($(DEB_BUILD_ARCH),amd64)
 	EDK2_BUILD_ARCH=X64
 endif
@@ -50,6 +52,7 @@ ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
 override_dh_auto_build: build-qemu-efi-aarch64 build-qemu-efi-arm build-ovmf
 
 debian/setup-build-stamp:
+	set -e; . ./edksetup.sh; \
 	make -C BaseTools ARCH=$(EDK2_BUILD_ARCH)
 	touch $@
 
