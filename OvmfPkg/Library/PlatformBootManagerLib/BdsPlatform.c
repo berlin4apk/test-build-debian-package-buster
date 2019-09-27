@@ -1,17 +1,17 @@
 /** @file
   Platform BDS customizations.
 
-  Copyright (c) 2004 - 2018, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2004 - 2019, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
 
 #include "BdsPlatform.h"
-#include <Guid/XenInfo.h>
 #include <Guid/RootBridgesConnectedEventGroup.h>
 #include <Protocol/FirmwareVolume2.h>
 #include <Library/PlatformBmPrintScLib.h>
 #include <Library/Tcg2PhysicalPresenceLib.h>
+#include <Library/XenPlatformLib.h>
 
 
 //
@@ -398,7 +398,8 @@ PlatformBootManagerBeforeConsole (
   //
   EfiBootManagerDispatchDeferredImages ();
 
-  PlatformInitializeConsole (gPlatformConsole);
+  PlatformInitializeConsole (
+    XenDetected() ? gXenPlatformConsole : gPlatformConsole);
   PcdStatus = PcdSet16S (PcdPlatformBootTimeOut,
                 GetFrontPageTimeoutFromQemu ());
   ASSERT_RETURN_ERROR (PcdStatus);
@@ -1208,6 +1209,12 @@ PciAcpiInitialization (
       PciWrite8 (PCI_LIB_ADDRESS (0, 0x1f, 0, 0x6b), 0x0b); // H
       break;
     default:
+      if (XenDetected ()) {
+        //
+        // There is no PCI bus in this case.
+        //
+        return;
+      }
       DEBUG ((EFI_D_ERROR, "%a: Unknown Host Bridge Device ID: 0x%04x\n",
         __FUNCTION__, mHostBridgeDevId));
       ASSERT (FALSE);
@@ -1223,38 +1230,6 @@ PciAcpiInitialization (
   // Set ACPI SCI_EN bit in PMCNTRL
   //
   IoOr16 ((PciRead32 (Pmba) & ~BIT0) + 4, BIT0);
-}
-
-/**
-  This function detects if OVMF is running on Xen.
-
-**/
-STATIC
-BOOLEAN
-XenDetected (
-  VOID
-  )
-{
-  EFI_HOB_GUID_TYPE         *GuidHob;
-  STATIC INTN               FoundHob = -1;
-
-  if (FoundHob == 0) {
-    return FALSE;
-  } else if (FoundHob == 1) {
-    return TRUE;
-  }
-
-  //
-  // See if a XenInfo HOB is available
-  //
-  GuidHob = GetFirstGuidHob (&gEfiXenInfoGuid);
-  if (GuidHob == NULL) {
-    FoundHob = 0;
-    return FALSE;
-  }
-
-  FoundHob = 1;
-  return TRUE;
 }
 
 EFI_STATUS
@@ -1532,7 +1507,7 @@ PlatformBootManagerAfterConsole (
   // Register UEFI Shell
   //
   PlatformRegisterFvBootOption (
-    PcdGetPtr (PcdShellFile), L"EFI Internal Shell", LOAD_OPTION_ACTIVE
+    &gUefiShellFileGuid, L"EFI Internal Shell", LOAD_OPTION_ACTIVE
     );
 
   RemoveStaleFvFileOptions ();

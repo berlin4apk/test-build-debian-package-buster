@@ -75,6 +75,9 @@
 #   0x80000001 | Invalid value provided.
 #
 
+[Ppis]
+  gEdkiiPeiMpServices2PpiGuid =    { 0x5cb9cb3d, 0x31a4, 0x480c, { 0x94, 0x98, 0x29, 0xd2, 0x69, 0xba, 0xcf, 0xba}}
+
 [PcdsFeatureFlag]
   ## Indicates if SMM Profile will be enabled.
   #  If enabled, instruction executions in and data accesses to memory outside of SMRAM will be logged.
@@ -207,6 +210,14 @@
   ## Specifies if CPU features will be initialized during S3 resume.
   # @Prompt If CPU features will be initialized during S3 resume.
   gUefiCpuPkgTokenSpaceGuid.PcdCpuFeaturesInitOnS3Resume|FALSE|BOOLEAN|0x0000001D
+
+  ## Specifies CPUID Leaf 0x15 Time Stamp Counter and Nominal Core Crystal Clock Frequency.
+  # TSC Frequency = ECX (core crystal clock frequency) * EBX/EAX.
+  #   Intel Xeon Processor Scalable Family with CPUID signature 06_55H = 25000000 (25MHz)
+  #   6th and 7th generation Intel Core processors and Intel Xeon W Processor Family = 24000000 (24MHz)
+  #   Intel Atom processors based on Goldmont Microarchitecture with CPUID signature 06_5CH = 19200000 (19.2MHz)
+  # @Prompt This PCD is the nominal frequency of the core crystal clock in Hz as is CPUID Leaf 0x15:ECX
+  gUefiCpuPkgTokenSpaceGuid.PcdCpuCoreCrystalClockFrequency|24000000|UINT64|0x32132113
 
 [PcdsFixedAtBuild, PcdsPatchableInModule, PcdsDynamic, PcdsDynamicEx]
   ## Specifies max supported number of Logical Processors.

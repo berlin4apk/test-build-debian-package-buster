@@ -110,11 +110,11 @@ SecStartup (
   // |-------------------|---->
   // |                   |
   // |                   |
-  // |      Heap         |    PeiTemporayRamSize
+  // |      Heap         |    PeiTemporaryRamSize
   // |                   |
   // |                   |
   // |-------------------|---->  TempRamBase
-  IdtTableInStack.PeiService  = NULL;
+  IdtTableInStack.PeiService = 0;
   AsmReadIdtr (&IdtDescriptor);
   if (IdtDescriptor.Base == 0) {
     ExceptionHandler = FspGetExceptionHandler(mIdtEntryTemplate);

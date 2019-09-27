@@ -33,14 +33,17 @@
 #
 
 [Sources]
+  InternalCryptLib.h
   Hash/CryptMd4Null.c
   Hash/CryptMd5.c
   Hash/CryptSha1.c
   Hash/CryptSha256.c
+  Hash/CryptSm3.c
   Hash/CryptSha512Null.c
   Hmac/CryptHmacMd5Null.c
   Hmac/CryptHmacSha1Null.c
   Hmac/CryptHmacSha256Null.c
+  Kdf/CryptHkdfNull.c
   Cipher/CryptAesNull.c
   Cipher/CryptTdesNull.c
   Cipher/CryptArc4Null.c

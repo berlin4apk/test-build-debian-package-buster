@@ -9,45 +9,21 @@
 #include "RegisterCpuFeatures.h"
 
 /**
-  Checks if two CPU feature bit masks are equal.
-
-  @param[in]  FirstFeatureMask  The first input CPU feature bit mask
-  @param[in]  SecondFeatureMask The second input CPU feature bit mask
-
-  @retval TRUE  Two CPU feature bit masks are equal.
-  @retval FALSE Two CPU feature bit masks are not equal.
-**/
-BOOLEAN
-IsCpuFeatureMatch (
-  IN UINT8               *FirstFeatureMask,
-  IN UINT8               *SecondFeatureMask
-  )
-{
-  UINTN                 BitMaskSize;
-
-  BitMaskSize = PcdGetSize (PcdCpuFeaturesSetting);
-  if (CompareMem (FirstFeatureMask, SecondFeatureMask, BitMaskSize) == 0) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
-/**
   Function that uses DEBUG() macros to display the contents of a a CPU feature bit mask.
 
   @param[in]  FeatureMask  A pointer to the CPU feature bit mask.
+  @param[in]  BitMaskSize  CPU feature bits mask buffer size.
+
 **/
 VOID
 DumpCpuFeatureMask (
-  IN UINT8               *FeatureMask
+  IN UINT8               *FeatureMask,
+  IN UINT32              BitMaskSize
   )
 {
   UINTN                  Index;
   UINT8                  *Data8;
-  UINTN                  BitMaskSize;
 
-  BitMaskSize = PcdGetSize (PcdCpuFeaturesSetting);
   Data8       = (UINT8 *) FeatureMask;
   for (Index = 0; Index < BitMaskSize; Index++) {
     DEBUG ((DEBUG_INFO, " %02x ", *Data8++));
@@ -59,10 +35,13 @@ DumpCpuFeatureMask (
   Dump CPU feature name or CPU feature bit mask.
 
   @param[in]  CpuFeature   Pointer to CPU_FEATURES_ENTRY
+  @param[in]  BitMaskSize  CPU feature bits mask buffer size.
+
 **/
 VOID
 DumpCpuFeature (
-  IN CPU_FEATURES_ENTRY  *CpuFeature
+  IN CPU_FEATURES_ENTRY  *CpuFeature,
+  IN UINT32              BitMaskSize
   )
 {
 
@@ -70,7 +49,7 @@ DumpCpuFeature (
     DEBUG ((DEBUG_INFO, "FeatureName: %a\n", CpuFeature->FeatureName));
   } else {
     DEBUG ((DEBUG_INFO, "FeatureMask = "));
-    DumpCpuFeatureMask (CpuFeature->FeatureMask);
+    DumpCpuFeatureMask (CpuFeature->FeatureMask, BitMaskSize);
   }
 }
 
@@ -89,16 +68,16 @@ IsBitMaskMatchCheck (
   IN UINT8        *DependentBitMask
   )
 {
-  UINTN      Index;
-  UINTN      BitMaskSize;
-  UINT8      *Data1;
-  UINT8      *Data2;
+  UINTN              Index;
+  UINT8              *Data1;
+  UINT8              *Data2;
+  CPU_FEATURES_DATA  *CpuFeaturesData;
 
-  BitMaskSize = PcdGetSize (PcdCpuFeaturesSetting);
+  CpuFeaturesData = GetCpuFeaturesData ();
 
   Data1 = FeatureMask;
   Data2 = DependentBitMask;
-  for (Index = 0; Index < BitMaskSize; Index++) {
+  for (Index = 0; Index < CpuFeaturesData->BitMaskSize; Index++) {
     if (((*(Data1++)) & (*(Data2++))) != 0) {
       return TRUE;
     }
@@ -631,6 +610,7 @@ CheckCpuFeaturesDependency (
 /**
   Worker function to register CPU Feature.
 
+  @param[in]  CpuFeaturesData       Pointer to CPU feature data structure.
   @param[in]  CpuFeature            Pointer to CPU feature entry
 
   @retval  RETURN_SUCCESS           The CPU feature was successfully registered.
@@ -642,32 +622,21 @@ CheckCpuFeaturesDependency (
 **/
 RETURN_STATUS
 RegisterCpuFeatureWorker (
+  IN CPU_FEATURES_DATA       *CpuFeaturesData,
   IN CPU_FEATURES_ENTRY      *CpuFeature
   )
 {
   EFI_STATUS                 Status;
-  CPU_FEATURES_DATA          *CpuFeaturesData;
   CPU_FEATURES_ENTRY         *CpuFeatureEntry;
   LIST_ENTRY                 *Entry;
-  UINTN                      BitMaskSize;
   BOOLEAN                    FeatureExist;
-
-  BitMaskSize     = PcdGetSize (PcdCpuFeaturesSetting);
-  CpuFeaturesData = GetCpuFeaturesData ();
-  if (CpuFeaturesData->FeaturesCount == 0) {
-    InitializeListHead (&CpuFeaturesData->FeatureList);
-    InitializeSpinLock (&CpuFeaturesData->CpuFlags.MemoryMappedLock);
-    InitializeSpinLock (&CpuFeaturesData->CpuFlags.ConsoleLogLock);
-    CpuFeaturesData->BitMaskSize = (UINT32) BitMaskSize;
-  }
-  ASSERT (CpuFeaturesData->BitMaskSize == BitMaskSize);
 
   FeatureExist = FALSE;
   CpuFeatureEntry = NULL;
   Entry = GetFirstNode (&CpuFeaturesData->FeatureList);
   while (!IsNull (&CpuFeaturesData->FeatureList, Entry)) {
     CpuFeatureEntry = CPU_FEATURE_ENTRY_FROM_LINK (Entry);
-    if (IsCpuFeatureMatch (CpuFeature->FeatureMask, CpuFeatureEntry->FeatureMask)) {
+    if (CompareMem (CpuFeature->FeatureMask, CpuFeatureEntry->FeatureMask, CpuFeaturesData->BitMaskSize) == 0) {
       //
       // If this feature already registered
       //
@@ -679,12 +648,12 @@ RegisterCpuFeatureWorker (
 
   if (!FeatureExist) {
     DEBUG ((DEBUG_INFO, "[NEW] "));
-    DumpCpuFeature (CpuFeature);
+    DumpCpuFeature (CpuFeature, CpuFeaturesData->BitMaskSize);
     InsertTailList (&CpuFeaturesData->FeatureList, &CpuFeature->Link);
     CpuFeaturesData->FeaturesCount++;
   } else {
     DEBUG ((DEBUG_INFO, "[OVERRIDE] "));
-    DumpCpuFeature (CpuFeature);
+    DumpCpuFeature (CpuFeature, CpuFeaturesData->BitMaskSize);
     ASSERT (CpuFeatureEntry != NULL);
     //
     // Overwrite original parameters of CPU feature
@@ -844,7 +813,6 @@ RegisterCpuFeature (
   EFI_STATUS                 Status;
   VA_LIST                    Marker;
   UINT32                     Feature;
-  UINTN                      BitMaskSize;
   CPU_FEATURES_ENTRY         *CpuFeature;
   UINT8                      *FeatureMask;
   UINT8                      *BeforeFeatureBitMask;
@@ -855,6 +823,7 @@ RegisterCpuFeature (
   UINT8                      *PackageAfterFeatureBitMask;
   BOOLEAN                    BeforeAll;
   BOOLEAN                    AfterAll;
+  CPU_FEATURES_DATA          *CpuFeaturesData;
 
   FeatureMask                 = NULL;
   BeforeFeatureBitMask        = NULL;
@@ -866,7 +835,17 @@ RegisterCpuFeature (
   BeforeAll            = FALSE;
   AfterAll             = FALSE;
 
-  BitMaskSize = PcdGetSize (PcdCpuFeaturesSetting);
+  CpuFeaturesData = GetCpuFeaturesData ();
+  if (CpuFeaturesData->FeaturesCount == 0) {
+    InitializeListHead (&CpuFeaturesData->FeatureList);
+    InitializeSpinLock (&CpuFeaturesData->CpuFlags.MemoryMappedLock);
+    //
+    // Code assumes below three PCDs have PCD same buffer size.
+    //
+    ASSERT (PcdGetSize (PcdCpuFeaturesSetting) == PcdGetSize (PcdCpuFeaturesCapability));
+    ASSERT (PcdGetSize (PcdCpuFeaturesSetting) == PcdGetSize (PcdCpuFeaturesSupport));
+    CpuFeaturesData->BitMaskSize = (UINT32) PcdGetSize (PcdCpuFeaturesSetting);
+  }
 
   VA_START (Marker, InitializeFunc);
   Feature = VA_ARG (Marker, UINT32);
@@ -884,19 +863,19 @@ RegisterCpuFeature (
       AfterAll  = ((Feature & CPU_FEATURE_AFTER_ALL) != 0) ? TRUE : FALSE;
       Feature  &= ~(CPU_FEATURE_BEFORE_ALL | CPU_FEATURE_AFTER_ALL);
       ASSERT (FeatureMask == NULL);
-      SetCpuFeaturesBitMask (&FeatureMask, Feature, BitMaskSize);
+      SetCpuFeaturesBitMask (&FeatureMask, Feature, CpuFeaturesData->BitMaskSize);
     } else if ((Feature & CPU_FEATURE_BEFORE) != 0) {
-      SetCpuFeaturesBitMask (&BeforeFeatureBitMask, Feature & ~CPU_FEATURE_BEFORE, BitMaskSize);
+      SetCpuFeaturesBitMask (&BeforeFeatureBitMask, Feature & ~CPU_FEATURE_BEFORE, CpuFeaturesData->BitMaskSize);
     } else if ((Feature & CPU_FEATURE_AFTER) != 0) {
-      SetCpuFeaturesBitMask (&AfterFeatureBitMask, Feature & ~CPU_FEATURE_AFTER, BitMaskSize);
+      SetCpuFeaturesBitMask (&AfterFeatureBitMask, Feature & ~CPU_FEATURE_AFTER, CpuFeaturesData->BitMaskSize);
     } else if ((Feature & CPU_FEATURE_CORE_BEFORE) != 0) {
-      SetCpuFeaturesBitMask (&CoreBeforeFeatureBitMask, Feature & ~CPU_FEATURE_CORE_BEFORE, BitMaskSize);
+      SetCpuFeaturesBitMask (&CoreBeforeFeatureBitMask, Feature & ~CPU_FEATURE_CORE_BEFORE, CpuFeaturesData->BitMaskSize);
     } else if ((Feature & CPU_FEATURE_CORE_AFTER) != 0) {
-      SetCpuFeaturesBitMask (&CoreAfterFeatureBitMask, Feature & ~CPU_FEATURE_CORE_AFTER, BitMaskSize);
+      SetCpuFeaturesBitMask (&CoreAfterFeatureBitMask, Feature & ~CPU_FEATURE_CORE_AFTER, CpuFeaturesData->BitMaskSize);
     } else if ((Feature & CPU_FEATURE_PACKAGE_BEFORE) != 0) {
-      SetCpuFeaturesBitMask (&PackageBeforeFeatureBitMask, Feature & ~CPU_FEATURE_PACKAGE_BEFORE, BitMaskSize);
+      SetCpuFeaturesBitMask (&PackageBeforeFeatureBitMask, Feature & ~CPU_FEATURE_PACKAGE_BEFORE, CpuFeaturesData->BitMaskSize);
     } else if ((Feature & CPU_FEATURE_PACKAGE_AFTER) != 0) {
-      SetCpuFeaturesBitMask (&PackageAfterFeatureBitMask, Feature & ~CPU_FEATURE_PACKAGE_AFTER, BitMaskSize);
+      SetCpuFeaturesBitMask (&PackageAfterFeatureBitMask, Feature & ~CPU_FEATURE_PACKAGE_AFTER, CpuFeaturesData->BitMaskSize);
     }
     Feature = VA_ARG (Marker, UINT32);
   }
@@ -924,7 +903,7 @@ RegisterCpuFeature (
     ASSERT_EFI_ERROR (Status);
   }
 
-  Status = RegisterCpuFeatureWorker (CpuFeature);
+  Status = RegisterCpuFeatureWorker (CpuFeaturesData, CpuFeature);
   ASSERT_EFI_ERROR (Status);
 
   return RETURN_SUCCESS;
@@ -1046,6 +1025,8 @@ EnlargeRegisterTable (
   @param[in]  ValidBitStart    Start of the bit section
   @param[in]  ValidBitLength   Length of the bit section
   @param[in]  Value            Value to write
+  @param[in]  TestThenWrite    Whether need to test current Value before writing.
+
 **/
 VOID
 CpuRegisterTableWriteWorker (
@@ -1055,7 +1036,8 @@ CpuRegisterTableWriteWorker (
   IN UINT64                  Index,
   IN UINT8                   ValidBitStart,
   IN UINT8                   ValidBitLength,
-  IN UINT64                  Value
+  IN UINT64                  Value,
+  IN BOOLEAN                 TestThenWrite
   )
 {
   CPU_FEATURES_DATA        *CpuFeaturesData;
@@ -1091,6 +1073,7 @@ CpuRegisterTableWriteWorker (
   RegisterTableEntry[RegisterTable->TableLength].ValidBitStart  = ValidBitStart;
   RegisterTableEntry[RegisterTable->TableLength].ValidBitLength = ValidBitLength;
   RegisterTableEntry[RegisterTable->TableLength].Value          = Value;
+  RegisterTableEntry[RegisterTable->TableLength].TestThenWrite  = TestThenWrite;
 
   RegisterTable->TableLength++;
 }
@@ -1126,7 +1109,41 @@ CpuRegisterTableWrite (
   Start  = (UINT8)LowBitSet64  (ValueMask);
   End    = (UINT8)HighBitSet64 (ValueMask);
   Length = End - Start + 1;
-  CpuRegisterTableWriteWorker (FALSE, ProcessorNumber, RegisterType, Index, Start, Length, Value);
+  CpuRegisterTableWriteWorker (FALSE, ProcessorNumber, RegisterType, Index, Start, Length, Value, FALSE);
+}
+
+/**
+  Adds an entry in specified register table.
+
+  This function adds an entry in specified register table, with given register type,
+  register index, bit section and value.
+
+  @param[in]  ProcessorNumber  The index of the CPU to add a register table entry
+  @param[in]  RegisterType     Type of the register to program
+  @param[in]  Index            Index of the register to program
+  @param[in]  ValueMask        Mask of bits in register to write
+  @param[in]  Value            Value to write
+
+  @note This service could be called by BSP only.
+**/
+VOID
+EFIAPI
+CpuRegisterTableTestThenWrite (
+  IN UINTN               ProcessorNumber,
+  IN REGISTER_TYPE       RegisterType,
+  IN UINT64              Index,
+  IN UINT64              ValueMask,
+  IN UINT64              Value
+  )
+{
+  UINT8                   Start;
+  UINT8                   End;
+  UINT8                   Length;
+
+  Start  = (UINT8)LowBitSet64  (ValueMask);
+  End    = (UINT8)HighBitSet64 (ValueMask);
+  Length = End - Start + 1;
+  CpuRegisterTableWriteWorker (FALSE, ProcessorNumber, RegisterType, Index, Start, Length, Value, TRUE);
 }
 
 /**
@@ -1160,7 +1177,7 @@ PreSmmCpuRegisterTableWrite (
   Start  = (UINT8)LowBitSet64  (ValueMask);
   End    = (UINT8)HighBitSet64 (ValueMask);
   Length = End - Start + 1;
-  CpuRegisterTableWriteWorker (TRUE, ProcessorNumber, RegisterType, Index, Start, Length, Value);
+  CpuRegisterTableWriteWorker (TRUE, ProcessorNumber, RegisterType, Index, Start, Length, Value, FALSE);
 }
 
 /**

@@ -1,3 +1,9 @@
+edk2 (0~20190828.37eef910-1) UNRELEASED; urgency=medium
+
+  * New upstream release, based on edk2-stable201908 tag.
+
+ -- dann frazier <dannf@debian.org>  Fri, 27 Sep 2019 17:56:35 -0600
+
 edk2 (0~20190606.20d2e5a1-4) unstable; urgency=medium
 
   * Fix up remaining references to python.

@@ -1,7 +1,7 @@
 /** @file
   CPU Register Table Library functions.
 
-  Copyright (c) 2017, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2017 - 2019, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -116,7 +116,7 @@ GetProcessorInformation (
                                       to check whether procedure has done.
 **/
 VOID
-StartupAPsWorker (
+StartupAllAPsWorker (
   IN  EFI_AP_PROCEDURE                 Procedure,
   IN  EFI_EVENT                        MpEvent
   )
@@ -229,31 +229,42 @@ CpuFeaturesInitialize (
   OldBspNumber = GetProcessorIndex (CpuFeaturesData);
   CpuFeaturesData->BspNumber = OldBspNumber;
 
-  Status = gBS->CreateEvent (
-                  EVT_NOTIFY_WAIT,
-                  TPL_CALLBACK,
-                  EfiEventEmptyFunction,
-                  NULL,
-                  &MpEvent
-                  );
-  ASSERT_EFI_ERROR (Status);
+  //
+  //
+  // Initialize MpEvent to suppress incorrect compiler/analyzer warnings.
+  //
+  MpEvent = NULL;
 
-  //
-  // Wakeup all APs for programming.
-  //
-  StartupAPsWorker (SetProcessorRegister, MpEvent);
+  if (CpuFeaturesData->NumberOfCpus > 1) {
+    Status = gBS->CreateEvent (
+                    EVT_NOTIFY_WAIT,
+                    TPL_CALLBACK,
+                    EfiEventEmptyFunction,
+                    NULL,
+                    &MpEvent
+                    );
+    ASSERT_EFI_ERROR (Status);
+
+    //
+    // Wakeup all APs for programming.
+    //
+    StartupAllAPsWorker (SetProcessorRegister, MpEvent);
+  }
+
   //
   // Programming BSP
   //
   SetProcessorRegister (CpuFeaturesData);
 
-  //
-  // Wait all processors to finish the task.
-  //
-  do {
-    Status = gBS->CheckEvent (MpEvent);
-  } while (Status == EFI_NOT_READY);
-  ASSERT_EFI_ERROR (Status);
+  if (CpuFeaturesData->NumberOfCpus > 1) {
+    //
+    // Wait all processors to finish the task.
+    //
+    do {
+      Status = gBS->CheckEvent (MpEvent);
+    } while (Status == EFI_NOT_READY);
+    ASSERT_EFI_ERROR (Status);
+  }
 
   //
   // Switch to new BSP if required

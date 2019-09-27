@@ -10,7 +10,7 @@
 #define __REGISTER_CPU_FEATURES_LIB_H__
 
 #include <AcpiCpuData.h>
-#include <Register/Cpuid.h>
+#include <Register/Intel/Cpuid.h>
 #include <Protocol/MpService.h>
 
 ///
@@ -61,7 +61,7 @@
 #define CPU_FEATURE_IP_PREFETCHER                   (32+5)
 #define CPU_FEATURE_MLC_STREAMER_PREFETCHER         (32+6)
 #define CPU_FEATURE_MLC_SPATIAL_PREFETCHER          (32+7)
-#define CPU_FEATURE_THREE_STRICK_COUNTER            (32+8)
+#define CPU_FEATURE_THREE_STRIKE_COUNTER            (32+8)
 #define CPU_FEATURE_APIC_TPR_UPDATE_MESSAGE         (32+9)
 #define CPU_FEATURE_ENERGY_PERFORMANCE_BIAS         (32+10)
 #define CPU_FEATURE_PPIN                            (32+11)
@@ -349,6 +349,32 @@ CpuRegisterTableWrite (
   );
 
 /**
+  Adds an entry in specified register table.
+
+  This function adds an entry in specified register table, with given register type,
+  register index, bit section and value.
+
+  Driver will  test the current value before setting new value.
+
+  @param[in]  ProcessorNumber  The index of the CPU to add a register table entry
+  @param[in]  RegisterType     Type of the register to program
+  @param[in]  Index            Index of the register to program
+  @param[in]  ValueMask        Mask of bits in register to write
+  @param[in]  Value            Value to write
+
+  @note This service could be called by BSP only.
+**/
+VOID
+EFIAPI
+CpuRegisterTableTestThenWrite (
+  IN UINTN               ProcessorNumber,
+  IN REGISTER_TYPE       RegisterType,
+  IN UINT64              Index,
+  IN UINT64              ValueMask,
+  IN UINT64              Value
+  );
+
+/**
   Adds an entry in specified Pre-SMM register table.
 
   This function adds an entry in specified register table, with given register type,
@@ -391,6 +417,26 @@ PreSmmCpuRegisterTableWrite (
   } while(FALSE);
 
 /**
+  Adds a 32-bit register write entry in specified register table.
+
+  This macro adds an entry in specified register table, with given register type,
+  register index, and value.
+
+  Driver will  test the current value before setting new value.
+
+  @param[in]  ProcessorNumber  The index of the CPU to add a register table entry.
+  @param[in]  RegisterType     Type of the register to program
+  @param[in]  Index            Index of the register to program
+  @param[in]  Value            Value to write
+
+  @note This service could be called by BSP only.
+**/
+#define CPU_REGISTER_TABLE_TEST_THEN_WRITE32(ProcessorNumber, RegisterType, Index, Value)     \
+  do {                                                                                        \
+    CpuRegisterTableTestThenWrite (ProcessorNumber, RegisterType, Index, MAX_UINT32, Value);  \
+  } while(FALSE);
+
+/**
   Adds a 64-bit register write entry in specified register table.
 
   This macro adds an entry in specified register table, with given register type,
@@ -406,6 +452,26 @@ PreSmmCpuRegisterTableWrite (
 #define CPU_REGISTER_TABLE_WRITE64(ProcessorNumber, RegisterType, Index, Value)       \
   do {                                                                                \
     CpuRegisterTableWrite (ProcessorNumber, RegisterType, Index, MAX_UINT64, Value);  \
+  } while(FALSE);
+
+/**
+  Adds a 64-bit register write entry in specified register table.
+
+  This macro adds an entry in specified register table, with given register type,
+  register index, and value.
+
+  Driver will  test the current value before setting new value.
+
+  @param[in]  ProcessorNumber  The index of the CPU to add a register table entry.
+  @param[in]  RegisterType     Type of the register to program
+  @param[in]  Index            Index of the register to program
+  @param[in]  Value            Value to write
+
+  @note This service could be called by BSP only.
+**/
+#define CPU_REGISTER_TABLE_TEST_THEN_WRITE64(ProcessorNumber, RegisterType, Index, Value)     \
+  do {                                                                                        \
+    CpuRegisterTableTestThenWrite (ProcessorNumber, RegisterType, Index, MAX_UINT64, Value);  \
   } while(FALSE);
 
 /**
@@ -429,6 +495,31 @@ PreSmmCpuRegisterTableWrite (
     ValueMask = MAX_UINT64;                                                                      \
     ((Type *)(&ValueMask))->Field = 0;                                                           \
     CpuRegisterTableWrite (ProcessorNumber, RegisterType, Index, ~ValueMask, Value);             \
+  } while(FALSE);
+
+/**
+  Adds a bit field write entry in specified register table.
+
+  This macro adds an entry in specified register table, with given register type,
+  register index, bit field section, and value.
+
+  Driver will  test the current value before setting new value.
+
+  @param[in]  ProcessorNumber  The index of the CPU to add a register table entry.
+  @param[in]  RegisterType     Type of the register to program.
+  @param[in]  Index            Index of the register to program.
+  @param[in]  Type             The data type name of a register structure.
+  @param[in]  Field            The bit fiel name in register structure to write.
+  @param[in]  Value            Value to write to the bit field.
+
+  @note This service could be called by BSP only.
+**/
+#define CPU_REGISTER_TABLE_TEST_THEN_WRITE_FIELD(ProcessorNumber, RegisterType, Index, Type, Field, Value) \
+  do {                                                                                                     \
+    UINT64  ValueMask;                                                                                     \
+    ValueMask = MAX_UINT64;                                                                                \
+    ((Type *)(&ValueMask))->Field = 0;                                                                     \
+    CpuRegisterTableTestThenWrite (ProcessorNumber, RegisterType, Index, ~ValueMask, Value);               \
   } while(FALSE);
 
 /**

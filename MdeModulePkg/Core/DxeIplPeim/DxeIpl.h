@@ -2,7 +2,7 @@
   Master header file for DxeIpl PEIM. All source files in this module should
   include this file for common definitions.
 
-Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2019, Intel Corporation. All rights reserved.<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -21,6 +21,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <Ppi/LoadFile.h>
 #include <Ppi/S3Resume2.h>
 #include <Ppi/RecoveryModule.h>
+#include <Ppi/CapsuleOnDisk.h>
 #include <Ppi/VectorHandoffInfo.h>
 
 #include <Guid/MemoryTypeInformation.h>
@@ -38,8 +39,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <Library/BaseMemoryLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/PcdLib.h>
-#include <Library/S3Lib.h>
-#include <Library/RecoveryLib.h>
 #include <Library/DebugAgentLib.h>
 #include <Library/PeiServicesTablePointerLib.h>
 #include <Library/PerformanceLib.h>
