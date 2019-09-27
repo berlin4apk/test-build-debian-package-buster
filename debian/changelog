@@ -1,6 +1,8 @@
 edk2 (0~20190828.37eef910-1) UNRELEASED; urgency=medium
 
   * New upstream release, based on edk2-stable201908 tag.
+    - debian/rules: Use git archive in get-orig-source to take advantage
+      of openssl .gitattributes that will trim cruft from the source tarball.
 
  -- dann frazier <dannf@debian.org>  Fri, 27 Sep 2019 17:56:35 -0600
 

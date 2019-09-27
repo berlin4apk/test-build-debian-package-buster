@@ -147,10 +147,13 @@ override_dh_auto_clean:
 get-orig-source:
 	# Should be executed on a checkout of the upstream master branch,
 	# with the debian/ directory manually copied in.
-	git clone . edk2-$(ver)
+	rm -rf edk2.tmp && git clone . edk2.tmp
 	# Don't recurse, openssl will bring in MBs of stuff we don't need
-	cd edk2-$(ver) && git submodule update --init
-	find edk2-$(ver) -name .git | xargs rm -rf
+	cd edk2.tmp && git submodule update --init
+	rm -rf edk2-$(ver) && mkdir edk2-$(ver)
+	cd edk2.tmp && git archive HEAD | tar xv -C ../edk2-$(ver)
+	cd edk2.tmp && git submodule foreach \
+		'git archive HEAD | tar xv -C $$toplevel/../edk2-$(ver)/$$sm_path'
 	ln -s ../debian edk2-$(ver)
 	# Remove unused embedded source, requested by Ubuntu security team
 	rm -r edk2-$(ver)/BaseTools/Source/C/BrotliCompress
@@ -160,6 +163,6 @@ get-orig-source:
 	cd edk2-$(ver) && python3 ./debian/find-binaries.py
 	rm edk2-$(ver)/debian
 	tar Jcvf ../edk2_$(ver).orig.tar.xz edk2-$(ver)
-	rm -rf edk2-$(ver)
+	rm -rf edk2.tmp edk2-$(ver)
 
 .PHONY: build-ovmf build-qemu-efi
