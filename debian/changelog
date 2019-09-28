@@ -1,4 +1,4 @@
-edk2 (0~20190828.37eef910-1) UNRELEASED; urgency=medium
+edk2 (0~20190828.37eef910-1) unstable; urgency=medium
 
   * New upstream release, based on edk2-stable201908 tag.
     - debian/rules: Use git archive in get-orig-source to take advantage
@@ -9,7 +9,7 @@ edk2 (0~20190828.37eef910-1) UNRELEASED; urgency=medium
   * d/p/BaseTools-Fix-the-lib-order-in-static_library_files..patch:
     Fix ARM image FTBFS.
 
- -- dann frazier <dannf@debian.org>  Fri, 27 Sep 2019 17:56:35 -0600
+ -- dann frazier <dannf@debian.org>  Fri, 27 Sep 2019 18:05:34 -0600
 
 edk2 (0~20190606.20d2e5a1-4) unstable; urgency=medium
 
