@@ -33,7 +33,6 @@ BaseTools/Bin/Darwin-i386/Arm/RELEASE_XCODE32/CompilerIntrinsicsLib.lib
 BaseTools/Source/Python/Eot/EfiCompressor.pyd
 BaseTools/Source/Python/Eot/LzmaCompressor.pyd
 IntelFsp2Pkg/FspSecCore/Vtf0/Bin/ResetVec.ia32.raw
-IntelFspPkg/FspSecCore/Vtf0/Bin/ResetVec.ia32.raw
 UefiCpuPkg/ResetVector/Vtf0/Bin/ResetVector.ia32.port80.raw
 UefiCpuPkg/ResetVector/Vtf0/Bin/ResetVector.ia32.raw
 UefiCpuPkg/ResetVector/Vtf0/Bin/ResetVector.ia32.serial.raw
