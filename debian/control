@@ -1,8 +1,7 @@
 Source: edk2
 Section: misc
 Priority: optional
-Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
-XSBC-Original-Maintainer: Debian QEMU Team <pkg-qemu-devel@lists.alioth.debian.org>
+Maintainer: Debian QEMU Team <pkg-qemu-devel@lists.alioth.debian.org>
 Uploaders: Steve Langasek <vorlon@debian.org>, Serge Hallyn <serge.hallyn@ubuntu.com>, dann frazier <dannf@debian.org>
 Build-Depends: bc,
  debhelper (>= 10),
