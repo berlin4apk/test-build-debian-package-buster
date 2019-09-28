@@ -6,6 +6,8 @@ edk2 (0~20190828.37eef910-1) UNRELEASED; urgency=medium
     - d/binary-check.blacklist: Drop binary removed upstream.
     - debian/find-binaries.py: Add to the list of heuristically "OK"
       file extensions.
+  * d/p/BaseTools-Fix-the-lib-order-in-static_library_files..patch:
+    Fix ARM image FTBFS.
 
  -- dann frazier <dannf@debian.org>  Fri, 27 Sep 2019 17:56:35 -0600
 

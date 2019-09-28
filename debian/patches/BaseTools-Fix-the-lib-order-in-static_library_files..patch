@@ -1,0 +1,38 @@
+From: "Feng, Bob C" <bob.c.feng@intel.com>
+Date: Fri, 27 Sep 2019 19:35:23 +0800
+Subject: [PATCH] BaseTools: Fix the lib order in static_library_files.lst
+
+Ref: https://bugzilla.tianocore.org/show_bug.cgi?id=2216
+
+This patch is going to fix the lib order in static_library_files.lst.
+This issue is introduced by commit 673d09a2dd.
+Before 673d09a2dd, build tool apply build rule for the module's library
+firstly and then apply build rule for module itself. Now, build tool
+apply build rule for module self and then for its library. That behavior
+impact the lib order in static_library_files.lst.
+
+This patch is to call module's LibraryAutoGenList function
+explicitly, where the applying build rule action for
+library is triggered.
+
+Cc: Liming Gao <liming.gao@intel.com>
+Cc: dann frazier <dann.frazier@canonical.com>
+Signed-off-by: Bob Feng <bob.c.feng@intel.com>
+
+Bug: https://bugzilla.tianocore.org/show_bug.cgi?id=2216
+Origin: https://www.redhat.com/archives/edk2-devel-archive/2019-September/msg01572.html
+Last-Update: 2019-09-27
+
+Index: edk2-0~20190828.37eef910/BaseTools/Source/Python/AutoGen/ModuleAutoGen.py
+===================================================================
+--- edk2-0~20190828.37eef910.orig/BaseTools/Source/Python/AutoGen/ModuleAutoGen.py
++++ edk2-0~20190828.37eef910/BaseTools/Source/Python/AutoGen/ModuleAutoGen.py
+@@ -1849,7 +1849,7 @@ class ModuleAutoGen(AutoGen):
+         # CanSkip uses timestamps to determine build skipping
+         if self.CanSkip():
+             return
+-
++        self.LibraryAutoGenList
+         AutoGenList = []
+         IgoredAutoGenList = []
+ 
