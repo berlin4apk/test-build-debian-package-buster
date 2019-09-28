@@ -22,15 +22,15 @@ def nameOK(name):
 
 def extensionOK(name):
     OKExtensions = [ '1', '3', 'ASL', 'asi', 'asl', 'aslc', 'Asm', 'asm',
-                     'asm16', 'bat', 'bmp', 'c', 'CMM', 'cmm', 'cpp', 'css',
-                     'dec', 'decTest', 'dlg', 'dsc', 'docx', 'dsp', 'dsw',
-                     'env', 'fdf', 'g', 'gif', 'H', 'h', 'hpp', 'html', 'i',
-                     'idf', 'in', 'inc', 'inf', 'ini', 'lds', 'log', 'lua',
-                     'mak', 'makefile', 'md', 'nasm', 'nasmb', 'nsh', 'patch',
-                     'pbxuser', 'pbxproj', 'pdf', 'pem', 'pl', 'png', 'ps',
-                     'py', 'r', 'rtf', 'S', 's', 'sct', 'sh', 'sln',
-                     'template', 'txt', 'uni', 'Vfr', 'vcproj', 'vfi',
-                     'vfr', 'xml' ]
+                     'asm16', 'bat', 'bmp', 'c', 'CMM', 'cmm', 'cnf', 'cpp',
+                     'css', 'dec', 'decTest', 'dlg', 'dsc', 'docx', 'dsp',
+                     'dsw', 'el', 'env', 'fdf', 'g', 'gif', 'H', 'h', 'hpp',
+                     'html', 'i', 'idf', 'in', 'inc', 'inf', 'info', 'ini',
+                     'lds', 'log', 'lua', 'mak', 'makefile', 'md', 'nasm',
+                     'nasmb', 'nsh', 'patch', 'pbxuser', 'pbxproj', 'pdf',
+                     'pem', 'pl', 'png', 'pod', 'ps', 'py', 'r', 'rtf', 'S',
+                     's', 'sct', 'sh', 'sln', 't', 'template', 'txt', 'uni',
+                     'Vfr', 'vcproj', 'vfi', 'vfr', 'xml' ]
     ext = name.split('.')[-1]
 
     if ext in OKExtensions:

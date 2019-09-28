@@ -4,6 +4,8 @@ edk2 (0~20190828.37eef910-1) UNRELEASED; urgency=medium
     - debian/rules: Use git archive in get-orig-source to take advantage
       of openssl .gitattributes that will trim cruft from the source tarball.
     - d/binary-check.blacklist: Drop binary removed upstream.
+    - debian/find-binaries.py: Add to the list of heuristically "OK"
+      file extensions.
 
  -- dann frazier <dannf@debian.org>  Fri, 27 Sep 2019 17:56:35 -0600
 
