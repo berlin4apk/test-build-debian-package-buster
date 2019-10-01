@@ -76,7 +76,7 @@ $(OVMF_BINARIES): debian/setup-build-stamp
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
 			$(OVMF_FLAGS) -b RELEASE; \
-		cp $(OVMF_BUILD_DIR)/FV/OVMF_*.fd \
+		cp $(OVMF_BUILD_DIR)/FV/OVMF*.fd \
 			debian/ovmf-install/; \
 		rm -rf Build/Ovmf$(EDK2_HOST_ARCH); \
 		build -a $(EDK2_HOST_ARCH) \

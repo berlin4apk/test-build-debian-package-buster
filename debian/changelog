@@ -1,3 +1,9 @@
+edk2 (0~20190828.37eef910-3) UNRELEASED; urgency=medium
+
+  * Don't require an SMM for the OVMF.fd image. Closes: #939928.
+
+ -- dann frazier <dannf@debian.org>  Tue, 01 Oct 2019 11:19:51 -0600
+
 edk2 (0~20190828.37eef910-2) unstable; urgency=medium
 
   * debian/control: Correct Maintainer field.
