@@ -5,3 +5,11 @@ ovmf-vars-generator-Pass-OEM-Strings-to-the-guest.patch
 ovmf-vars-generator-ignore-qemu-warnings.patch
 python3.patch
 BaseTools-Fix-the-lib-order-in-static_library_files..patch
+0001-MdePkg-Include-Protocol-Tls.h-Add-the-data-type-of-E.patch
+0002-CryptoPkg-TlsLib-Add-the-new-API-TlsSetVerifyHost-CV.patch
+0003-CryptoPkg-Crt-turn-strchr-into-a-function-CVE-2019-1.patch
+0004-CryptoPkg-Crt-satisfy-inet_pton.c-dependencies-CVE-2.patch
+0005-CryptoPkg-Crt-import-inet_pton.c-CVE-2019-14553.patch
+0006-CryptoPkg-TlsLib-TlsSetVerifyHost-parse-IP-address-l.patch
+0007-NetworkPkg-TlsDxe-Add-the-support-of-host-validation.patch
+0008-NetworkPkg-HttpDxe-Set-the-HostName-for-the-verifica.patch

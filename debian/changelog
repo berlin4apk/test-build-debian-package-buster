@@ -1,3 +1,10 @@
+edk2 (0~20190828.37eef910-4) UNRELEASED; urgency=medium
+
+  * Support server identify validation in HTTPS Boot (CVE-2019-14553).
+    Closes: #941775.
+
+ -- dann frazier <dannf@debian.org>  Sat, 02 Nov 2019 09:39:42 -0600
+
 edk2 (0~20190828.37eef910-3) unstable; urgency=medium
 
   * Don't require an SMM for the OVMF.fd image. Closes: #939928.
