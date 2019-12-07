@@ -6,7 +6,7 @@ include /usr/share/dpkg/architecture.mk
 
 # Bumping this up to >= GCC5 will require the replacing the pre-compiled
 # liblto*.a binaries that we strip from our orig.tar.xz.
-EDK2_TOOLCHAIN = GCC49
+EDK2_TOOLCHAIN = GCC5
 export $(EDK2_TOOLCHAIN)_AARCH64_PREFIX=aarch64-linux-gnu-
 export $(EDK2_TOOLCHAIN)_ARM_PREFIX=arm-linux-gnueabihf-
 
@@ -117,6 +117,12 @@ debian/ovmf-install/OVMF_VARS.ms.fd: debian/UefiShell.iso debian/oem-string
 		--uefi-shell-iso debian/UefiShell.iso \
 		debian/ovmf-install/OVMF_VARS.ms.fd
 
+ArmPkg/Library/GccLto/liblto-aarch64.a:	ArmPkg/Library/GccLto/liblto-aarch64.s
+	$($(EDK2_TOOLCHAIN)_AARCH64_PREFIX)gcc -c -fpic $< -o $@
+
+ArmPkg/Library/GccLto/liblto-arm.a: ArmPkg/Library/GccLto/liblto-arm.s
+	$($(EDK2_TOOLCHAIN)_ARM_PREFIX)gcc -c -fpic $< -o $@
+
 build-qemu-efi: debian/setup-build-stamp
 	set -e; . ./edksetup.sh; \
 		build -a $(EDK2_HOST_ARCH) \
@@ -127,10 +133,10 @@ build-qemu-efi: debian/setup-build-stamp
 	dd if=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/QEMU_EFI.fd of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/$(FW_NAME)_CODE.fd conv=notrunc
 	dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/$(FW_NAME)_VARS.fd bs=1M seek=64 count=0
 
-build-qemu-efi-aarch64:
+build-qemu-efi-aarch64: ArmPkg/Library/GccLto/liblto-aarch64.a
 	$(MAKE) -f debian/rules build-qemu-efi EDK2_ARCH_DIR=AArch64 EDK2_HOST_ARCH=AARCH64 FW_NAME=AAVMF
 
-build-qemu-efi-arm:
+build-qemu-efi-arm: ArmPkg/Library/GccLto/liblto-arm.a
 	$(MAKE) -f debian/rules build-qemu-efi EDK2_ARCH_DIR=Arm EDK2_HOST_ARCH=ARM FW_NAME=AAVMF32
 
 override_dh_auto_clean:
@@ -143,6 +149,7 @@ override_dh_auto_clean:
 	rm -rf debian/ovmf-install debian/iso-root debian/vfat-root
 	rm -f debian/oem-string debian/setup-build-stamp
 	rm -f debian/shell.img debian/UefiShell.iso
+	rm -f ArmPkg/Library/GccLto/liblto-*.a
 
 get-orig-source:
 	# Should be executed on a checkout of the upstream master branch,

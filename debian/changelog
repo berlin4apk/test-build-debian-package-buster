@@ -11,6 +11,8 @@ edk2 (0~20191122.bd85bf54-1) UNRELEASED; urgency=medium
     - 0006-CryptoPkg-TlsLib-TlsSetVerifyHost-parse-IP-address-l.patch
     - 0007-NetworkPkg-TlsDxe-Add-the-support-of-host-validation.patch
     - 0008-NetworkPkg-HttpDxe-Set-the-HostName-for-the-verifica.patch
+  * Compile the liblto plugins for ARM & AARCH64, allowing us to
+    move our toolchain config from GCC49 to GCC5. Move to GCC5.
 
  -- dann frazier <dannf@debian.org>  Sun, 08 Dec 2019 08:35:51 -0700
 
