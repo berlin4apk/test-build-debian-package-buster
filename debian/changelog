@@ -1,4 +1,4 @@
-edk2 (0~20191122.bd85bf54-1) UNRELEASED; urgency=medium
+edk2 (0~20191122.bd85bf54-1) unstable; urgency=medium
 
   * New upstream release, based on edk2-stable201911 tag.
   * Drop patches merged upstream:
@@ -14,7 +14,7 @@ edk2 (0~20191122.bd85bf54-1) UNRELEASED; urgency=medium
   * Compile the liblto plugins for ARM & AARCH64, allowing us to
     move our toolchain config from GCC49 to GCC5. Move to GCC5.
 
- -- dann frazier <dannf@debian.org>  Sun, 08 Dec 2019 08:35:51 -0700
+ -- dann frazier <dannf@debian.org>  Sun, 08 Dec 2019 09:16:40 -0700
 
 edk2 (0~20190828.37eef910-4) unstable; urgency=medium
 
