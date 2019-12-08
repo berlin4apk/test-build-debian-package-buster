@@ -462,14 +462,31 @@ class ModuleAutoGen(AutoGen):
     def BuildCommand(self):
         return self.PlatformInfo.BuildCommand
 
-    ## Get object list of all packages the module and its dependent libraries belong to
+    ## Get Module package and Platform package
+    #
+    #   @retval list The list of package object
+    #
+    @cached_property
+    def PackageList(self):
+        PkagList = []
+        if self.Module.Packages:
+            PkagList.extend(self.Module.Packages)
+        Platform = self.BuildDatabase[self.PlatformInfo.MetaFile, self.Arch, self.BuildTarget, self.ToolChain]
+        for Package in Platform.Packages:
+            if Package in PkagList:
+                continue
+            PkagList.append(Package)
+        return PkagList
+
+    ## Get object list of all packages the module and its dependent libraries belong to and the Platform depends on
     #
     #   @retval     list    The list of package object
     #
     @cached_property
     def DerivedPackageList(self):
         PackageList = []
-        for M in [self.Module] + self.DependentLibraryList:
+        PackageList.extend(self.PackageList)
+        for M in self.DependentLibraryList:
             for Package in M.Packages:
                 if Package in PackageList:
                     continue
@@ -938,13 +955,13 @@ class ModuleAutoGen(AutoGen):
         self.Targets
         return self._FileTypes
 
-    ## Get the list of package object the module depends on
+    ## Get the list of package object the module depends on and the Platform depends on
     #
     #   @retval     list    The package object list
     #
     @cached_property
     def DependentPackageList(self):
-        return self.Module.Packages
+        return self.PackageList
 
     ## Return the list of auto-generated code file
     #
@@ -1101,7 +1118,7 @@ class ModuleAutoGen(AutoGen):
         RetVal.append(self.MetaFile.Dir)
         RetVal.append(self.DebugDir)
 
-        for Package in self.Module.Packages:
+        for Package in self.PackageList:
             PackageDir = mws.join(self.WorkspaceDir, Package.MetaFile.Dir)
             if PackageDir not in RetVal:
                 RetVal.append(PackageDir)
@@ -1125,7 +1142,7 @@ class ModuleAutoGen(AutoGen):
     @cached_property
     def PackageIncludePathList(self):
         IncludesList = []
-        for Package in self.Module.Packages:
+        for Package in self.PackageList:
             PackageDir = mws.join(self.WorkspaceDir, Package.MetaFile.Dir)
             IncludesList = Package.Includes
             if Package._PrivateIncludes:
@@ -1267,29 +1284,30 @@ class ModuleAutoGen(AutoGen):
     @cached_property
     def OutputFile(self):
         retVal = set()
+
         OutputDir = self.OutputDir.replace('\\', '/').strip('/')
         DebugDir = self.DebugDir.replace('\\', '/').strip('/')
-        FfsOutputDir = self.FfsOutputDir.replace('\\', '/').rstrip('/')
         for Item in self.CodaTargetList:
             File = Item.Target.Path.replace('\\', '/').strip('/').replace(DebugDir, '').replace(OutputDir, '').strip('/')
-            retVal.add(File)
-        if self.DepexGenerated:
-            retVal.add(self.Name + '.depex')
+            NewFile = path.join(self.OutputDir, File)
+            retVal.add(NewFile)
 
         Bin = self._GenOffsetBin()
         if Bin:
-            retVal.add(Bin)
+            NewFile = path.join(self.OutputDir, Bin)
+            retVal.add(NewFile)
 
-        for Root, Dirs, Files in os.walk(OutputDir):
+        for Root, Dirs, Files in os.walk(self.OutputDir):
             for File in Files:
-                if File.lower().endswith('.pdb'):
-                    retVal.add(File)
+                # lib file is already added through above CodaTargetList, skip it here
+                if not (File.lower().endswith('.obj') or File.lower().endswith('.lib')):
+                    NewFile = path.join(self.OutputDir, File)
+                    retVal.add(NewFile)
 
-        for Root, Dirs, Files in os.walk(FfsOutputDir):
+        for Root, Dirs, Files in os.walk(self.FfsOutputDir):
             for File in Files:
-                if File.lower().endswith('.ffs') or File.lower().endswith('.offset') or File.lower().endswith('.raw') \
-                    or File.lower().endswith('.raw.txt'):
-                    retVal.add(File)
+                NewFile = path.join(self.FfsOutputDir, File)
+                retVal.add(NewFile)
 
         return retVal
 
@@ -1659,15 +1677,8 @@ class ModuleAutoGen(AutoGen):
             Ma = self.BuildDatabase[self.MetaFile, self.Arch, self.BuildTarget, self.ToolChain]
             self.OutputFile = Ma.Binaries
         for File in self.OutputFile:
-            File = str(File)
-            if not os.path.isabs(File):
-                NewFile = os.path.join(self.OutputDir, File)
-                if not os.path.exists(NewFile):
-                    NewFile = os.path.join(self.FfsOutputDir, File)
-                File = NewFile
             if os.path.exists(File):
-                if File.lower().endswith('.ffs') or File.lower().endswith('.offset') or File.lower().endswith('.raw') \
-                    or File.lower().endswith('.raw.txt'):
+                if File.startswith(os.path.abspath(self.FfsOutputDir)+os.sep):
                     self.CacheCopyFile(FfsDir, self.FfsOutputDir, File)
                 else:
                     self.CacheCopyFile(FileDir, self.OutputDir, File)
@@ -1849,7 +1860,7 @@ class ModuleAutoGen(AutoGen):
         # CanSkip uses timestamps to determine build skipping
         if self.CanSkip():
             return
-
+        self.LibraryAutoGenList
         AutoGenList = []
         IgoredAutoGenList = []
 
@@ -2066,8 +2077,8 @@ class ModuleAutoGen(AutoGen):
 
         if not (self.MetaFile.Path, self.Arch) in gDict or \
            not gDict[(self.MetaFile.Path, self.Arch)].ModuleFilesHashDigest:
-           EdkLogger.quiet("[cache warning]: Cannot generate ModuleFilesHashDigest for module %s[%s]" %(self.MetaFile.Path, self.Arch))
-           return
+            EdkLogger.quiet("[cache warning]: Cannot generate ModuleFilesHashDigest for module %s[%s]" %(self.MetaFile.Path, self.Arch))
+            return
 
         # Initialze hash object
         m = hashlib.md5()
@@ -2129,7 +2140,7 @@ class ModuleAutoGen(AutoGen):
             self.CreateCodeFile()
         if not (self.MetaFile.Path, self.Arch) in gDict or \
            not gDict[(self.MetaFile.Path, self.Arch)].CreateMakeFileDone:
-            self.CreateMakeFile(GenFfsList=GlobalData.FfsCmd.get((self.MetaFile.File, self.Arch),[]))
+            self.CreateMakeFile(GenFfsList=GlobalData.FfsCmd.get((self.MetaFile.Path, self.Arch),[]))
 
         if not (self.MetaFile.Path, self.Arch) in gDict or \
            not gDict[(self.MetaFile.Path, self.Arch)].CreateCodeFileDone or \

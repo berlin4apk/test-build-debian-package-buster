@@ -128,7 +128,6 @@ class WorkspaceAutoGen(AutoGen):
         self.CreateBuildOptionsFile()
         self.CreatePcdTokenNumberFile()
         self.CreateModuleHashInfo()
-        GlobalData.gAutoGenPhase = False
 
     #
     # Merge Arch
@@ -421,6 +420,7 @@ class WorkspaceAutoGen(AutoGen):
                     continue
                 ModuleData = self.BuildDatabase[ModuleFile, Arch, self.BuildTarget, self.ToolChain]
                 PkgSet.update(ModuleData.Packages)
+            PkgSet.update(Platform.Packages)
             Pkgs[Arch] = list(PkgSet)
         return Pkgs
 
@@ -834,8 +834,7 @@ class WorkspaceAutoGen(AutoGen):
         elif LogLevel == EdkLogger.QUIET:
             FdsCommandDict["quiet"] = True
 
-        if GlobalData.gEnableGenfdsMultiThread:
-            FdsCommandDict["GenfdsMultiThread"] = True
+        FdsCommandDict["GenfdsMultiThread"] = GlobalData.gEnableGenfdsMultiThread
         if GlobalData.gIgnoreSource:
             FdsCommandDict["IgnoreSources"] = True
 
