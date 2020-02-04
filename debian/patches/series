@@ -4,3 +4,4 @@ brotlicompress-disable.diff
 ovmf-vars-generator-Pass-OEM-Strings-to-the-guest.patch
 ovmf-vars-generator-ignore-qemu-warnings.patch
 python3.patch
+ovmf-vars-generator-no-defaults.patch

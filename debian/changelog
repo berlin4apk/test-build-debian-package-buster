@@ -1,6 +1,8 @@
 edk2 (0~20191122.bd85bf54-2) UNRELEASED; urgency=medium
 
   * Bump debhelper compatibility level to 12.
+  * Provide an OVMF_VARS.snakeoil.fd image and matching private key for
+    development testing. LP: #1850848.
 
  -- dann frazier <dannf@debian.org>  Mon, 03 Feb 2020 18:58:17 -0700
 

@@ -63,7 +63,7 @@ OVMF_IMAGES := OVMF_CODE.fd OVMF_CODE.secboot.fd OVMF_VARS.fd
 OVMF_BINARIES = $(OVMF_ENROLL) $(OVMF_SHELL)
 OVMF_BINARIES += $(prefix debian/ovmf-install/,$(OVMF_IMAGES))
 
-build-ovmf: $(OVMF_BINARIES) debian/ovmf-install/OVMF_VARS.ms.fd
+build-ovmf: $(OVMF_BINARIES) debian/ovmf-install/OVMF_VARS.ms.fd debian/ovmf-install/OVMF_VARS.snakeoil.fd
 
 $(OVMF_BINARIES): EDK2_ARCH_DIR=X64
 $(OVMF_BINARIES): EDK2_HOST_ARCH=X64
@@ -87,7 +87,11 @@ $(OVMF_BINARIES): debian/setup-build-stamp
 			debian/ovmf-install/OVMF_CODE.secboot.fd
 
 dpkg_vendor = $(shell dpkg-vendor --query vendor)
-debian/oem-string: debian/PkKek-1-$(dpkg_vendor).pem
+debian/oem-string-vendor: debian/PkKek-1-$(dpkg_vendor).pem
+	tr -d '\n' < $< | \
+		sed -e 's/.*-----BEGIN CERTIFICATE-----/4e32566d-8e9e-4f52-81d3-5bb9715f9727:/' -e 's/-----END CERTIFICATE-----//' > $@
+
+debian/oem-string-snakeoil: debian/PkKek-1-snakeoil.pem
 	tr -d '\n' < $< | \
 		sed -e 's/.*-----BEGIN CERTIFICATE-----/4e32566d-8e9e-4f52-81d3-5bb9715f9727:/' -e 's/-----END CERTIFICATE-----//' > $@
 
@@ -106,16 +110,26 @@ debian/UefiShell.iso: debian/iso-root/shell.img
 	xorriso --as mkisofs -input-charset ASCII -J -rational-rock \
 		-e `basename $<` -no-emul-boot -o $@ `dirname $<`
 
-debian/ovmf-install/OVMF_VARS.ms.fd: debian/UefiShell.iso debian/oem-string
+debian/ovmf-install/OVMF_VARS.ms.fd: debian/UefiShell.iso debian/oem-string-vendor
 	python3 $(OVMF_VARS_GENERATOR) --qemu-binary /usr/bin/qemu-system-x86_64 \
 		--print-output \
 		--disable-smm \
 		--skip-testing \
-		--oem-string `< debian/oem-string` \
+		--oem-string `< debian/oem-string-vendor` \
 		--ovmf-binary debian/ovmf-install/OVMF_CODE.fd \
 		--ovmf-template-vars debian/ovmf-install/OVMF_VARS.fd \
-		--uefi-shell-iso debian/UefiShell.iso \
-		debian/ovmf-install/OVMF_VARS.ms.fd
+		--uefi-shell-iso debian/UefiShell.iso $@
+
+debian/ovmf-install/OVMF_VARS.snakeoil.fd: debian/UefiShell.iso debian/oem-string-snakeoil
+	python3 $(OVMF_VARS_GENERATOR) --qemu-binary /usr/bin/qemu-system-x86_64 \
+		--print-output \
+		--disable-smm \
+		--skip-testing \
+		--no-default \
+		--oem-string `< debian/oem-string-snakeoil` \
+		--ovmf-binary debian/ovmf-install/OVMF_CODE.fd \
+		--ovmf-template-vars debian/ovmf-install/OVMF_VARS.fd \
+		--uefi-shell-iso debian/UefiShell.iso $@
 
 ArmPkg/Library/GccLto/liblto-aarch64.a:	ArmPkg/Library/GccLto/liblto-aarch64.s
 	$($(EDK2_TOOLCHAIN)_AARCH64_PREFIX)gcc -c -fpic $< -o $@
@@ -147,9 +161,10 @@ override_dh_auto_clean:
 	fi
 	rm -rf Conf/.cache Build .pc-post
 	rm -rf debian/ovmf-install debian/iso-root debian/vfat-root
-	rm -f debian/oem-string debian/setup-build-stamp
+	rm -f debian/oem-string debian/oem-string-snakeoil
 	rm -f debian/shell.img debian/UefiShell.iso
 	rm -f ArmPkg/Library/GccLto/liblto-*.a
+	rm -f debian/setup-build-stamp
 
 get-orig-source:
 	# Should be executed on a checkout of the upstream master branch,
