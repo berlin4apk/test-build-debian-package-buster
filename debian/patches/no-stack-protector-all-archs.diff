@@ -8,9 +8,9 @@ Index: edk2/BaseTools/Conf/tools_def.template
 ===================================================================
 --- edk2.orig/BaseTools/Conf/tools_def.template
 +++ edk2/BaseTools/Conf/tools_def.template
-@@ -3139,7 +3139,7 @@ DEFINE GCC_X64_RC_FLAGS            = -I
- DEFINE GCC_ARM_RC_FLAGS            = -I binary -O elf32-littlearm     -B arm     --rename-section .data=.hii
- DEFINE GCC_AARCH64_RC_FLAGS        = -I binary -O elf64-littleaarch64 -B aarch64 --rename-section .data=.hii
+@@ -1950,7 +1950,7 @@ DEFINE GCC_AARCH64_RC_FLAGS        = -I
+ # GCC Build Flag for included header file list generation
+ DEFINE GCC_DEPS_FLAGS              = -MMD -MF $@.deps
  
 -DEFINE GCC48_ALL_CC_FLAGS            = -g -fshort-wchar -fno-builtin -fno-strict-aliasing -Wall -Werror -Wno-array-bounds -Wno-missing-braces -ffunction-sections -fdata-sections -include AutoGen.h -fno-common -DSTRING_ARRAY_NAME=$(BASE_NAME)Strings
 +DEFINE GCC48_ALL_CC_FLAGS            = -g -fshort-wchar -fno-builtin -fno-strict-aliasing -Wall -Werror -Wno-array-bounds -Wno-missing-braces -ffunction-sections -fdata-sections -fno-stack-protector -include AutoGen.h -fno-common -DSTRING_ARRAY_NAME=$(BASE_NAME)Strings

@@ -12,6 +12,9 @@ edk2 (0~20200229.4c0f6e34-1) UNRELEASED; urgency=medium
     - Fix issue that could allow an efi image with a blacklisted hash in the
       dbx to be loaded. (CVE-2019-14575) (Closes: #952935)
     - Fix a memory leak in the ARP handler. (CVE-2019-14559) (Closes: #952926)
+    - Refresh patches:
+       + debian/patches/no-missing-braces.diff
+       + debian/patches/no-stack-protector-all-archs.diff
 
  -- dann frazier <dannf@debian.org>  Fri, 13 Mar 2020 14:48:55 -0600
 
