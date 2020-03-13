@@ -1,4 +1,4 @@
-edk2 (0~20200229.4c0f6e34-1) UNRELEASED; urgency=medium
+edk2 (0~20200229.4c0f6e34-1) unstable; urgency=medium
 
   * New upstream release, based on edk2-stable202002 tag.
     - Fix numeric truncation in S3BootScript[Save]*() API. (CVE-2019-14563)
@@ -16,7 +16,7 @@ edk2 (0~20200229.4c0f6e34-1) UNRELEASED; urgency=medium
        + debian/patches/no-missing-braces.diff
        + debian/patches/no-stack-protector-all-archs.diff
 
- -- dann frazier <dannf@debian.org>  Fri, 13 Mar 2020 14:48:55 -0600
+ -- dann frazier <dannf@debian.org>  Fri, 13 Mar 2020 16:05:49 -0600
 
 edk2 (0~20191122.bd85bf54-2) unstable; urgency=medium
 
