@@ -1,7 +1,9 @@
 /** @file
   CPU MP Initialize Library common functions.
 
-  Copyright (c) 2016 - 2019, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2016 - 2020, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2020, AMD Inc. All rights reserved.<BR>
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -9,6 +11,30 @@
 #include "MpLib.h"
 
 EFI_GUID mCpuInitMpLibHobGuid = CPU_INIT_MP_LIB_HOB_GUID;
+
+
+/**
+  Determine if the standard CPU signature is "AuthenticAMD".
+
+  @retval TRUE  The CPU signature matches.
+  @retval FALSE The CPU signature does not match.
+
+**/
+STATIC
+BOOLEAN
+StandardSignatureIsAuthenticAMD (
+  VOID
+  )
+{
+  UINT32  RegEbx;
+  UINT32  RegEcx;
+  UINT32  RegEdx;
+
+  AsmCpuid (CPUID_SIGNATURE, NULL, &RegEbx, &RegEcx, &RegEdx);
+  return (RegEbx == CPUID_SIGNATURE_AUTHENTIC_AMD_EBX &&
+          RegEcx == CPUID_SIGNATURE_AUTHENTIC_AMD_ECX &&
+          RegEdx == CPUID_SIGNATURE_AUTHENTIC_AMD_EDX);
+}
 
 /**
   The function will check if BSP Execute Disable is enabled.
@@ -399,12 +425,16 @@ ApInitializeSync (
   )
 {
   CPU_MP_DATA  *CpuMpData;
+  UINTN        ProcessorNumber;
+  EFI_STATUS   Status;
 
   CpuMpData = (CPU_MP_DATA *) Buffer;
+  Status = GetProcessorNumber (CpuMpData, &ProcessorNumber);
+  ASSERT_EFI_ERROR (Status);
   //
   // Load microcode on AP
   //
-  MicrocodeDetect (CpuMpData, FALSE);
+  MicrocodeDetect (CpuMpData, ProcessorNumber);
   //
   // Sync BSP's MTRR table to AP
   //
@@ -475,7 +505,7 @@ CollectProcessorCount (
     CpuPause ();
   }
 
-  
+
   //
   // Enable x2APIC mode if
   //  1. Number of CPU is greater than 255; or
@@ -548,7 +578,8 @@ InitializeApData (
   IN     UINT64           ApTopOfStack
   )
 {
-  CPU_INFO_IN_HOB          *CpuInfoInHob;
+  CPU_INFO_IN_HOB                  *CpuInfoInHob;
+  MSR_IA32_PLATFORM_ID_REGISTER    PlatformIdMsr;
 
   CpuInfoInHob = (CPU_INFO_IN_HOB *) (UINTN) CpuMpData->CpuInfoInHob;
   CpuInfoInHob[ProcessorNumber].InitialApicId = GetInitialApicId ();
@@ -558,6 +589,22 @@ InitializeApData (
 
   CpuMpData->CpuData[ProcessorNumber].Waiting    = FALSE;
   CpuMpData->CpuData[ProcessorNumber].CpuHealthy = (BistData == 0) ? TRUE : FALSE;
+
+  //
+  // NOTE: PlatformId is not relevant on AMD platforms.
+  //
+  if (!StandardSignatureIsAuthenticAMD ()) {
+    PlatformIdMsr.Uint64 = AsmReadMsr64 (MSR_IA32_PLATFORM_ID);
+    CpuMpData->CpuData[ProcessorNumber].PlatformId = (UINT8)PlatformIdMsr.Bits.PlatformId;
+  }
+
+  AsmCpuid (
+    CPUID_VERSION_INFO,
+    &CpuMpData->CpuData[ProcessorNumber].ProcessorSignature,
+    NULL,
+    NULL,
+    NULL
+    );
 
   InitializeSpinLock(&CpuMpData->CpuData[ProcessorNumber].ApLock);
   SetApState (&CpuMpData->CpuData[ProcessorNumber], CpuStateIdle);
@@ -615,10 +662,6 @@ ApWakeupFunction (
       //
       ApTopOfStack  = CpuMpData->Buffer + (ProcessorNumber + 1) * CpuMpData->CpuApStackSize;
       BistData = *(UINT32 *) ((UINTN) ApTopOfStack - sizeof (UINTN));
-      //
-      // Do some AP initialize sync
-      //
-      ApInitializeSync (CpuMpData);
       //
       // CpuMpData->CpuData[0].VolatileRegisters is initialized based on BSP environment,
       //   to initialize AP in InitConfig path.
@@ -1603,7 +1646,6 @@ MpInitLibInitialize (
   UINTN                    ApResetVectorSize;
   UINTN                    BackupBufferAddr;
   UINTN                    ApIdtBase;
-  VOID                     *MicrocodePatchInRam;
 
   OldCpuMpData = GetCpuMpDataFromGuidedHob ();
   if (OldCpuMpData == NULL) {
@@ -1671,42 +1713,6 @@ MpInitLibInitialize (
   CpuMpData->SwitchBspFlag    = FALSE;
   CpuMpData->CpuData          = (CPU_AP_DATA *) (CpuMpData + 1);
   CpuMpData->CpuInfoInHob     = (UINT64) (UINTN) (CpuMpData->CpuData + MaxLogicalProcessorNumber);
-  if (OldCpuMpData == NULL) {
-    CpuMpData->MicrocodePatchRegionSize = PcdGet64 (PcdCpuMicrocodePatchRegionSize);
-    //
-    // If platform has more than one CPU, relocate microcode to memory to reduce
-    // loading microcode time.
-    //
-    MicrocodePatchInRam = NULL;
-    if (MaxLogicalProcessorNumber > 1) {
-      MicrocodePatchInRam = AllocatePages (
-                              EFI_SIZE_TO_PAGES (
-                                (UINTN)CpuMpData->MicrocodePatchRegionSize
-                                )
-                              );
-    }
-    if (MicrocodePatchInRam == NULL) {
-      //
-      // there is only one processor, or no microcode patch is available, or
-      // memory allocation failed
-      //
-      CpuMpData->MicrocodePatchAddress = PcdGet64 (PcdCpuMicrocodePatchAddress);
-    } else {
-      //
-      // there are multiple processors, and a microcode patch is available, and
-      // memory allocation succeeded
-      //
-      CopyMem (
-        MicrocodePatchInRam,
-        (VOID *)(UINTN)PcdGet64 (PcdCpuMicrocodePatchAddress),
-        (UINTN)CpuMpData->MicrocodePatchRegionSize
-        );
-      CpuMpData->MicrocodePatchAddress = (UINTN)MicrocodePatchInRam;
-    }
-  }else {
-    CpuMpData->MicrocodePatchRegionSize = OldCpuMpData->MicrocodePatchRegionSize;
-    CpuMpData->MicrocodePatchAddress    = OldCpuMpData->MicrocodePatchAddress;
-  }
   InitializeSpinLock(&CpuMpData->MpLock);
 
   //
@@ -1750,14 +1756,6 @@ MpInitLibInitialize (
       (UINT32 *)(MonitorBuffer + MonitorFilterSize * Index);
   }
   //
-  // Load Microcode on BSP
-  //
-  MicrocodeDetect (CpuMpData, TRUE);
-  //
-  // Store BSP's MTRR setting
-  //
-  MtrrGetAllMtrrs (&CpuMpData->MtrrTable);
-  //
   // Enable the local APIC for Virtual Wire Mode.
   //
   ProgramVirtualWireMode ();
@@ -1776,7 +1774,6 @@ MpInitLibInitialize (
     //
     CpuMpData->CpuCount  = OldCpuMpData->CpuCount;
     CpuMpData->BspNumber = OldCpuMpData->BspNumber;
-    CpuMpData->InitFlag  = ApInitReconfig;
     CpuMpData->CpuInfoInHob = OldCpuMpData->CpuInfoInHob;
     CpuInfoInHob = (CPU_INFO_IN_HOB *) (UINTN) CpuMpData->CpuInfoInHob;
     for (Index = 0; Index < CpuMpData->CpuCount; Index++) {
@@ -1785,21 +1782,43 @@ MpInitLibInitialize (
       CpuMpData->CpuData[Index].ApFunction = 0;
       CopyMem (&CpuMpData->CpuData[Index].VolatileRegisters, &VolatileRegisters, sizeof (CPU_VOLATILE_REGISTERS));
     }
-    if (MaxLogicalProcessorNumber > 1) {
-      //
-      // Wakeup APs to do some AP initialize sync
-      //
-      WakeUpAP (CpuMpData, TRUE, 0, ApInitializeSync, CpuMpData, TRUE);
-      //
-      // Wait for all APs finished initialization
-      //
-      while (CpuMpData->FinishedCount < (CpuMpData->CpuCount - 1)) {
-        CpuPause ();
-      }
-      CpuMpData->InitFlag = ApInitDone;
-      for (Index = 0; Index < CpuMpData->CpuCount; Index++) {
-        SetApState (&CpuMpData->CpuData[Index], CpuStateIdle);
-      }
+  }
+
+  if (!GetMicrocodePatchInfoFromHob (
+         &CpuMpData->MicrocodePatchAddress,
+         &CpuMpData->MicrocodePatchRegionSize
+         )) {
+    //
+    // The microcode patch information cache HOB does not exist, which means
+    // the microcode patches data has not been loaded into memory yet
+    //
+    ShadowMicrocodeUpdatePatch (CpuMpData);
+  }
+
+  //
+  // Detect and apply Microcode on BSP
+  //
+  MicrocodeDetect (CpuMpData, CpuMpData->BspNumber);
+  //
+  // Store BSP's MTRR setting
+  //
+  MtrrGetAllMtrrs (&CpuMpData->MtrrTable);
+
+  //
+  // Wakeup APs to do some AP initialize sync (Microcode & MTRR)
+  //
+  if (CpuMpData->CpuCount > 1) {
+    CpuMpData->InitFlag = ApInitReconfig;
+    WakeUpAP (CpuMpData, TRUE, 0, ApInitializeSync, CpuMpData, TRUE);
+    //
+    // Wait for all APs finished initialization
+    //
+    while (CpuMpData->FinishedCount < (CpuMpData->CpuCount - 1)) {
+      CpuPause ();
+    }
+    CpuMpData->InitFlag = ApInitDone;
+    for (Index = 0; Index < CpuMpData->CpuCount; Index++) {
+      SetApState (&CpuMpData->CpuData[Index], CpuStateIdle);
     }
   }
 
