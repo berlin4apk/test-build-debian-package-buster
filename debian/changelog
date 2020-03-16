@@ -4,6 +4,7 @@ edk2 (0.0~20200229-1) UNRELEASED; urgency=medium
     Thanks to the Multiarch hinter.
   * Change versioning scheme to reflect usage of edk2-stable<YYYYMM>
     tag releases over git snapshots.
+  * Bump Standards-Version from 4.1.3 to 4.5.0.
 
  -- dann frazier <dannf@debian.org>  Mon, 16 Mar 2020 11:22:09 -0600
 
