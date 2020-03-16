@@ -1,7 +1,9 @@
-edk2 (0~20200229.4c0f6e34-2) UNRELEASED; urgency=medium
+edk2 (0.0~20200229-1) UNRELEASED; urgency=medium
 
   * Mark ovmf, qemu-efi-aarch64 and qemu-efi-arm as Multi-Arch: foreign.
     Thanks to the Multiarch hinter.
+  * Change versioning scheme to reflect usage of edk2-stable<YYYYMM>
+    tag releases over git snapshots.
 
  -- dann frazier <dannf@debian.org>  Mon, 16 Mar 2020 11:22:09 -0600
 
