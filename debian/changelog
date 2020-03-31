@@ -2,6 +2,14 @@ edk2 (0.0~20200229-1) UNRELEASED; urgency=medium
 
   * Reintroduce OVMF_CODE.ms.fd symlink, but now it points to
     OVMF_CODE.secboot.fd instead of OVMF_CODE.fd which enforces SMM.
+  * Update firmware descriptor JSON files:
+     - Update the existing secboot descriptor to use an empty variable
+       store. This makes it Secure Boot-capable, but with Secure Boot disabled.
+       Previously it used a store w/ keys pre-enrolled, without advertising
+       that feature.
+     - Add a new "ms" descriptor which has keys pre-enrolled and Secure Boot
+       enabled, and advertises the "enrolled-keys" feature.
+     - Provide more details in "description" fields.
   * Mark ovmf, qemu-efi-aarch64 and qemu-efi-arm as Multi-Arch: foreign.
     Thanks to the Multiarch hinter.
   * Change versioning scheme to reflect usage of edk2-stable<YYYYMM>
