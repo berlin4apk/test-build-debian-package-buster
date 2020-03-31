@@ -10,6 +10,7 @@ edk2 (0.0~20200229-1) UNRELEASED; urgency=medium
      - Add a new "ms" descriptor which has keys pre-enrolled and Secure Boot
        enabled, and advertises the "enrolled-keys" feature.
      - Provide more details in "description" fields.
+  * README.Debian: Improve the use-case description for each image.
   * Mark ovmf, qemu-efi-aarch64 and qemu-efi-arm as Multi-Arch: foreign.
     Thanks to the Multiarch hinter.
   * Change versioning scheme to reflect usage of edk2-stable<YYYYMM>
