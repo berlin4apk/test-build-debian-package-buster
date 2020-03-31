@@ -1,4 +1,4 @@
-edk2 (0.0~20200229-1) UNRELEASED; urgency=medium
+edk2 (0.0~20200229-1) unstable; urgency=medium
 
   * Reintroduce OVMF_CODE.ms.fd symlink, but now it points to
     OVMF_CODE.secboot.fd instead of OVMF_CODE.fd, which enforces SMM.
@@ -18,7 +18,7 @@ edk2 (0.0~20200229-1) UNRELEASED; urgency=medium
   * Bump Standards-Version from 4.1.3 to 4.5.0.
   * Add a debian/watch file.
 
- -- dann frazier <dannf@debian.org>  Mon, 16 Mar 2020 11:22:09 -0600
+ -- dann frazier <dannf@debian.org>  Tue, 31 Mar 2020 16:46:58 -0600
 
 edk2 (0~20200229.4c0f6e34-1) unstable; urgency=medium
 
