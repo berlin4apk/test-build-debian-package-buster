@@ -1,3 +1,9 @@
+edk2 (0.0~20200229-2~bpo10+1) buster-backports; urgency=medium
+
+  * Rebuild for buster-backports.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Tue, 21 Apr 2020 13:41:27 +0200
+
 edk2 (0.0~20200229-2) unstable; urgency=medium
 
   * Actually install the new "ms" descriptor.
