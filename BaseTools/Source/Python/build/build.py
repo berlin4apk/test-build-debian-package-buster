@@ -25,6 +25,7 @@ import traceback
 import multiprocessing
 from threading import Thread,Event,BoundedSemaphore
 import threading
+from linecache import getlines
 from subprocess import Popen,PIPE, STDOUT
 from collections import OrderedDict, defaultdict
 
@@ -1413,6 +1414,9 @@ class Build():
         if Target == 'fds':
             if GenFdsApi(AutoGenObject.GenFdsCommandDict, self.Db):
                 EdkLogger.error("build", COMMAND_FAILURE)
+            Threshold = self.GetFreeSizeThreshold()
+            if Threshold:
+                self.CheckFreeSizeThreshold(Threshold, AutoGenObject.FvDir)
             return True
 
         # run
@@ -2311,6 +2315,9 @@ class Build():
                         GenFdsStart = time.time()
                         if GenFdsApi(Wa.GenFdsCommandDict, self.Db):
                             EdkLogger.error("build", COMMAND_FAILURE)
+                        Threshold = self.GetFreeSizeThreshold()
+                        if Threshold:
+                            self.CheckFreeSizeThreshold(Threshold, Wa.FvDir)
 
                         #
                         # Create MAP file for all platform FVs after GenFds.
@@ -2322,6 +2329,46 @@ class Build():
                     #
                     self._SaveMapFile(MapBuffer, Wa)
                 self.CreateGuidedSectionToolsFile(Wa)
+
+    ## GetFreeSizeThreshold()
+    #
+    #   @retval int             Threshold value
+    #
+    def GetFreeSizeThreshold(self):
+        Threshold = None
+        Threshold_Str = GlobalData.gCommandLineDefines.get('FV_SPARE_SPACE_THRESHOLD')
+        if Threshold_Str:
+            try:
+                if Threshold_Str.lower().startswith('0x'):
+                    Threshold = int(Threshold_Str, 16)
+                else:
+                    Threshold = int(Threshold_Str)
+            except:
+                EdkLogger.warn("build", 'incorrect value for FV_SPARE_SPACE_THRESHOLD %s.Only decimal or hex format is allowed.' % Threshold_Str)
+        return Threshold
+
+    def CheckFreeSizeThreshold(self, Threshold=None, FvDir=None):
+        if not isinstance(Threshold, int):
+            return
+        if not isinstance(FvDir, str) or not FvDir:
+            return
+        FdfParserObject = GlobalData.gFdfParser
+        FvRegionNameList = [FvName for FvName in FdfParserObject.Profile.FvDict if FdfParserObject.Profile.FvDict[FvName].FvRegionInFD]
+        for FvName in FdfParserObject.Profile.FvDict:
+            if FvName in FvRegionNameList:
+                FvSpaceInfoFileName = os.path.join(FvDir, FvName.upper() + '.Fv.map')
+                if os.path.exists(FvSpaceInfoFileName):
+                    FileLinesList = getlines(FvSpaceInfoFileName)
+                    for Line in FileLinesList:
+                        NameValue = Line.split('=')
+                        if len(NameValue) == 2 and NameValue[0].strip() == 'EFI_FV_SPACE_SIZE':
+                            FreeSizeValue = int(NameValue[1].strip(), 0)
+                            if FreeSizeValue < Threshold:
+                                EdkLogger.error("build", FV_FREESIZE_ERROR,
+                                                '%s FV free space %d is not enough to meet with the required spare space %d set by -D FV_SPARE_SPACE_THRESHOLD option.' % (
+                                                    FvName, FreeSizeValue, Threshold))
+                            break
+
     ## Generate GuidedSectionTools.txt in the FV directories.
     #
     def CreateGuidedSectionToolsFile(self,Wa):
@@ -2347,7 +2394,7 @@ class Build():
                                 toolName = split[3]
                                 path = '_'.join(split[0:4]) + '_PATH'
                                 path = self.ToolDef.ToolsDefTxtDictionary[path]
-                                path = self.GetFullPathOfTool(path)
+                                path = self.GetRealPathOfTool(path)
                                 guidAttribs.append((guid, toolName, path))
 
                     # Write out GuidedSecTools.txt
@@ -2357,21 +2404,11 @@ class Build():
                         print(' '.join(guidedSectionTool), file=toolsFile)
                     toolsFile.close()
 
-    ## Returns the full path of the tool.
+    ## Returns the real path of the tool.
     #
-    def GetFullPathOfTool (self, tool):
+    def GetRealPathOfTool (self, tool):
         if os.path.exists(tool):
             return os.path.realpath(tool)
-        else:
-            # We need to search for the tool using the
-            # PATH environment variable.
-            for dirInPath in os.environ['PATH'].split(os.pathsep):
-                foundPath = os.path.join(dirInPath, tool)
-                if os.path.exists(foundPath):
-                    return os.path.realpath(foundPath)
-
-        # If the tool was not found in the path then we just return
-        # the input tool.
         return tool
 
     ## Launch the module or platform build

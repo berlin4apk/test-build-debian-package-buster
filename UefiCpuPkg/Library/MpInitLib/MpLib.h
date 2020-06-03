@@ -31,6 +31,7 @@
 #include <Library/SynchronizationLib.h>
 #include <Library/MtrrLib.h>
 #include <Library/HobLib.h>
+#include <Library/PcdLib.h>
 
 #include <Guid/MicrocodePatchHob.h>
 
@@ -661,7 +662,7 @@ GetProcessorNumber (
   This funtion will try to invoke platform specific microcode shadow logic to
   relocate microcode update patches into memory.
 
-  @param[in] CpuMpData  The pointer to CPU MP Data structure.
+  @param[in, out] CpuMpData  The pointer to CPU MP Data structure.
 
   @retval EFI_SUCCESS              Shadow microcode success.
   @retval EFI_OUT_OF_RESOURCES     No enough resource to complete the operation.

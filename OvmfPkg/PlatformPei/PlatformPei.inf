@@ -30,12 +30,14 @@
   FeatureControl.c
   Fv.c
   MemDetect.c
+  MemTypeInfo.c
   Platform.c
   Platform.h
   Xen.c
   Xen.h
 
 [Packages]
+  EmbeddedPkg/EmbeddedPkg.dec
   MdePkg/MdePkg.dec
   MdeModulePkg/MdeModulePkg.dec
   SecurityPkg/SecurityPkg.dec
@@ -59,6 +61,7 @@
   PeimEntryPoint
   QemuFwCfgLib
   QemuFwCfgS3Lib
+  QemuFwCfgSimpleParserLib
   MtrrLib
   MemEncryptSevLib
   PcdLib
@@ -93,7 +96,6 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdDxeIplSwitchToLongMode
   gEfiMdeModulePkgTokenSpaceGuid.PcdUse1GPageTable
   gEfiMdeModulePkgTokenSpaceGuid.PcdSetNxForStack
-  gEfiMdeModulePkgTokenSpaceGuid.PcdPropertiesTableEnable
   gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiS3Enable
   gEfiMdeModulePkgTokenSpaceGuid.PcdPteMemoryEncryptionAddressOrMask
   gEfiSecurityPkgTokenSpaceGuid.PcdOptionRomImageVerificationPolicy
@@ -104,6 +106,11 @@
 
 [FixedPcd]
   gEfiMdePkgTokenSpaceGuid.PcdPciExpressBaseAddress
+  gEmbeddedTokenSpaceGuid.PcdMemoryTypeEfiACPIMemoryNVS
+  gEmbeddedTokenSpaceGuid.PcdMemoryTypeEfiACPIReclaimMemory
+  gEmbeddedTokenSpaceGuid.PcdMemoryTypeEfiReservedMemoryType
+  gEmbeddedTokenSpaceGuid.PcdMemoryTypeEfiRuntimeServicesCode
+  gEmbeddedTokenSpaceGuid.PcdMemoryTypeEfiRuntimeServicesData
 
 [FeaturePcd]
   gUefiOvmfPkgTokenSpaceGuid.PcdCsmEnable
@@ -112,6 +119,7 @@
 [Ppis]
   gEfiPeiMasterBootModePpiGuid
   gEfiPeiMpServicesPpiGuid
+  gEfiPeiReadOnlyVariable2PpiGuid
 
 [Depex]
   TRUE

@@ -209,7 +209,6 @@ InitUnitTestFramework (
   EFI_STATUS                  Status;
   UNIT_TEST_FRAMEWORK_HANDLE  NewFrameworkHandle;
   UNIT_TEST_FRAMEWORK         *NewFramework;
-  UNIT_TEST_SAVE_HEADER       *SavedState;
 
   Status       = EFI_SUCCESS;
   NewFramework = NULL;
@@ -264,8 +263,7 @@ InitUnitTestFramework (
   // If there is a persisted context, load it now.
   //
   if (DoesCacheExist (NewFrameworkHandle)) {
-    SavedState = (UNIT_TEST_SAVE_HEADER *)NewFramework->SavedState;
-    Status = LoadUnitTestCache (NewFrameworkHandle, &SavedState);
+    Status = LoadUnitTestCache (NewFrameworkHandle,  (UNIT_TEST_SAVE_HEADER**)(&NewFramework->SavedState));
     if (EFI_ERROR (Status)) {
       //
       // Don't actually report it as an error, but emit a warning.
@@ -436,7 +434,6 @@ AddTestCase (
 
   Status          = EFI_SUCCESS;
   Suite           = (UNIT_TEST_SUITE *)SuiteHandle;
-  ParentFramework = (UNIT_TEST_FRAMEWORK *)Suite->ParentFramework;
 
   //
   // First, let's check to make sure that our parameters look good.
@@ -445,6 +442,7 @@ AddTestCase (
     return EFI_INVALID_PARAMETER;
   }
 
+  ParentFramework = (UNIT_TEST_FRAMEWORK *)Suite->ParentFramework;
   //
   // Create the new entry.
   NewTestEntry = AllocateZeroPool (sizeof( UNIT_TEST_LIST_ENTRY ));
