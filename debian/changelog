@@ -1,8 +1,8 @@
-edk2 (2020.05-1) UNRELEASED; urgency=medium
+edk2 (2020.05-1) unstable; urgency=medium
 
   * New upstream release, based on edk2-stable202005 tag.
 
- -- dann frazier <dannf@debian.org>  Wed, 03 Jun 2020 15:18:57 -0600
+ -- dann frazier <dannf@debian.org>  Wed, 03 Jun 2020 15:39:40 -0600
 
 edk2 (0.0~20200229-2) unstable; urgency=medium
 
