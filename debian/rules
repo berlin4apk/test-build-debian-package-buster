@@ -30,8 +30,11 @@ ifeq ($(DEB_HOST_ARCH),i386)
 endif
 
 COMMON_FLAGS = -DNETWORK_HTTP_BOOT_ENABLE=TRUE -DNETWORK_TLS_ENABLE -DSECURE_BOOT_ENABLE=TRUE
-OVMF_FLAGS   = $(COMMON_FLAGS) -DFD_SIZE_2MB -DTPM2_ENABLE=TRUE
-OVMF_SB_FLAGS = $(OVMF_FLAGS) -DSMM_REQUIRE=TRUE
+OVMF_COMMON_FLAGS = $(COMMON_FLAGS) -DTPM2_ENABLE=TRUE
+OVMF_2M_FLAGS = $(OVMF_COMMON_FLAGS) -DFD_SIZE_2MB
+OVMF_4M_FLAGS = $(OVMF_COMMON_FLAGS) -DFD_SIZE_4MB
+OVMF_2M_SMM_FLAGS = $(OVMF_2M_FLAGS) -DSMM_REQUIRE=TRUE
+OVMF_4M_SMM_FLAGS = $(OVMF_4M_FLAGS) -DSMM_REQUIRE=TRUE
 AAVMF_FLAGS  = $(COMMON_FLAGS)
 
 OVMF_VARS_GENERATOR = ./qemu-ovmf-secureboot-1-1-3/ovmf-vars-generator
@@ -59,11 +62,11 @@ debian/setup-build-stamp:
 OVMF_BUILD_DIR = Build/OvmfX64/RELEASE_$(EDK2_TOOLCHAIN)
 OVMF_ENROLL = $(OVMF_BUILD_DIR)/X64/EnrollDefaultKeys.efi
 OVMF_SHELL =  $(OVMF_BUILD_DIR)/X64/Shell.efi
-OVMF_IMAGES := OVMF_CODE.fd OVMF_CODE.secboot.fd OVMF_VARS.fd
+OVMF_IMAGES := OVMF_CODE.fd OVMF_CODE_4M.fd OVMF_CODE.secboot.fd OVMF_CODE_4M.secboot.fd OVMF_VARS.fd OVMF_VARS_4M.fd
 OVMF_BINARIES = $(OVMF_ENROLL) $(OVMF_SHELL)
 OVMF_BINARIES += $(prefix debian/ovmf-install/,$(OVMF_IMAGES))
 
-build-ovmf: $(OVMF_BINARIES) debian/ovmf-install/OVMF_VARS.ms.fd debian/ovmf-install/OVMF_VARS.snakeoil.fd
+build-ovmf: $(OVMF_BINARIES) debian/ovmf-install/OVMF_VARS.ms.fd debian/ovmf-install/OVMF_VARS_4M.ms.fd debian/ovmf-install/OVMF_VARS.snakeoil.fd
 
 $(OVMF_BINARIES): EDK2_ARCH_DIR=X64
 $(OVMF_BINARIES): EDK2_HOST_ARCH=X64
@@ -75,16 +78,35 @@ $(OVMF_BINARIES): debian/setup-build-stamp
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
-			$(OVMF_FLAGS) -b RELEASE; \
-		cp $(OVMF_BUILD_DIR)/FV/OVMF*.fd \
+			$(OVMF_2M_FLAGS) -b RELEASE; \
+		cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
+			$(OVMF_BUILD_DIR)/FV/OVMF.fd \
+			debian/ovmf-install/; \
+		cp $(OVMF_BUILD_DIR)/FV/OVMF_VARS.fd \
 			debian/ovmf-install/; \
 		rm -rf Build/Ovmf$(EDK2_HOST_ARCH); \
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
-			$(OVMF_SB_FLAGS) -b RELEASE; \
+			$(OVMF_4M_FLAGS) -b RELEASE; \
 		cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
-			debian/ovmf-install/OVMF_CODE.secboot.fd
+			debian/ovmf-install/OVMF_CODE_4M.fd; \
+		cp $(OVMF_BUILD_DIR)/FV/OVMF_VARS.fd \
+			debian/ovmf-install/OVMF_VARS_4M.fd; \
+		rm -rf Build/Ovmf$(EDK2_HOST_ARCH); \
+		build -a $(EDK2_HOST_ARCH) \
+			-t $(EDK2_TOOLCHAIN) \
+			-p OvmfPkg/OvmfPkgX64.dsc \
+			$(OVMF_2M_SMM_FLAGS) -b RELEASE; \
+		cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
+			debian/ovmf-install/OVMF_CODE.secboot.fd; \
+		rm -rf Build/Ovmf$(EDK2_HOST_ARCH); \
+		build -a $(EDK2_HOST_ARCH) \
+			-t $(EDK2_TOOLCHAIN) \
+			-p OvmfPkg/OvmfPkgX64.dsc \
+			$(OVMF_4M_SMM_FLAGS) -b RELEASE; \
+		cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
+			debian/ovmf-install/OVMF_CODE_4M.secboot.fd; \
 
 dpkg_vendor = $(shell dpkg-vendor --query vendor)
 debian/oem-string-vendor: debian/PkKek-1-$(dpkg_vendor).pem
