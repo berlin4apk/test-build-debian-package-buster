@@ -3,6 +3,10 @@ edk2 (2020.05-3) UNRELEASED; urgency=medium
   * Provide 4MB OVMF images as the existing 2MB images no longer
     have sufficient variable space for the current Secure Boot Forbidden
     Signature Database. LP: #1885662.
+  * Update fw descriptors to reference 4M images instead of their 2M
+    counterparts. This will migrate tools that use the descriptor interface
+    (like libvirt) over to the 4M images when creating new VMs. Existing 2M
+    VMs will require manual migration.
 
  -- dann frazier <dannf@debian.org>  Wed, 05 Aug 2020 16:48:57 -0600
 

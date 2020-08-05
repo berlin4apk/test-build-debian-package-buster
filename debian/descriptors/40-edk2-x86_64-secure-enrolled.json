@@ -6,11 +6,11 @@
     "mapping": {
         "device": "flash",
         "executable": {
-            "filename": "/usr/share/OVMF/OVMF_CODE.ms.fd",
+            "filename": "/usr/share/OVMF/OVMF_CODE_4M.ms.fd",
             "format": "raw"
         },
         "nvram-template": {
-            "filename": "/usr/share/OVMF/OVMF_VARS.ms.fd",
+            "filename": "/usr/share/OVMF/OVMF_VARS_4M.ms.fd",
             "format": "raw"
         }
     },
