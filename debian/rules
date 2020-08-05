@@ -66,7 +66,7 @@ OVMF_IMAGES := OVMF_CODE.fd OVMF_CODE_4M.fd OVMF_CODE.secboot.fd OVMF_CODE_4M.se
 OVMF_BINARIES = $(OVMF_ENROLL) $(OVMF_SHELL)
 OVMF_BINARIES += $(prefix debian/ovmf-install/,$(OVMF_IMAGES))
 
-build-ovmf: $(OVMF_BINARIES) debian/ovmf-install/OVMF_VARS.ms.fd debian/ovmf-install/OVMF_VARS_4M.ms.fd debian/ovmf-install/OVMF_VARS.snakeoil.fd
+build-ovmf: $(OVMF_BINARIES) debian/ovmf-install/OVMF_VARS.ms.fd debian/ovmf-install/OVMF_VARS_4M.ms.fd debian/ovmf-install/OVMF_VARS_4M.snakeoil.fd
 
 $(OVMF_BINARIES): EDK2_ARCH_DIR=X64
 $(OVMF_BINARIES): EDK2_HOST_ARCH=X64

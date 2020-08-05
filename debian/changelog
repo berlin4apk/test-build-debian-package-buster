@@ -7,6 +7,9 @@ edk2 (2020.05-3) UNRELEASED; urgency=medium
     counterparts. This will migrate tools that use the descriptor interface
     (like libvirt) over to the 4M images when creating new VMs. Existing 2M
     VMs will require manual migration.
+  * Add a 4M snakeoil variable template and drop the 2M version. This will
+    break existing snakeoil VMs, but that should be OK for a test/devel
+    facility.
 
  -- dann frazier <dannf@debian.org>  Wed, 05 Aug 2020 16:48:57 -0600
 
