@@ -10,6 +10,7 @@ edk2 (2020.05-3) UNRELEASED; urgency=medium
   * Add a 4M snakeoil variable template and drop the 2M version. This will
     break existing snakeoil VMs, but that should be OK for a test/devel
     facility.
+  * Increase autopkgtest timeout from 30s to 60s. LP: #1885186.
 
  -- dann frazier <dannf@debian.org>  Wed, 05 Aug 2020 16:48:57 -0600
 
