@@ -92,8 +92,13 @@ if __name__ == '__main__':
         child.logfile = sys.stdout.buffer
     try:
         while True:
-            i = child.expect(['Press .* or any other key to continue',
-                              'Shell> '])
+            i = child.expect(
+                [
+                    'Press .* or any other key to continue',
+                    'Shell> '
+                ],
+                timeout=60,
+            )
             if i == 0:
                 child.sendline('\x1b')
                 continue
