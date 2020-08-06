@@ -1,4 +1,4 @@
-edk2 (2020.05-3) UNRELEASED; urgency=medium
+edk2 (2020.05-3) unstable; urgency=medium
 
   * Provide 4MB OVMF images as the existing 2MB images no longer
     have sufficient variable space for the current Secure Boot Forbidden
@@ -12,7 +12,7 @@ edk2 (2020.05-3) UNRELEASED; urgency=medium
     facility.
   * Increase autopkgtest timeout from 30s to 60s. LP: #1885186.
 
- -- dann frazier <dannf@debian.org>  Wed, 05 Aug 2020 16:48:57 -0600
+ -- dann frazier <dannf@debian.org>  Wed, 05 Aug 2020 18:33:22 -0600
 
 edk2 (2020.05-2) unstable; urgency=medium
 
