@@ -1,4 +1,4 @@
-edk2 (2020.05-4) UNRELEASED; urgency=medium
+edk2 (2020.05-4) unstable; urgency=medium
 
   * Fix integer overflow in DxeImageVerificationHandler. (CVE-2019-14562)
     (Closes: #968819)
@@ -8,7 +8,7 @@ edk2 (2020.05-4) UNRELEASED; urgency=medium
   * Re-enable TPM support, which was accidentally disabled due to an
     upstream build flag rename in 2020.05-1. LP: #1890646.
 
- -- dann frazier <dannf@debian.org>  Wed, 02 Sep 2020 09:57:34 -0600
+ -- dann frazier <dannf@debian.org>  Wed, 02 Sep 2020 10:26:10 -0600
 
 edk2 (2020.05-3) unstable; urgency=medium
 
