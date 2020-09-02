@@ -5,6 +5,8 @@ edk2 (2020.05-4) UNRELEASED; urgency=medium
      - d/p/0001-SecurityPkg-DxeImageVerificationLib-extract-SecDataD.patch
      - d/p/0002-SecurityPkg-DxeImageVerificationLib-assign-WinCertif.patch
      - d/p/0003-SecurityPkg-DxeImageVerificationLib-catch-alignment-.patch
+  * Re-enable TPM support, which was accidentally disabled due to an
+    upstream build flag rename in 2020.05-1. LP: #1890646.
 
  -- dann frazier <dannf@debian.org>  Wed, 02 Sep 2020 09:57:34 -0600
 
