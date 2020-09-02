@@ -1,3 +1,13 @@
+edk2 (0~20181115.85588389-3+deb10u2) UNRELEASED; urgency=medium
+
+  * Fix integer overflow in DxeImageVerificationHandler. (CVE-2019-14562)
+    (Closes: #968819)
+     - d/p/0001-SecurityPkg-DxeImageVerificationLib-extract-SecDataD.patch
+     - d/p/0002-SecurityPkg-DxeImageVerificationLib-assign-WinCertif.patch
+     - d/p/0003-SecurityPkg-DxeImageVerificationLib-catch-alignment-.patch
+
+ -- dann frazier <dannf@debian.org>  Thu, 17 Sep 2020 13:37:25 -0600
+
 edk2 (0~20181115.85588389-3+deb10u1) buster; urgency=medium
 
   * Fix numeric truncation in S3BootScript[Save]*() API. (CVE-2019-14563)

@@ -24,3 +24,6 @@ NetworkPkg-DnsDxe-CVE-2018-12178-Check-the-received-.patch
 0015-SecurityPkg-DxeImageVerificationLib-Differentiate-er.patch
 0016-SecurityPkg-DxeImageVerificationLib-change-IsCertHas.patch
 0017-NetworkPkg-ArpDxe-Recycle-invalid-ARP-packets-CVE-20.patch
+0001-SecurityPkg-DxeImageVerificationLib-extract-SecDataD.patch
+0002-SecurityPkg-DxeImageVerificationLib-assign-WinCertif.patch
+0003-SecurityPkg-DxeImageVerificationLib-catch-alignment-.patch
