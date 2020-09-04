@@ -2,7 +2,7 @@
 
 SHELL=/bin/bash
 
-include /usr/share/dpkg/architecture.mk
+include /usr/share/dpkg/default.mk
 
 EDK2_TOOLCHAIN = GCC5
 export $(EDK2_TOOLCHAIN)_AARCH64_PREFIX=aarch64-linux-gnu-
@@ -44,8 +44,6 @@ undefine EDK_SOURCE
 undefine EFI_SOURCE
 undefine EDK_TOOLS_PATH
 undefine CONF_PATH
-
-ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
 
 %:
 	dh $@
@@ -106,8 +104,7 @@ $(OVMF_BINARIES): debian/setup-build-stamp
 		cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
 			debian/ovmf-install/OVMF_CODE_4M.secboot.fd; \
 
-dpkg_vendor = $(shell dpkg-vendor --query vendor)
-debian/oem-string-vendor: debian/PkKek-1-$(dpkg_vendor).pem
+debian/oem-string-vendor: debian/PkKek-1-$(DEB_VENDOR).pem
 	tr -d '\n' < $< | \
 		sed -e 's/.*-----BEGIN CERTIFICATE-----/4e32566d-8e9e-4f52-81d3-5bb9715f9727:/' -e 's/-----END CERTIFICATE-----//' > $@
 
@@ -192,19 +189,22 @@ get-orig-source:
 	rm -rf edk2.tmp && git clone . edk2.tmp
 	# Don't recurse, openssl will bring in MBs of stuff we don't need
 	cd edk2.tmp && git submodule update --init
-	rm -rf edk2-$(ver) && mkdir edk2-$(ver)
-	cd edk2.tmp && git archive HEAD | tar xv -C ../edk2-$(ver)
+	rm -rf edk2-$(DEB_VERSION_UPSTREAM) && \
+		mkdir edk2-$(DEB_VERSION_UPSTREAM)
+	cd edk2.tmp && git archive HEAD | \
+		tar xv -C ../edk2-$(DEB_VERSION_UPSTREAM)
 	cd edk2.tmp && git submodule foreach \
-		'git archive HEAD | tar xv -C $$toplevel/../edk2-$(ver)/$$sm_path'
-	ln -s ../debian edk2-$(ver)
+		'git archive HEAD | tar xv -C $$toplevel/../edk2-$(DEB_VERSION_UPSTREAM)/$$sm_path'
+	ln -s ../debian edk2-$(DEB_VERSION_UPSTREAM)
 	# Remove unused embedded source, requested by Ubuntu security team
-	rm -r edk2-$(ver)/BaseTools/Source/C/BrotliCompress
+	rm -r edk2-$(DEB_VERSION_UPSTREAM)/BaseTools/Source/C/BrotliCompress
 	# Remove known-binary files
-	cd edk2-$(ver) && python3 ./debian/remove-binaries.py
+	cd edk2-$(DEB_VERSION_UPSTREAM) && python3 ./debian/remove-binaries.py
 	# Look for possible unknown binary files
-	cd edk2-$(ver) && python3 ./debian/find-binaries.py
-	rm edk2-$(ver)/debian
-	tar Jcvf ../edk2_$(ver).orig.tar.xz edk2-$(ver)
-	rm -rf edk2.tmp edk2-$(ver)
+	cd edk2-$(DEB_VERSION_UPSTREAM) && python3 ./debian/find-binaries.py
+	rm edk2-$(DEB_VERSION_UPSTREAM)/debian
+	tar Jcvf ../edk2_$(DEB_VERSION_UPSTREAM).orig.tar.xz \
+		edk2-$(DEB_VERSION_UPSTREAM)
+	rm -rf edk2.tmp edk2-$(DEB_VERSION_UPSTREAM)
 
 .PHONY: build-ovmf build-qemu-efi
