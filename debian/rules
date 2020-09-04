@@ -4,8 +4,6 @@ SHELL=/bin/bash
 
 include /usr/share/dpkg/architecture.mk
 
-# Bumping this up to >= GCC5 will require the replacing the pre-compiled
-# liblto*.a binaries that we strip from our orig.tar.xz.
 EDK2_TOOLCHAIN = GCC5
 export $(EDK2_TOOLCHAIN)_AARCH64_PREFIX=aarch64-linux-gnu-
 export $(EDK2_TOOLCHAIN)_ARM_PREFIX=arm-linux-gnueabihf-
