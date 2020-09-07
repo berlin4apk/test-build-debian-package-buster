@@ -1,9 +1,9 @@
-edk2 (2020.05-5) UNRELEASED; urgency=medium
+edk2 (2020.05-5) unstable; urgency=medium
 
   * Update snakeoil keys. Previous one expired 2019-12-01. New one
     expires 2120-08-14.
 
- -- dann frazier <dannf@debian.org>  Mon, 07 Sep 2020 12:43:31 -0600
+ -- dann frazier <dannf@debian.org>  Mon, 07 Sep 2020 13:23:29 -0600
 
 edk2 (2020.05-4) unstable; urgency=medium
 
