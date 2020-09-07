@@ -1,3 +1,10 @@
+edk2 (2020.05-5) UNRELEASED; urgency=medium
+
+  * Update snakeoil keys. Previous one expired 2019-12-01. New one
+    expires 2120-08-14.
+
+ -- dann frazier <dannf@debian.org>  Mon, 07 Sep 2020 12:43:31 -0600
+
 edk2 (2020.05-4) unstable; urgency=medium
 
   * Fix integer overflow in DxeImageVerificationHandler. (CVE-2019-14562)
