@@ -62,6 +62,8 @@ OVMF_IMAGES := OVMF_CODE.fd OVMF_CODE_4M.fd OVMF_CODE.secboot.fd OVMF_CODE_4M.se
 OVMF_BINARIES = $(OVMF_ENROLL) $(OVMF_SHELL)
 OVMF_BINARIES += $(prefix debian/ovmf-install/,$(OVMF_IMAGES))
 
+QEMU_EFI_BUILD_DIR = Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)
+
 build-ovmf: $(OVMF_BINARIES) debian/ovmf-install/OVMF_VARS.ms.fd debian/ovmf-install/OVMF_VARS_4M.ms.fd debian/ovmf-install/OVMF_VARS_4M.snakeoil.fd
 
 $(OVMF_BINARIES): EDK2_ARCH_DIR=X64
@@ -160,9 +162,9 @@ build-qemu-efi: debian/setup-build-stamp
 			-t $(EDK2_TOOLCHAIN) \
 			-p ArmVirtPkg/ArmVirtQemu.dsc \
 			$(AAVMF_FLAGS) -b RELEASE
-	dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/$(FW_NAME)_CODE.fd bs=1M seek=64 count=0
-	dd if=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/QEMU_EFI.fd of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/$(FW_NAME)_CODE.fd conv=notrunc
-	dd if=/dev/zero of=Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)/FV/$(FW_NAME)_VARS.fd bs=1M seek=64 count=0
+	dd if=/dev/zero of=$(QEMU_EFI_BUILD_DIR)/FV/$(FW_NAME)_CODE.fd bs=1M seek=64 count=0
+	dd if=$(QEMU_EFI_BUILD_DIR)/FV/QEMU_EFI.fd of=$(QEMU_EFI_BUILD_DIR)/FV/$(FW_NAME)_CODE.fd conv=notrunc
+	dd if=/dev/zero of=$(QEMU_EFI_BUILD_DIR)/FV/$(FW_NAME)_VARS.fd bs=1M seek=64 count=0
 
 build-qemu-efi-aarch64: ArmPkg/Library/GccLto/liblto-aarch64.a
 	$(MAKE) -f debian/rules build-qemu-efi EDK2_ARCH_DIR=AArch64 EDK2_HOST_ARCH=AARCH64 FW_NAME=AAVMF
