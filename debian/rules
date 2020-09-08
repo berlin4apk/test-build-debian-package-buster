@@ -202,4 +202,4 @@ get-orig-source:
 		edk2-$(DEB_VERSION_UPSTREAM)
 	rm -rf edk2.tmp edk2-$(DEB_VERSION_UPSTREAM)
 
-.PHONY: build-ovmf build-qemu-efi
+.PHONY: build-ovmf build-qemu-efi build-qemu-efi-aarch64 build-qemu-efi-arm
