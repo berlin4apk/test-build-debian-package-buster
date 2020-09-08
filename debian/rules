@@ -180,7 +180,7 @@ override_dh_auto_clean:
 	fi
 	rm -rf Conf/.cache Build .pc-post
 	rm -rf debian/ovmf-install debian/iso-root debian/vfat-root
-	rm -f debian/oem-string debian/oem-string-snakeoil
+	rm -f debian/oem-string-vendor debian/oem-string-snakeoil
 	rm -f debian/shell.img debian/UefiShell.iso
 	rm -f ArmPkg/Library/GccLto/liblto-*.a
 	rm -f debian/setup-build-stamp
