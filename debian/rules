@@ -104,23 +104,28 @@ debian/oem-string-%: debian/PkKek-1-%.pem
 	tr -d '\n' < $< | \
 		sed -e 's/.*-----BEGIN CERTIFICATE-----/4e32566d-8e9e-4f52-81d3-5bb9715f9727:/' -e 's/-----END CERTIFICATE-----//' > $@
 
-debian/shell.img: VFAT_ROOT=debian/vfat-root
-debian/shell.img: $(OVMF_SHELL) $(OVMF_ENROLL)
+debian/shell.x64.img: VFAT_ROOT=debian/vfat-root-x64
+debian/shell.x64.img: SHELL_BIN=$(OVMF_SHELL)
+debian/shell.x64.img: ENROLL_BIN=$(OVMF_ENROLL)
+debian/shell.x64.img: $(OVMF_SHELL) $(OVMF_ENROLL)
+debian/shell.%.img:
 	rm -rf $(VFAT_ROOT)
 	mkdir -p $(VFAT_ROOT)/efi/boot
-	cp $(OVMF_SHELL) $(VFAT_ROOT)/efi/boot/bootx64.efi
-	cp $(OVMF_ENROLL) $(VFAT_ROOT)
+	cp $(SHELL_BIN) \
+		$(VFAT_ROOT)/efi/boot/boot`echo $@ | cut -d. -f2`.efi
+	cp $(ENROLL_BIN) $(VFAT_ROOT)
 	qemu-img convert --image-opts \
 		driver=vvfat,floppy=on,fat-type=12,label=UEFI_SHELL,dir=$(VFAT_ROOT) $@
 
-debian/UefiShell.iso: debian/shell.img
-	rm -rf debian/iso-root
-	mkdir -p debian/iso-root
-	cp $< debian/iso-root
+debian/UefiShell.%.iso: debian/shell.%.img
+	rm -rf debian/iso-root-`echo $@ | cut -d. -f2`
+	mkdir -p debian/iso-root-`echo $@ | cut -d. -f2`
+	cp $< debian/iso-root-`echo $@ | cut -d. -f2`
 	xorriso --as mkisofs -input-charset ASCII -J -rational-rock \
-		-e `basename $<` -no-emul-boot -o $@ `dirname $<`
+		-e `basename $<` -no-emul-boot -o $@ \
+		debian/iso-root-`echo $@ | cut -d. -f2`
 
-%.ms.fd: %.fd debian/UefiShell.iso debian/oem-string-vendor
+%.ms.fd: %.fd debian/UefiShell.x64.iso debian/oem-string-vendor
 	python3 $(OVMF_VARS_GENERATOR) --qemu-binary /usr/bin/qemu-system-x86_64 \
 		--print-output \
 		--disable-smm \
@@ -128,9 +133,9 @@ debian/UefiShell.iso: debian/shell.img
 		--oem-string `< debian/oem-string-vendor` \
 		--ovmf-binary $(subst VARS,CODE,$<) \
 		--ovmf-template-vars $< \
-		--uefi-shell-iso debian/UefiShell.iso $@
+		--uefi-shell-iso debian/UefiShell.x64.iso $@
 
-%.snakeoil.fd: %.fd debian/UefiShell.iso debian/oem-string-snakeoil
+%.snakeoil.fd: %.fd debian/UefiShell.x64.iso debian/oem-string-snakeoil
 	python3 $(OVMF_VARS_GENERATOR) --qemu-binary /usr/bin/qemu-system-x86_64 \
 		--print-output \
 		--disable-smm \
@@ -139,7 +144,7 @@ debian/UefiShell.iso: debian/shell.img
 		--oem-string `< debian/oem-string-snakeoil` \
 		--ovmf-binary $(subst VARS,CODE,$<) \
 		--ovmf-template-vars $< \
-		--uefi-shell-iso debian/UefiShell.iso $@
+		--uefi-shell-iso debian/UefiShell.x64.iso $@
 
 ArmPkg/Library/GccLto/liblto-aarch64.a:	ArmPkg/Library/GccLto/liblto-aarch64.s
 	$($(EDK2_TOOLCHAIN)_AARCH64_PREFIX)gcc -c -fpic $< -o $@
@@ -170,10 +175,10 @@ override_dh_auto_clean:
 		make -C BaseTools clean; \
 	fi
 	rm -rf Conf/.cache Build .pc-post
-	rm -rf debian/ovmf-install debian/iso-root debian/vfat-root
+	rm -rf debian/ovmf-install debian/iso-root-* debian/vfat-root-*
 	rm -f debian/PkKek-1-vendor.pem
 	rm -f debian/oem-string-vendor debian/oem-string-snakeoil
-	rm -f debian/shell.img debian/UefiShell.iso
+	rm -f debian/shell.*.img debian/UefiShell.*.iso
 	rm -f ArmPkg/Library/GccLto/liblto-*.a
 	rm -f debian/setup-build-stamp
 
