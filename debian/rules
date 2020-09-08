@@ -106,11 +106,10 @@ $(OVMF_BINARIES): debian/setup-build-stamp
 		cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
 			debian/ovmf-install/OVMF_CODE_4M.secboot.fd; \
 
-debian/oem-string-vendor: debian/PkKek-1-$(DEB_VENDOR).pem
-	tr -d '\n' < $< | \
-		sed -e 's/.*-----BEGIN CERTIFICATE-----/4e32566d-8e9e-4f52-81d3-5bb9715f9727:/' -e 's/-----END CERTIFICATE-----//' > $@
+debian/PkKek-1-vendor.pem: debian/PkKek-1-$(DEB_VENDOR).pem
+	ln -sf `basename $<` $@
 
-debian/oem-string-snakeoil: debian/PkKek-1-snakeoil.pem
+debian/oem-string-%: debian/PkKek-1-%.pem
 	tr -d '\n' < $< | \
 		sed -e 's/.*-----BEGIN CERTIFICATE-----/4e32566d-8e9e-4f52-81d3-5bb9715f9727:/' -e 's/-----END CERTIFICATE-----//' > $@
 
@@ -180,6 +179,7 @@ override_dh_auto_clean:
 	fi
 	rm -rf Conf/.cache Build .pc-post
 	rm -rf debian/ovmf-install debian/iso-root debian/vfat-root
+	rm -f debian/PkKek-1-vendor.pem
 	rm -f debian/oem-string-vendor debian/oem-string-snakeoil
 	rm -f debian/shell.img debian/UefiShell.iso
 	rm -f ArmPkg/Library/GccLto/liblto-*.a
