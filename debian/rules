@@ -53,7 +53,7 @@ OVMF_ENROLL = $(OVMF_BUILD_DIR)/X64/EnrollDefaultKeys.efi
 OVMF_SHELL =  $(OVMF_BUILD_DIR)/X64/Shell.efi
 OVMF_IMAGES := OVMF_CODE.fd OVMF_CODE_4M.fd OVMF_CODE.secboot.fd OVMF_CODE_4M.secboot.fd OVMF_VARS.fd OVMF_VARS_4M.fd
 OVMF_BINARIES = $(OVMF_ENROLL) $(OVMF_SHELL)
-OVMF_BINARIES += $(prefix debian/ovmf-install/,$(OVMF_IMAGES))
+OVMF_BINARIES += $(addprefix debian/ovmf-install/,$(OVMF_IMAGES))
 
 QEMU_EFI_BUILD_DIR = Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)
 
