@@ -104,10 +104,8 @@ debian/oem-string-%: debian/PkKek-1-%.pem
 	tr -d '\n' < $< | \
 		sed -e 's/.*-----BEGIN CERTIFICATE-----/4e32566d-8e9e-4f52-81d3-5bb9715f9727:/' -e 's/-----END CERTIFICATE-----//' > $@
 
-debian/iso-root/shell.img: VFAT_ROOT=debian/vfat-root
-debian/iso-root/shell.img: $(OVMF_SHELL) $(OVMF_ENROLL)
-	rm -rf debian/iso-root
-	mkdir debian/iso-root
+debian/shell.img: VFAT_ROOT=debian/vfat-root
+debian/shell.img: $(OVMF_SHELL) $(OVMF_ENROLL)
 	rm -rf $(VFAT_ROOT)
 	mkdir -p $(VFAT_ROOT)/efi/boot
 	cp $(OVMF_SHELL) $(VFAT_ROOT)/efi/boot/bootx64.efi
@@ -115,7 +113,10 @@ debian/iso-root/shell.img: $(OVMF_SHELL) $(OVMF_ENROLL)
 	qemu-img convert --image-opts \
 		driver=vvfat,floppy=on,fat-type=12,label=UEFI_SHELL,dir=$(VFAT_ROOT) $@
 
-debian/UefiShell.iso: debian/iso-root/shell.img
+debian/UefiShell.iso: debian/shell.img
+	rm -rf debian/iso-root
+	mkdir -p debian/iso-root
+	cp $< debian/iso-root
 	xorriso --as mkisofs -input-charset ASCII -J -rational-rock \
 		-e `basename $<` -no-emul-boot -o $@ `dirname $<`
 
