@@ -56,6 +56,10 @@ OVMF_IMAGES := $(addprefix debian/ovmf-install/,OVMF_CODE.fd OVMF_CODE_4M.fd OVM
 OVMF_PREENROLLED_VARS := $(addprefix debian/ovmf-install/,OVMF_VARS.ms.fd OVMF_VARS_4M.ms.fd OVMF_VARS_4M.snakeoil.fd)
 
 QEMU_EFI_BUILD_DIR = Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)
+AAVMF_BUILD_DIR = Build/ArmVirtQemu-AARCH64/RELEASE_$(EDK2_TOOLCHAIN)
+AAVMF_ENROLL    = $(AAVMF_BUILD_DIR)/AARCH64/EnrollDefaultKeys.efi
+AAVMF_SHELL     = $(AAVMF_BUILD_DIR)/AARCH64/Shell.efi
+AAVMF_BINARIES  = $(AAVMF_ENROLL) $(AAVMF_SHELL)
 
 build-ovmf: $(OVMF_BINARIES) $(OVMF_IMAGES) $(OVMF_PREENROLLED_VARS)
 $(OVMF_BINARIES) $(OVMF_IMAGES): EDK2_HOST_ARCH=X64
@@ -104,6 +108,10 @@ debian/oem-string-%: debian/PkKek-1-%.pem
 	tr -d '\n' < $< | \
 		sed -e 's/.*-----BEGIN CERTIFICATE-----/4e32566d-8e9e-4f52-81d3-5bb9715f9727:/' -e 's/-----END CERTIFICATE-----//' > $@
 
+debian/shell.aa64.img: VFAT_ROOT=debian/vfat-root-aa64
+debian/shell.aa64.img: SHELL_BIN=$(AAVMF_SHELL)
+debian/shell.aa64.img: ENROLL_BIN=$(AAVMF_ENROLL)
+debian/shell.aa64.img: $(AAVMF_SHELL) $(AAVMF_ENROLL)
 debian/shell.x64.img: VFAT_ROOT=debian/vfat-root-x64
 debian/shell.x64.img: SHELL_BIN=$(OVMF_SHELL)
 debian/shell.x64.img: ENROLL_BIN=$(OVMF_ENROLL)
@@ -162,7 +170,8 @@ build-qemu-efi: debian/setup-build-stamp
 	dd if=$(QEMU_EFI_BUILD_DIR)/FV/QEMU_EFI.fd of=$(QEMU_EFI_BUILD_DIR)/FV/$(FW_NAME)_CODE.fd conv=notrunc
 	dd if=/dev/zero of=$(QEMU_EFI_BUILD_DIR)/FV/$(FW_NAME)_VARS.fd bs=1M seek=64 count=0
 
-build-qemu-efi-aarch64: ArmPkg/Library/GccLto/liblto-aarch64.a
+build-qemu-efi-aarch64: $(AAVMF_BINARIES)
+$(AAVMF_BINARIES): ArmPkg/Library/GccLto/liblto-aarch64.a
 	$(MAKE) -f debian/rules build-qemu-efi EDK2_ARCH_DIR=AArch64 EDK2_HOST_ARCH=AARCH64 FW_NAME=AAVMF
 
 build-qemu-efi-arm: ArmPkg/Library/GccLto/liblto-arm.a
