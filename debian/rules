@@ -53,11 +53,11 @@ OVMF_ENROLL = $(OVMF_BUILD_DIR)/X64/EnrollDefaultKeys.efi
 OVMF_SHELL =  $(OVMF_BUILD_DIR)/X64/Shell.efi
 OVMF_BINARIES = $(OVMF_ENROLL) $(OVMF_SHELL)
 OVMF_IMAGES := $(addprefix debian/ovmf-install/,OVMF_CODE.fd OVMF_CODE_4M.fd OVMF_CODE.secboot.fd OVMF_CODE_4M.secboot.fd OVMF_VARS.fd OVMF_VARS_4M.fd)
+OVMF_PREENROLLED_VARS := $(addprefix debian/ovmf-install/,OVMF_VARS.ms.fd OVMF_VARS_4M.ms.fd OVMF_VARS_4M.snakeoil.fd)
 
 QEMU_EFI_BUILD_DIR = Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)
 
-build-ovmf: $(OVMF_BINARIES) $(OVMF_IMAGES) debian/ovmf-install/OVMF_VARS.ms.fd debian/ovmf-install/OVMF_VARS_4M.ms.fd debian/ovmf-install/OVMF_VARS_4M.snakeoil.fd
-
+build-ovmf: $(OVMF_BINARIES) $(OVMF_IMAGES) $(OVMF_PREENROLLED_VARS)
 $(OVMF_BINARIES) $(OVMF_IMAGES): EDK2_HOST_ARCH=X64
 $(OVMF_BINARIES) $(OVMF_IMAGES): debian/setup-build-stamp
 	cd UefiCpuPkg/ResetVector/Vtf0 && python3 Build.py
