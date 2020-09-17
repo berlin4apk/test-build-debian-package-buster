@@ -1,4 +1,4 @@
-edk2 (0~20181115.85588389-3+deb10u2) UNRELEASED; urgency=medium
+edk2 (0~20181115.85588389-3+deb10u2) buster; urgency=medium
 
   * Fix integer overflow in DxeImageVerificationHandler. (CVE-2019-14562)
     (Closes: #968819)
@@ -6,7 +6,7 @@ edk2 (0~20181115.85588389-3+deb10u2) UNRELEASED; urgency=medium
      - d/p/0002-SecurityPkg-DxeImageVerificationLib-assign-WinCertif.patch
      - d/p/0003-SecurityPkg-DxeImageVerificationLib-catch-alignment-.patch
 
- -- dann frazier <dannf@debian.org>  Thu, 17 Sep 2020 13:37:25 -0600
+ -- dann frazier <dannf@debian.org>  Thu, 17 Sep 2020 13:45:52 -0600
 
 edk2 (0~20181115.85588389-3+deb10u1) buster; urgency=medium
 
