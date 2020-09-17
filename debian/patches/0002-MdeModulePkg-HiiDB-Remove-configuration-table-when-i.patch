@@ -1,0 +1,51 @@
+From c32be82e99ef272e7fa742c2f06ff9a4c3756613 Mon Sep 17 00:00:00 2001
+From: Dandan Bi <dandan.bi@intel.com>
+Date: Tue, 24 Sep 2019 11:17:52 +0800
+Subject: [PATCH 02/17] MdeModulePkg/HiiDB: Remove configuration table when
+ it's freed (CVE-2019-14586)
+
+REF: https://bugzilla.tianocore.org/show_bug.cgi?id=1995
+
+Fix the corner case issue that the original configuration runtime
+memory is freed, but it is still exposed to the OS runtime.
+So this patch is to remove the configuration table to avoid being
+used in OS runtime when the configuration runtime memory is freed.
+
+Cc: Liming Gao <liming.gao@intel.com>
+Cc: Eric Dong <eric.dong@intel.com>
+Cc: Jian J Wang <jian.j.wang@intel.com>
+Signed-off-by: Dandan Bi <dandan.bi@intel.com>
+Reviewed-by: Eric Dong <eric.dong@intel.com>
+Reviewed-by: Jian J Wang <jian.j.wang@intel.com>
+[dannf: Minor context adjustments]
+
+Origin: https://github.com/tianocore/edk2/commit/c32be82e99ef272e7fa742c2f06ff9a4c3756613
+Bug: https://bugzilla.tianocore.org/show_bug.cgi?id=1995
+Last-Update: 2020-04-03
+
+Index: edk2-0~20180205.c0d9813c/MdeModulePkg/Universal/HiiDatabaseDxe/Database.c
+===================================================================
+--- edk2-0~20180205.c0d9813c.orig/MdeModulePkg/Universal/HiiDatabaseDxe/Database.c
++++ edk2-0~20180205.c0d9813c/MdeModulePkg/Universal/HiiDatabaseDxe/Database.c
+@@ -3372,6 +3372,10 @@ HiiGetConfigRespInfo(
+       if (gRTConfigRespBuffer == NULL){
+         FreePool(ConfigAltResp);
+         DEBUG ((DEBUG_ERROR, "Not enough memory resource to get the ConfigResp string.\n"));
++        //
++        // Remove from the System Table when the configuration runtime buffer is freed.
++        //
++        gBS->InstallConfigurationTable (&gEfiHiiConfigRoutingProtocolGuid, NULL);
+         return EFI_OUT_OF_RESOURCES;
+       }
+     } else {
+@@ -3422,6 +3426,10 @@ HiiGetDatabaseInfo(
+     gRTDatabaseInfoBuffer = AllocateRuntimeZeroPool(DatabaseInfoSize);
+     if (gRTDatabaseInfoBuffer == NULL){
+       DEBUG ((DEBUG_ERROR, "Not enough memory resource to get the HiiDatabase info.\n"));
++      //
++      // Remove from the System Table when the configuration runtime buffer is freed.
++      //
++      gBS->InstallConfigurationTable (&gEfiHiiDatabaseProtocolGuid, NULL);
+       return EFI_OUT_OF_RESOURCES;
+     }
+   } else {

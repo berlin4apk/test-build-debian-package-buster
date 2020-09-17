@@ -1,0 +1,37 @@
+From cb30c8f25162e6d8142c6b098f14c1e4e7f125ce Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <lersek@redhat.com>
+Date: Wed, 25 Sep 2019 13:41:57 +0200
+Subject: [PATCH 14/17] SecurityPkg/DxeImageVerificationLib: plug Data leak in
+ IsForbiddenByDbx() (CVE-2019-14575)
+
+REF: https://bugzilla.tianocore.org/show_bug.cgi?id=1608
+
+If the second GetVariable() call for "dbx" fails, in IsForbiddenByDbx(),
+we have to free Data. Jump to "Done" for that.
+
+Cc: Jiewen Yao <jiewen.yao@intel.com>
+Cc: Chao Zhang <chao.b.zhang@intel.com>
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Jiewen Yao <jiewen.yao@intel.com>
+
+Origin: https://github.com/tianocore/edk2/commit/cb30c8f25162e6d8142c6b098f14c1e4e7f125ce
+Bug: https://bugzilla.tianocore.org/show_bug.cgi?id=1608
+Bug-Debian: https://bugs.debian.org/952935
+Last-Update: 2020-03-16
+
+diff --git a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+index 470a0d20ef..f20640af68 100644
+--- a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
++++ b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+@@ -1274,7 +1274,7 @@ IsForbiddenByDbx (
+ 
+   Status = gRT->GetVariable (EFI_IMAGE_SECURITY_DATABASE1, &gEfiImageSecurityDatabaseGuid, NULL, &DataSize, (VOID *) Data);
+   if (EFI_ERROR (Status)) {
+-    return IsForbidden;
++    goto Done;
+   }
+ 
+   //
+-- 
+2.25.1
+

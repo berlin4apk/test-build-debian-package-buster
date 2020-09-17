@@ -1,0 +1,55 @@
+From c230c002accc4281ccc57bba7153a9b2d9b9ccd3 Mon Sep 17 00:00:00 2001
+From: Jian J Wang <jian.j.wang@intel.com>
+Date: Fri, 14 Feb 2020 13:50:32 +0800
+Subject: [PATCH 16/17] SecurityPkg/DxeImageVerificationLib: change
+ IsCertHashFoundInDatabase name (CVE-2019-14575)
+
+IsCertHashFoundInDatabase() is actually used only for searching dbx,
+according to the function logic, its comments and its use cases. Changing
+it to IsCertHashFoundInDbx to avoid confusion.
+
+REF: https://bugzilla.tianocore.org/show_bug.cgi?id=1608
+Cc: Jiewen Yao <jiewen.yao@intel.com>
+Cc: Chao Zhang <chao.b.zhang@intel.com>
+Signed-off-by: Jian J Wang <jian.j.wang@intel.com>
+Reviewed-by: Jiewen Yao <jiewen.yao@intel.com>
+
+Origin: https://github.com/tianocore/edk2/commit/c230c002accc4281ccc57bba7153a9b2d9b9ccd3
+Bug: https://bugzilla.tianocore.org/show_bug.cgi?id=1608
+Bug-Debian: https://bugs.debian.org/952935
+Last-Update: 2020-03-16
+
+diff --git a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+index 0e1587bc3c..b7fa8ea8c5 100644
+--- a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
++++ b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+@@ -829,7 +829,7 @@ AddImageExeInfo (
+ 
+ **/
+ EFI_STATUS
+-IsCertHashFoundInDatabase (
++IsCertHashFoundInDbx (
+   IN  UINT8               *Certificate,
+   IN  UINTN               CertSize,
+   IN  EFI_SIGNATURE_LIST  *SignatureList,
+@@ -1362,7 +1362,7 @@ IsForbiddenByDbx (
+     //
+     CertPtr = CertPtr + sizeof (UINT32) + CertSize;
+ 
+-    Status = IsCertHashFoundInDatabase (Cert, CertSize, (EFI_SIGNATURE_LIST *)Data, DataSize, &RevocationTime, &IsFound);
++    Status = IsCertHashFoundInDbx (Cert, CertSize, (EFI_SIGNATURE_LIST *)Data, DataSize, &RevocationTime, &IsFound);
+     if (EFI_ERROR (Status)) {
+       //
+       // Error in searching dbx. Consider it as 'found'. RevocationTime might
+@@ -1528,7 +1528,7 @@ IsAllowedByDb (
+             //
+             // Here We still need to check if this RootCert's Hash is revoked
+             //
+-            Status = IsCertHashFoundInDatabase (RootCert, RootCertSize, (EFI_SIGNATURE_LIST *)DbxData, DbxDataSize, &RevocationTime, &IsFound);
++            Status = IsCertHashFoundInDbx (RootCert, RootCertSize, (EFI_SIGNATURE_LIST *)DbxData, DbxDataSize, &RevocationTime, &IsFound);
+             if (EFI_ERROR (Status)) {
+               //
+               // Error in searching dbx. Consider it as 'found'. RevocationTime might
+-- 
+2.25.1
+

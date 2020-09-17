@@ -1,0 +1,37 @@
+From c13742b180095e5181e41dffda954581ecbd9b9c Mon Sep 17 00:00:00 2001
+From: Jian J Wang <jian.j.wang@intel.com>
+Date: Thu, 10 Oct 2019 11:14:47 +0800
+Subject: [PATCH 08/17] SecurityPkg/DxeImageVerificationLib: reject
+ CertStack.CertNumber==0 per DBX (CVE-2019-14575)
+
+In case the signers' certificate stack, retrieved from the PE/COFF image's
+Authenticode blob, has zero elements (=there are zero signer certificates),
+then we should consider the image forbidden by DBX, not accepted by DBX.
+
+Cc: Jiewen Yao <jiewen.yao@intel.com>
+Cc: Chao Zhang <chao.b.zhang@intel.com>
+Signed-off-by: Jian J Wang <jian.j.wang@intel.com>
+Reviewed-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Jiewen Yao <jiewen.yao@intel.com>
+
+Origin: https://github.com/tianocore/edk2/commit/c13742b180095e5181e41dffda954581ecbd9b9c
+Bug: https://bugzilla.tianocore.org/show_bug.cgi?id=1608
+Bug-Debian: https://bugs.debian.org/952935
+Last-Update: 2020-03-16
+
+diff --git a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+index 74dbffa122..5dcd6efed5 100644
+--- a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
++++ b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+@@ -1326,7 +1326,7 @@ IsForbiddenByDbx (
+   //       UINT8  Certn[];
+   //
+   Pkcs7GetSigners (AuthData, AuthDataSize, &CertBuffer, &BufferLength, &TrustedCert, &TrustedCertLength);
+-  if ((BufferLength == 0) || (CertBuffer == NULL)) {
++  if ((BufferLength == 0) || (CertBuffer == NULL) || (*CertBuffer) == 0) {
+     IsForbidden = TRUE;
+     goto Done;
+   }
+-- 
+2.25.1
+

@@ -1,3 +1,18 @@
+edk2 (0~20181115.85588389-3+deb10u1) buster; urgency=medium
+
+  * Fix numeric truncation in S3BootScript[Save]*() API. (CVE-2019-14563)
+  * Fix use-after-free in PcdHiiOsRuntimeSupport. (CVE-2019-14586)
+  * Clear memory before free to avoid potential password leak.
+    (CVE-2019-14558)
+  * Fix double-unmap in SdMmcCreateTrb(). This did not impact any
+    of the images built from this package. (CVE-2019-14587)
+  * Fix memory leak in ArpOnFrameRcvdDpc(). (CVE-2019-14559)
+  * Fix issue that could allow an efi image with a blacklisted hash in the
+    dbx to be loaded. (CVE-2019-14575) (Closes: 952935)
+  * Fix a memory leak in the ARP handler. (CVE-2019-14559) (Closes: #952926)
+
+ -- dann frazier <dannf@debian.org>  Thu, 23 Apr 2020 13:33:06 -0600
+
 edk2 (0~20181115.85588389-3) unstable; urgency=medium
 
   * Security fixes (Closes: #924615):
