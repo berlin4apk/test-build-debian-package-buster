@@ -7,6 +7,8 @@ edk2 (2020.08-1) UNRELEASED; urgency=medium
      - d/p/0003-SecurityPkg-DxeImageVerificationLib-catch-alignment-.patch
   * Drop patch no longer required due to upstream fixes:
      - d/p/no-missing-braces.diff
+  * Refresh patch:
+     - d/p/no-stack-protector-all-archs.diff
 
  -- dann frazier <dannf@debian.org>  Mon, 28 Sep 2020 13:37:21 -0600
 
