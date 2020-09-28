@@ -5,6 +5,3 @@ ovmf-vars-generator-Pass-OEM-Strings-to-the-guest.patch
 ovmf-vars-generator-ignore-qemu-warnings.patch
 python3.patch
 ovmf-vars-generator-no-defaults.patch
-0001-SecurityPkg-DxeImageVerificationLib-extract-SecDataD.patch
-0002-SecurityPkg-DxeImageVerificationLib-assign-WinCertif.patch
-0003-SecurityPkg-DxeImageVerificationLib-catch-alignment-.patch
