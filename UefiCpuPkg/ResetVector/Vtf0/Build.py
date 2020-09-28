@@ -33,15 +33,15 @@ for arch in ('ia32', 'x64'):
             'Vtf0.nasmb',
             )
         ret = RunCommand(commandLine)
-        print ('\tASM\t' + output)
+        print '\tASM\t' + output
         if ret != 0: sys.exit(ret)
 
         commandLine = (
-            'python3',
+            'python',
             'Tools/FixupForRawSection.py',
             output,
             )
-        print ('\tFIXUP\t' + output)
+        print '\tFIXUP\t' + output
         ret = RunCommand(commandLine)
         if ret != 0: sys.exit(ret)
 
