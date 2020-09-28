@@ -1,4 +1,4 @@
-edk2 (2020.08-1) UNRELEASED; urgency=medium
+edk2 (2020.08-1) unstable; urgency=medium
 
   * New upstream release, based on edk2-stable202008 tag.
   * Drop patches merged upstream:
@@ -10,7 +10,7 @@ edk2 (2020.08-1) UNRELEASED; urgency=medium
   * Refresh patch:
      - d/p/no-stack-protector-all-archs.diff
 
- -- dann frazier <dannf@debian.org>  Mon, 28 Sep 2020 13:37:21 -0600
+ -- dann frazier <dannf@debian.org>  Mon, 28 Sep 2020 13:40:05 -0600
 
 edk2 (2020.05-5) unstable; urgency=medium
 
