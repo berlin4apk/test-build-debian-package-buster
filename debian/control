@@ -13,7 +13,7 @@ Build-Depends: bc,
  python3,
  python3-distutils,
  qemu-utils,
- qemu-system-x86,
+ qemu-system-x86 (>= 1:2.12+dfsg-1),
  uuid-dev,
  xorriso,
 Standards-Version: 4.5.0
