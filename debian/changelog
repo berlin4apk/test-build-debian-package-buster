@@ -1,10 +1,11 @@
-edk2 (2020.08-2) UNRELEASED; urgency=medium
+edk2 (2020.11-1) UNRELEASED; urgency=medium
 
+  * New upstream release, based on edk2-stable202011 tag.
   * Version the build-dep on qemu-system-x86 to ensure it is new enough
     to support setting smbios OEM strings on the command line. Thanks to
     Christian Ehrhardt. LP: #1900846.
 
- -- dann frazier <dannf@debian.org>  Thu, 22 Oct 2020 13:46:25 -0600
+ -- dann frazier <dannf@debian.org>  Mon, 30 Nov 2020 11:02:49 -0700
 
 edk2 (2020.08-1) unstable; urgency=medium
 
