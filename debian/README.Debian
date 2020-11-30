@@ -36,6 +36,10 @@ OVMF_VARS_4M.ms.fd
   already activated. Using this with OVMF_CODE.ms.fd will boot a
   guest directly in Secure Boot mode.
 
+OVMF32_CODE_4M.secboot.fd
+OVMF32_VARS_4M.fd
+  These images are the same as their "OVMF" variants, but for 32-bit guests.
+
 OVMF_CODE.fd
 OVMF_CODE.ms.fd
 OVMF_CODE.secboot.fd
@@ -59,4 +63,4 @@ PkKek-1-snakeoil.pem
   OVMF_VARS.snakeoil.fd template. The password for the key is
   'snakeoil'.
 
- -- dann frazier <dannf@debian.org>, Wed,  5 Aug 2020 17:09:39 -0600
+ -- dann frazier <dannf@debian.org>, Fri, 11 Dec 2020 17:30:59 -0700

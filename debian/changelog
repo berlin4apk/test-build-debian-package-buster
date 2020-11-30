@@ -4,6 +4,7 @@ edk2 (2020.11-1) UNRELEASED; urgency=medium
   * Version the build-dep on qemu-system-x86 to ensure it is new enough
     to support setting smbios OEM strings on the command line. Thanks to
     Christian Ehrhardt. LP: #1900846.
+  * Introduce ovmf-ia32 package. (Closes: #842683)
 
  -- dann frazier <dannf@debian.org>  Mon, 30 Nov 2020 11:02:49 -0700
 

@@ -26,6 +26,9 @@ OVMF_2M_FLAGS = $(OVMF_COMMON_FLAGS) -DFD_SIZE_2MB
 OVMF_4M_FLAGS = $(OVMF_COMMON_FLAGS) -DFD_SIZE_4MB
 OVMF_2M_SMM_FLAGS = $(OVMF_2M_FLAGS) -DSMM_REQUIRE=TRUE
 OVMF_4M_SMM_FLAGS = $(OVMF_4M_FLAGS) -DSMM_REQUIRE=TRUE
+OVMF32_4M_FLAGS = $(OVMF_COMMON_FLAGS) -DFD_SIZE_4MB
+OVMF32_4M_SMM_FLAGS =  $(OVMF32_4M_FLAGS) -DSMM_REQUIRE=TRUE
+
 AAVMF_FLAGS  = $(COMMON_FLAGS)
 
 OVMF_VARS_GENERATOR = ./qemu-ovmf-secureboot-1-1-3/ovmf-vars-generator
@@ -41,7 +44,7 @@ undefine CONF_PATH
 %:
 	dh $@
 
-override_dh_auto_build: build-qemu-efi-aarch64 build-qemu-efi-arm build-ovmf
+override_dh_auto_build: build-qemu-efi-aarch64 build-qemu-efi-arm build-ovmf build-ovmf32
 
 debian/setup-build-stamp:
 	set -e; . ./edksetup.sh; \
@@ -55,11 +58,30 @@ OVMF_BINARIES = $(OVMF_ENROLL) $(OVMF_SHELL)
 OVMF_IMAGES := $(addprefix debian/ovmf-install/,OVMF_CODE.fd OVMF_CODE_4M.fd OVMF_CODE.secboot.fd OVMF_CODE_4M.secboot.fd OVMF_VARS.fd OVMF_VARS_4M.fd)
 OVMF_PREENROLLED_VARS := $(addprefix debian/ovmf-install/,OVMF_VARS.ms.fd OVMF_VARS_4M.ms.fd OVMF_VARS_4M.snakeoil.fd)
 
+OVMF32_BUILD_DIR = Build/OvmfIa32/RELEASE_$(EDK2_TOOLCHAIN)
+OVMF32_SHELL = $(OVMF32_BUILD_DIR)/IA32/Shell.efi
+OVMF32_BINARIES = $(OVMF32_SHELL)
+OVMF32_IMAGES  := $(addprefix debian/ovmf32-install/,OVMF32_CODE_4M.secboot.fd OVMF_VARS_4M.fd)
+
 QEMU_EFI_BUILD_DIR = Build/ArmVirtQemu-$(EDK2_HOST_ARCH)/RELEASE_$(EDK2_TOOLCHAIN)
 AAVMF_BUILD_DIR = Build/ArmVirtQemu-AARCH64/RELEASE_$(EDK2_TOOLCHAIN)
 AAVMF_ENROLL    = $(AAVMF_BUILD_DIR)/AARCH64/EnrollDefaultKeys.efi
 AAVMF_SHELL     = $(AAVMF_BUILD_DIR)/AARCH64/Shell.efi
 AAVMF_BINARIES  = $(AAVMF_ENROLL) $(AAVMF_SHELL)
+
+build-ovmf32: $(OVMF32_BINARIES) $(OVMF32_IMAGES)
+$(OVMF32_BINARIES) $(OVMF32_IMAGES): debian/setup-build-stamp
+	rm -rf debian/ovmf32-install
+	mkdir debian/ovmf32-install
+	set -e; . ./edksetup.sh; \
+		build -a IA32 \
+			-t $(EDK2_TOOLCHAIN) \
+			-p OvmfPkg/OvmfPkgIa32.dsc \
+			$(OVMF32_4M_SMM_FLAGS) -b RELEASE
+	cp $(OVMF32_BUILD_DIR)/FV/OVMF_CODE.fd \
+		debian/ovmf32-install/OVMF32_CODE_4M.secboot.fd
+	cp $(OVMF32_BUILD_DIR)/FV/OVMF_VARS.fd \
+		debian/ovmf32-install/OVMF32_VARS_4M.fd
 
 build-ovmf: $(OVMF_BINARIES) $(OVMF_IMAGES) $(OVMF_PREENROLLED_VARS)
 $(OVMF_BINARIES) $(OVMF_IMAGES): EDK2_HOST_ARCH=X64
@@ -184,7 +206,8 @@ override_dh_auto_clean:
 		make -C BaseTools clean; \
 	fi
 	rm -rf Conf/.cache Build .pc-post
-	rm -rf debian/ovmf-install debian/iso-root-* debian/vfat-root-*
+	rm -rf debian/ovmf-install debian/ovmf32-install
+	rm -rf debian/iso-root-* debian/vfat-root-*
 	rm -f debian/PkKek-1-vendor.pem
 	rm -f debian/oem-string-vendor debian/oem-string-snakeoil
 	rm -f debian/shell.*.img debian/UefiShell.*.iso
@@ -215,4 +238,4 @@ get-orig-source:
 		edk2-$(DEB_VERSION_UPSTREAM)
 	rm -rf edk2.tmp edk2-$(DEB_VERSION_UPSTREAM)
 
-.PHONY: build-ovmf build-qemu-efi build-qemu-efi-aarch64 build-qemu-efi-arm
+.PHONY: build-ovmf build-ovmf32 build-qemu-efi build-qemu-efi-aarch64 build-qemu-efi-arm
