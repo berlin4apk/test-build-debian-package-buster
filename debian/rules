@@ -64,7 +64,6 @@ AAVMF_BINARIES  = $(AAVMF_ENROLL) $(AAVMF_SHELL)
 build-ovmf: $(OVMF_BINARIES) $(OVMF_IMAGES) $(OVMF_PREENROLLED_VARS)
 $(OVMF_BINARIES) $(OVMF_IMAGES): EDK2_HOST_ARCH=X64
 $(OVMF_BINARIES) $(OVMF_IMAGES): debian/setup-build-stamp
-	cd UefiCpuPkg/ResetVector/Vtf0 && python3 Build.py
 	rm -rf debian/ovmf-install
 	mkdir debian/ovmf-install
 	set -e; . ./edksetup.sh; \
