@@ -5,6 +5,11 @@ edk2 (2020.11-1) UNRELEASED; urgency=medium
     to support setting smbios OEM strings on the command line. Thanks to
     Christian Ehrhardt. LP: #1900846.
   * Introduce ovmf-ia32 package. (Closes: #842683)
+  * Switch OVMF_CODE_4M images to use a 32-bit PEI phase which supports
+    S3 suspend. This avoids having to disable S3 in QEMU to use the
+    SMM-enforcing secboot variant. Non-4M images are for backwards
+    compatibility only, and remain with a 64-bit PEI phase. LP: #1903681.
+    (Closes: #973783)
 
  -- dann frazier <dannf@debian.org>  Mon, 30 Nov 2020 11:02:49 -0700
 
