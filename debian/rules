@@ -70,35 +70,36 @@ $(OVMF_BINARIES) $(OVMF_IMAGES): debian/setup-build-stamp
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
-			$(OVMF_2M_FLAGS) -b RELEASE; \
-		cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
-			$(OVMF_BUILD_DIR)/FV/OVMF.fd \
-			debian/ovmf-install/; \
-		cp $(OVMF_BUILD_DIR)/FV/OVMF_VARS.fd \
-			debian/ovmf-install/; \
-		rm -rf Build/Ovmf$(EDK2_HOST_ARCH); \
+			$(OVMF_2M_FLAGS) -b RELEASE
+	cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
+		$(OVMF_BUILD_DIR)/FV/OVMF.fd debian/ovmf-install/
+	cp $(OVMF_BUILD_DIR)/FV/OVMF_VARS.fd debian/ovmf-install/
+	rm -rf Build/Ovmf$(EDK2_HOST_ARCH)
+	set -e; . ./edksetup.sh; \
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
-			$(OVMF_4M_FLAGS) -b RELEASE; \
-		cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
-			debian/ovmf-install/OVMF_CODE_4M.fd; \
-		cp $(OVMF_BUILD_DIR)/FV/OVMF_VARS.fd \
-			debian/ovmf-install/OVMF_VARS_4M.fd; \
-		rm -rf Build/Ovmf$(EDK2_HOST_ARCH); \
+			$(OVMF_4M_FLAGS) -b RELEASE
+	cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
+		debian/ovmf-install/OVMF_CODE_4M.fd
+	cp $(OVMF_BUILD_DIR)/FV/OVMF_VARS.fd \
+		debian/ovmf-install/OVMF_VARS_4M.fd
+	rm -rf Build/Ovmf$(EDK2_HOST_ARCH)
+	set -e; . ./edksetup.sh; \
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
-			$(OVMF_2M_SMM_FLAGS) -b RELEASE; \
-		cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
-			debian/ovmf-install/OVMF_CODE.secboot.fd; \
-		rm -rf Build/Ovmf$(EDK2_HOST_ARCH); \
+			$(OVMF_2M_SMM_FLAGS) -b RELEASE
+	cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
+		debian/ovmf-install/OVMF_CODE.secboot.fd
+	rm -rf Build/Ovmf$(EDK2_HOST_ARCH)
+	set -e; . ./edksetup.sh; \
 		build -a $(EDK2_HOST_ARCH) \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
-			$(OVMF_4M_SMM_FLAGS) -b RELEASE; \
-		cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
-			debian/ovmf-install/OVMF_CODE_4M.secboot.fd; \
+			$(OVMF_4M_SMM_FLAGS) -b RELEASE
+	cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
+		debian/ovmf-install/OVMF_CODE_4M.secboot.fd
 
 debian/PkKek-1-vendor.pem: debian/PkKek-1-$(DEB_VENDOR).pem
 	ln -sf `basename $<` $@
