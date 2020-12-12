@@ -200,11 +200,8 @@ build-qemu-efi-arm: ArmPkg/Library/GccLto/liblto-arm.a
 	$(MAKE) -f debian/rules build-qemu-efi EDK2_ARCH_DIR=Arm EDK2_HOST_ARCH=ARM FW_NAME=AAVMF32
 
 override_dh_auto_clean:
-	set -e; \
-	if [ -d BaseTools/Source/C/bin ]; then \
-		. ./edksetup.sh; build clean; \
-		make -C BaseTools clean; \
-	fi
+	-. ./edksetup.sh; build clean
+	make -C BaseTools clean
 	rm -rf Conf/.cache Build .pc-post
 	rm -rf debian/ovmf-install debian/ovmf32-install
 	rm -rf debian/iso-root-* debian/vfat-root-*
