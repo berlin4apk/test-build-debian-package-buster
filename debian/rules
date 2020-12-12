@@ -84,21 +84,20 @@ $(OVMF32_BINARIES) $(OVMF32_IMAGES): debian/setup-build-stamp
 		debian/ovmf32-install/OVMF32_VARS_4M.fd
 
 build-ovmf: $(OVMF_BINARIES) $(OVMF_IMAGES) $(OVMF_PREENROLLED_VARS)
-$(OVMF_BINARIES) $(OVMF_IMAGES): EDK2_HOST_ARCH=X64
 $(OVMF_BINARIES) $(OVMF_IMAGES): debian/setup-build-stamp
 	rm -rf debian/ovmf-install
 	mkdir debian/ovmf-install
 	set -e; . ./edksetup.sh; \
-		build -a $(EDK2_HOST_ARCH) \
+		build -a X64 \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
 			$(OVMF_2M_FLAGS) -b RELEASE
 	cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
 		$(OVMF_BUILD_DIR)/FV/OVMF.fd debian/ovmf-install/
 	cp $(OVMF_BUILD_DIR)/FV/OVMF_VARS.fd debian/ovmf-install/
-	rm -rf Build/Ovmf$(EDK2_HOST_ARCH)
+	rm -rf Build/OvmfX64
 	set -e; . ./edksetup.sh; \
-		build -a $(EDK2_HOST_ARCH) \
+		build -a X64 \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
 			$(OVMF_4M_FLAGS) -b RELEASE
@@ -106,17 +105,17 @@ $(OVMF_BINARIES) $(OVMF_IMAGES): debian/setup-build-stamp
 		debian/ovmf-install/OVMF_CODE_4M.fd
 	cp $(OVMF_BUILD_DIR)/FV/OVMF_VARS.fd \
 		debian/ovmf-install/OVMF_VARS_4M.fd
-	rm -rf Build/Ovmf$(EDK2_HOST_ARCH)
+	rm -rf Build/OvmfX64
 	set -e; . ./edksetup.sh; \
-		build -a $(EDK2_HOST_ARCH) \
+		build -a X64 \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
 			$(OVMF_2M_SMM_FLAGS) -b RELEASE
 	cp $(OVMF_BUILD_DIR)/FV/OVMF_CODE.fd \
 		debian/ovmf-install/OVMF_CODE.secboot.fd
-	rm -rf Build/Ovmf$(EDK2_HOST_ARCH)
+	rm -rf Build/OvmfX64
 	set -e; . ./edksetup.sh; \
-		build -a $(EDK2_HOST_ARCH) \
+		build -a X64 \
 			-t $(EDK2_TOOLCHAIN) \
 			-p OvmfPkg/OvmfPkgX64.dsc \
 			$(OVMF_4M_SMM_FLAGS) -b RELEASE
