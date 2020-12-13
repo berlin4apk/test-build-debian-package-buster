@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright 2019 Canonical Ltd.
+# Copyright 2019-2020 Canonical Ltd.
 # Authors:
 # - dann frazier <dann.frazier@canonical.com>
 #
@@ -23,94 +23,179 @@ import pexpect
 import shutil
 import sys
 import tempfile
-
-
-ArchImageMap = {
-    'AARCH64': ['/usr/share/AAVMF/AAVMF_CODE.fd',
-                '/usr/share/AAVMF/AAVMF_VARS.fd'],
-    'ARM': ['/usr/share/AAVMF/AAVMF32_CODE.fd',
-            '/usr/share/AAVMF/AAVMF32_VARS.fd'],
-    'IA32': ['/usr/share/OVMF/OVMF32_CODE_4M.secboot.fd',
-             '/usr/share/OVMF/OVMF32_VARS_4M.fd'],
-    'X64': ['/usr/share/OVMF/OVMF_CODE.fd',
-            '/usr/share/OVMF/OVMF_VARS.fd']
-}
+import unittest
 
 
 def cleanup_file(f):
     os.unlink(f)
 
 
-def spawn_qemu(arch):
-    if arch == 'IA32':
-        cmd = ['/usr/bin/qemu-system-i386']
-    elif arch == 'X64':
-        cmd = ['/usr/bin/qemu-system-x86_64']
-    elif arch in ['AARCH64', 'ARM']:
-        cmd = ['/usr/bin/qemu-system-aarch64']
-    else:
-        raise ValueError
-
+class BootToShellTest(unittest.TestCase):
+    debug = False
     # Based on the args used by ovmf-vars-generator
-    cmd = cmd + ['-no-user-config', '-nodefaults', '-m', '256',
-                 '-smp', '2,sockets=2,cores=1,threads=1', '-display', 'none',
-                 '-serial', 'stdio']
+    Qemu_Common_Params = [
+        '-no-user-config', '-nodefaults',
+        '-m', '256',
+        '-smp', '2,sockets=2,cores=1,threads=1',
+        '-display', 'none',
+        '-serial', 'stdio',
+    ]
+    Qemu_Ovmf_Common_Params = [
+        '-chardev', 'pty,id=charserial1',
+        '-device', 'isa-serial,chardev=charserial1,id=serial1',
+    ]
+    Qemu_Qemu_Efi_Common_Params = [
+        '-machine', 'virt',
+        '-device', 'virtio-serial-device',
+    ]
 
-    if arch == 'IA32':
-        cmd = cmd + ['-machine', 'q35,accel=tcg']
-    elif arch == 'X64':
-        cmd = cmd + ['-machine', 'pc,accel=tcg']
-    if arch in ['IA32', 'X64']:
-        cmd = cmd + ['-chardev', 'pty,id=charserial1',
-                     '-device', 'isa-serial,chardev=charserial1,id=serial1']
-    elif arch in ['AARCH64', 'ARM']:
-        cmd = cmd + ['-machine', 'virt', '-cpu']
-        if arch == 'AARCH64':
-            cmd = cmd + ['cortex-a57']
-        elif arch == 'ARM':
-            cmd = cmd + ['cortex-a15']
-        else:
-            raise ValueError
-        cmd = cmd + ['-device', 'virtio-serial-device']
+    def gen_pflash_params(self, code_path, vars_template_path):
+        (vars_file, vars_path) = tempfile.mkstemp()
+        shutil.copy(vars_template_path, vars_path)
+        atexit.register(cleanup_file, vars_path)
 
-    codepath = ArchImageMap[arch][0]
-    (varsfile, varspath) = tempfile.mkstemp()
-    shutil.copy(ArchImageMap[arch][1], varspath)
-    atexit.register(cleanup_file, varspath)
-
-    cmd = cmd + [
-        '-drive',
-        'file=%s,if=pflash,format=raw,unit=0,readonly=on' % (codepath),
-        '-drive',
-        'file=%s,if=pflash,format=raw,unit=1,readonly=off' % (varspath),
+        return [
+            '-drive',
+            'file=%s,if=pflash,format=raw,unit=0,readonly=on' % (code_path),
+            '-drive',
+            'file=%s,if=pflash,format=raw,unit=1,readonly=off' % (vars_path),
         ]
 
-    return pexpect.spawn(' '.join(cmd))
+    def run_cmd_check_shell(self, cmd):
+        child = pexpect.spawn(' '.join(cmd))
+
+        if self.debug:
+            child.logfile = sys.stdout.buffer
+        try:
+            while True:
+                i = child.expect(
+                    [
+                        'Press .* or any other key to continue',
+                        'Shell> '
+                    ],
+                    timeout=60,
+                )
+                if i == 0:
+                    child.sendline('\x1b')
+                    continue
+                if i == 1:
+                    child.sendline('reset -s')
+                    break
+        except (pexpect.EOF, pexpect.TIMEOUT) as err:
+            self.fail("%s\n" % (err))
+
+    def test_aavmf(self):
+        cmd = [
+            'qemu-system-aarch64',
+            '-cpu', 'cortex-a57',
+        ] + self.Qemu_Common_Params + self.Qemu_Qemu_Efi_Common_Params
+        cmd = cmd + self.gen_pflash_params(
+            '/usr/share/AAVMF/AAVMF_CODE.fd',
+            '/usr/share/AAVMF/AAVMF_VARS.fd',
+        )
+        self.run_cmd_check_shell(cmd)
+
+    def test_aavmf32(self):
+        cmd = [
+            'qemu-system-aarch64',
+            '-cpu', 'cortex-a15',
+        ] + self.Qemu_Common_Params + self.Qemu_Qemu_Efi_Common_Params
+        cmd = cmd + self.gen_pflash_params(
+            '/usr/share/AAVMF/AAVMF32_CODE.fd',
+            '/usr/share/AAVMF/AAVMF32_VARS.fd',
+        )
+        self.run_cmd_check_shell(cmd)
+
+    def test_ovmf_pc(self):
+        cmd = [
+            'qemu-system-x86_64',
+            '-machine', 'pc,accel=tcg'
+        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
+        cmd = cmd + self.gen_pflash_params(
+            '/usr/share/OVMF/OVMF_CODE.fd',
+            '/usr/share/OVMF/OVMF_VARS.fd',
+        )
+        self.run_cmd_check_shell(cmd)
+
+    def test_ovmf_q35(self):
+        cmd = [
+            'qemu-system-x86_64',
+            '-machine', 'q35,accel=tcg'
+        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
+        cmd = cmd + self.gen_pflash_params(
+            '/usr/share/OVMF/OVMF_CODE.fd',
+            '/usr/share/OVMF/OVMF_VARS.fd',
+        )
+        self.run_cmd_check_shell(cmd)
+
+    def test_ovmf_secboot(self):
+        cmd = [
+            'qemu-system-x86_64',
+            '-machine', 'q35,accel=tcg',
+            '-global', 'ICH9-LPC.disable_s3=1',
+        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
+        cmd = cmd + self.gen_pflash_params(
+            '/usr/share/OVMF/OVMF_CODE.secboot.fd',
+            '/usr/share/OVMF/OVMF_VARS.fd',
+        )
+        self.run_cmd_check_shell(cmd)
+
+    def test_ovmf_ms(self):
+        cmd = [
+            'qemu-system-x86_64',
+            '-machine', 'q35,accel=tcg',
+            '-global', 'ICH9-LPC.disable_s3=1',
+        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
+        cmd = cmd + self.gen_pflash_params(
+            '/usr/share/OVMF/OVMF_CODE.ms.fd',
+            '/usr/share/OVMF/OVMF_VARS.ms.fd',
+        )
+        self.run_cmd_check_shell(cmd)
+
+    def test_ovmf_4m(self):
+        cmd = [
+            'qemu-system-x86_64',
+            '-machine', 'q35,accel=tcg'
+        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
+        cmd = cmd + self.gen_pflash_params(
+            '/usr/share/OVMF/OVMF_CODE_4M.fd',
+            '/usr/share/OVMF/OVMF_VARS_4M.fd',
+        )
+        self.run_cmd_check_shell(cmd)
+
+    def test_ovmf_4m_secboot(self):
+        cmd = [
+            'qemu-system-x86_64',
+            '-machine', 'q35,accel=tcg',
+        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
+        cmd = cmd + self.gen_pflash_params(
+            '/usr/share/OVMF/OVMF_CODE_4M.secboot.fd',
+            '/usr/share/OVMF/OVMF_VARS_4M.fd',
+        )
+        self.run_cmd_check_shell(cmd)
+
+    def test_ovmf_4m_ms(self):
+        cmd = [
+            'qemu-system-x86_64',
+            '-machine', 'q35,accel=tcg',
+        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
+        cmd = cmd + self.gen_pflash_params(
+            '/usr/share/OVMF/OVMF_CODE_4M.ms.fd',
+            '/usr/share/OVMF/OVMF_VARS_4M.ms.fd',
+        )
+        self.run_cmd_check_shell(cmd)
+
+    def test_ovmf32_4m_secboot(self):
+        cmd = [
+            'qemu-system-i386',
+            '-machine', 'q35,accel=tcg'
+        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
+        cmd = cmd + self.gen_pflash_params(
+            '/usr/share/OVMF/OVMF32_CODE_4M.secboot.fd',
+            '/usr/share/OVMF/OVMF32_VARS_4M.fd',
+        )
+        self.run_cmd_check_shell(cmd)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Test EDK2 images in QEMU.')
-    parser.add_argument('--arch', dest='arch')
-    parser.add_argument('--debug', action='store_true')
-    args = parser.parse_args()
-
-    child = spawn_qemu(args.arch)
-    if args.debug:
-        child.logfile = sys.stdout.buffer
-    try:
-        while True:
-            i = child.expect(
-                [
-                    'Press .* or any other key to continue',
-                    'Shell> '
-                ],
-                timeout=60,
-            )
-            if i == 0:
-                child.sendline('\x1b')
-                continue
-            if i == 1:
-                child.sendline('reset -s')
-                break
-    except (pexpect.EOF, pexpect.TIMEOUT) as err:
-        sys.stderr.write("%s\n" % (err))
+    unittest.main(verbosity=2)

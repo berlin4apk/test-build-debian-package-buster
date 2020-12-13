@@ -10,6 +10,7 @@ edk2 (2020.11-1) UNRELEASED; urgency=medium
     SMM-enforcing secboot variant. Non-4M images are for backwards
     compatibility only, and remain with a 64-bit PEI phase. LP: #1903681.
     (Closes: #973783)
+  * Rework autopkgtests to cover all provided images.
 
  -- dann frazier <dannf@debian.org>  Mon, 30 Nov 2020 11:02:49 -0700
 
