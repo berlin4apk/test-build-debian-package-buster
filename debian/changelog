@@ -1,4 +1,4 @@
-edk2 (2020.11-1) UNRELEASED; urgency=medium
+edk2 (2020.11-1) unstable; urgency=medium
 
   * New upstream release, based on edk2-stable202011 tag.
   * Version the build-dep on qemu-system-x86 to ensure it is new enough
@@ -12,7 +12,7 @@ edk2 (2020.11-1) UNRELEASED; urgency=medium
     (Closes: #973783)
   * Rework autopkgtests to cover all provided images.
 
- -- dann frazier <dannf@debian.org>  Mon, 30 Nov 2020 11:02:49 -0700
+ -- dann frazier <dannf@debian.org>  Sat, 12 Dec 2020 17:57:02 -0700
 
 edk2 (2020.08-1) unstable; urgency=medium
 
