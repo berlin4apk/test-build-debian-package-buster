@@ -27,3 +27,4 @@ NetworkPkg-DnsDxe-CVE-2018-12178-Check-the-received-.patch
 0001-SecurityPkg-DxeImageVerificationLib-extract-SecDataD.patch
 0002-SecurityPkg-DxeImageVerificationLib-assign-WinCertif.patch
 0003-SecurityPkg-DxeImageVerificationLib-catch-alignment-.patch
+CryptoPkg-BaseCryptLib-fix-NULL-dereference-CVE-2019.patch

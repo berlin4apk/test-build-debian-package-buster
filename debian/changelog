@@ -1,3 +1,11 @@
+edk2 (0~20181115.85588389-3+deb10u3) UNRELEASED; urgency=medium
+
+  * CryptoPkg/BaseCryptLib: fix NULL dereference. (CVE-2019-14584)
+    (Closes: #977300)
+     - d/p/CryptoPkg-BaseCryptLib-fix-NULL-dereference-CVE-2019.patch
+
+ -- dann frazier <dannf@debian.org>  Tue, 15 Dec 2020 12:23:27 -0700
+
 edk2 (0~20181115.85588389-3+deb10u2) buster; urgency=medium
 
   * Fix integer overflow in DxeImageVerificationHandler. (CVE-2019-14562)
