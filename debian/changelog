@@ -3,6 +3,8 @@ edk2 (2020.11-3) UNRELEASED; urgency=medium
   * autopkgtest: Avoid needing to use 'atexit' callbacks to cleanup
     uefi variable flash images by implementing a PflashParams object
     that cleans itself up when deleted.
+  * autopkgtest: Add missing carriage return to 'reset -s' command
+    that is intended to shutdown the guest.
 
  -- dann frazier <dannf@debian.org>  Wed, 06 Jan 2021 18:58:31 -0700
 

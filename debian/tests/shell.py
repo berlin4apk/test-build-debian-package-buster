@@ -78,7 +78,7 @@ class BootToShellTest(unittest.TestCase):
                     child.sendline('\x1b')
                     continue
                 if i == 1:
-                    child.sendline('reset -s')
+                    child.sendline('reset -s\r')
                     break
         except (pexpect.EOF, pexpect.TIMEOUT) as err:
             self.fail("%s\n" % (err))
