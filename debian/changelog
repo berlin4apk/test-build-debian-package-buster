@@ -6,6 +6,7 @@ edk2 (2020.11-3) UNRELEASED; urgency=medium
   * autopkgtest: Add missing carriage return to 'reset -s' command
     that is intended to shutdown the guest.
   * autopkgtest: Require guest shutdown to complete.
+  * autopkgtest: Add tests to validate secureboot.
 
  -- dann frazier <dannf@debian.org>  Wed, 06 Jan 2021 18:58:31 -0700
 
