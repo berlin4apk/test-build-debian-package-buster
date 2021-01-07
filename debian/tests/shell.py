@@ -79,8 +79,10 @@ class BootToShellTest(unittest.TestCase):
                     continue
                 if i == 1:
                     child.sendline('reset -s\r')
-                    break
-        except (pexpect.EOF, pexpect.TIMEOUT) as err:
+                    continue
+        except pexpect.EOF:
+            return
+        except pexpect.TIMEOUT as err:
             self.fail("%s\n" % (err))
 
     def test_aavmf(self):
