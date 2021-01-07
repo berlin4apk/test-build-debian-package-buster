@@ -1,3 +1,11 @@
+edk2 (2020.11-3) UNRELEASED; urgency=medium
+
+  * autopkgtest: Avoid needing to use 'atexit' callbacks to cleanup
+    uefi variable flash images by implementing a PflashParams object
+    that cleans itself up when deleted.
+
+ -- dann frazier <dannf@debian.org>  Wed, 06 Jan 2021 18:58:31 -0700
+
 edk2 (2020.11-2) unstable; urgency=medium
 
   * autopkgtest: Add allow-stderr to Restrictions to fix failure.
