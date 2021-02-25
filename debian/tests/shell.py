@@ -60,7 +60,7 @@ class FatFsImage:
 class EfiBootableIsoImage:
     def __init__(self, eltorito_img):
         with tempfile.TemporaryDirectory() as iso_root:
-            eltorito_iso_root = os.path.join('boot', 'grub')
+            eltorito_iso_root = 'boot'
             eltorito_iso_path = os.path.join(eltorito_iso_root, 'efi.img')
             eltorito_local_root = os.path.join(iso_root, eltorito_iso_root)
             eltorito_local_path = os.path.join(iso_root, eltorito_iso_path)
