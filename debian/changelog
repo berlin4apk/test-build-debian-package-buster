@@ -9,7 +9,7 @@ edk2 (2020.11-3) UNRELEASED; urgency=medium
   * autopkgtest: Add tests to validate secureboot.
   * autopkgtest: Refactor create_efi_bootable_iso() into a subclass of
     EfiBootableIsoImage.
-  * autopkgtest: Inroduce a series of QemuUefi*Command classes.
+  * autopkgtest: Introduce a series of QemuUefi*Command classes.
 
  -- dann frazier <dannf@debian.org>  Wed, 06 Jan 2021 18:58:31 -0700
 
