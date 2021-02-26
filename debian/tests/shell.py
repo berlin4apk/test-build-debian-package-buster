@@ -38,7 +38,7 @@ class FatFsImage:
         subprocess.check_call(
             [
                 'dd', 'if=/dev/zero', 'of=%s' % (self.path),
-                'count=0', 'bs=1M', 'seek=64', 'status=none'
+                'count=0', 'bs=1M', 'seek=%d' % (size_in_mb), 'status=none'
             ]
         )
         subprocess.check_call(['mkdosfs', '-F', '32', self.path])
