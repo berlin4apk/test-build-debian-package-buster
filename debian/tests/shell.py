@@ -149,6 +149,11 @@ class QemuUefiCommand:
         ]
 
     class PflashParams:
+        '''
+        Used to generate the appropriate -pflash arguments for QEMU. Mostly
+        used as a fancy way to generate a per-instance vars file and have it
+        be automatically cleaned up when the object is destroyed.
+        '''
         def __init__(self, code_path, vars_template_path):
             with tempfile.NamedTemporaryFile(delete=False) as varfile:
                 self.varfile_path = varfile.name
