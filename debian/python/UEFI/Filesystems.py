@@ -41,6 +41,12 @@ class FatFsImage:
     def mkdir(self, dir):
         subprocess.run(['mmd', '-i', self.path, dir])
 
+    def makedirs(self, dir):
+        dirs = dir.split(os.path.sep)
+        for dir_idx in range(1, len(dirs)+1):
+            next_dir = os.path.sep.join(dirs[:dir_idx])
+            self.mkdir(next_dir)
+
     def insert_file(self, src, dest):
         subprocess.check_call(
             [
@@ -85,13 +91,10 @@ class GrubShellBootableIsoImage(EfiBootableIsoImage):
             'AA64': "arm64",
         }
         efi_img = FatFsImage(64)
+        efi_img.makedirs(os.path.join('EFI', 'BOOT'))
         removable_media_path = os.path.join(
             'EFI', 'BOOT', 'BOOT%s.EFI' % (efi_arch.upper())
         )
-        parent_dirs = removable_media_path.split(os.path.sep)[:-1]
-        for dir_idx in range(1, len(parent_dirs)+1):
-            next_dir = os.path.sep.join(parent_dirs[:dir_idx])
-            efi_img.mkdir(next_dir)
         efi_ext = 'efi'
         grub_subdir = "%s-efi" % EfiArchToGrubArch[efi_arch.upper()]
         if use_signed:
