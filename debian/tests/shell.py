@@ -124,8 +124,9 @@ class GrubShellBootableIsoImage(EfiBootableIsoImage):
         super().__init__(efi_img)
 
 
-class BootToShellTest(unittest.TestCase):
-    debug = False
+class QemuUefiCommand:
+    '''This is only intended to be a base class'''
+    Qemu_Arch_Command = []
     # Based on the args used by ovmf-vars-generator
     Qemu_Common_Params = [
         '-no-user-config', '-nodefaults',
@@ -134,14 +135,18 @@ class BootToShellTest(unittest.TestCase):
         '-display', 'none',
         '-serial', 'stdio',
     ]
-    Qemu_Ovmf_Common_Params = [
-        '-chardev', 'pty,id=charserial1',
-        '-device', 'isa-serial,chardev=charserial1,id=serial1',
-    ]
-    Qemu_Qemu_Efi_Common_Params = [
-        '-machine', 'virt',
-        '-device', 'virtio-serial-device',
-    ]
+    Qemu_Arch_Params = []
+
+    def __init__(self, code_path, vars_template_path):
+        self.pflash = self.PflashParams(code_path, vars_template_path)
+        self.command = self.Qemu_Arch_Command + \
+            self.Qemu_Common_Params + \
+            self.Qemu_Arch_Params + self.pflash.params
+
+    def add_disk(self, path):
+        self.command = self.command + [
+            '-drive', 'file=%s,format=raw' % (path)
+        ]
 
     class PflashParams:
         def __init__(self, code_path, vars_template_path):
@@ -160,6 +165,120 @@ class BootToShellTest(unittest.TestCase):
 
         def __del__(self):
             os.unlink(self.varfile_path)
+
+
+class OvmfFlavor(enum.Enum):
+    MS = 1
+    SECBOOT = 2
+
+
+class QemuUefiOvmfCommand(QemuUefiCommand):
+    Qemu_Arch_Params = [
+        '-chardev', 'pty,id=charserial1',
+        '-device', 'isa-serial,chardev=charserial1,id=serial1',
+    ]
+
+    def __init__(self, flash_size_mb, flavor=None):
+        if flash_size_mb == 2:
+            size_ext = ''
+        elif flash_size_mb == 4:
+            size_ext = '_4M'
+        else:
+            raise Exception("Invalid flash size {}".format(flash_size_mb))
+
+        if flash_size_mb == 2 and flavor in [
+                OvmfFlavor.MS, OvmfFlavor.SECBOOT
+        ]:
+            # These legacy images are built with a 64-bit PEI phase that
+            # currently does not support S3
+            extra_qemu_args = ['-global', 'ICH9-LPC.disable_s3=1']
+        else:
+            extra_qemu_args = []
+
+        if flavor == OvmfFlavor.MS:
+            code_ext = vars_ext = '.ms'
+        elif flavor == OvmfFlavor.SECBOOT:
+            code_ext = '.secboot'
+            vars_ext = ''
+        elif flavor is None:
+            code_ext = ''
+            vars_ext = ''
+        else:
+            raise Exception("Invalid flavor")
+
+        code_path = '/usr/share/OVMF/OVMF_CODE%s%s.fd' % (
+            size_ext, code_ext
+        )
+        vars_template_path = '/usr/share/OVMF/OVMF_VARS%s%s.fd' % (
+            size_ext, vars_ext
+        )
+
+        super().__init__(code_path, vars_template_path)
+        self.command = self.command + extra_qemu_args
+
+
+class QemuUefiOvmfPcCommand(QemuUefiOvmfCommand):
+    Qemu_Arch_Command = [
+        'qemu-system-x86_64',
+        '-machine', 'pc,accel=tcg'
+    ]
+
+
+class QemuUefiOvmfQ35Command(QemuUefiOvmfCommand):
+    Qemu_Arch_Command = [
+        'qemu-system-x86_64',
+        '-machine', 'q35,accel=tcg'
+    ]
+
+
+class QemuUefiOvmf32Command(QemuUefiCommand):
+    Qemu_Arch_Command = [
+        'qemu-system-i386',
+        '-machine', 'q35,accel=tcg'
+    ]
+
+    def __init__(self):
+        super().__init__(
+            '/usr/share/OVMF/OVMF32_CODE_4M.secboot.fd',
+            '/usr/share/OVMF/OVMF32_VARS_4M.fd',
+        )
+
+
+class QemuUefiQemuEfiCommand(QemuUefiCommand):
+    Qemu_Arch_Params = [
+        '-machine', 'virt',
+        '-device', 'virtio-serial-device',
+    ]
+
+
+class QemuUefiAavmfCommand(QemuUefiQemuEfiCommand):
+    Qemu_Arch_Command = [
+        'qemu-system-aarch64',
+        '-cpu', 'cortex-a57',
+    ]
+
+    def __init__(self):
+        super().__init__(
+            '/usr/share/AAVMF/AAVMF_CODE.fd',
+            '/usr/share/AAVMF/AAVMF_VARS.fd',
+        )
+
+
+class QemuUefiAavmf32Command(QemuUefiQemuEfiCommand):
+    Qemu_Arch_Command = [
+        'qemu-system-aarch64',
+        '-cpu', 'cortex-a15',
+    ]
+
+    def __init__(self):
+        super().__init__(
+            '/usr/share/AAVMF/AAVMF32_CODE.fd',
+            '/usr/share/AAVMF/AAVMF32_VARS.fd',
+        )
+
+
+class BootToShellTest(unittest.TestCase):
+    debug = False
 
     def run_cmd_check_shell(self, cmd):
         child = pexpect.spawn(' '.join(cmd))
@@ -235,188 +354,72 @@ class BootToShellTest(unittest.TestCase):
         self.assertEqual(should_verify, verified)
 
     def test_aavmf(self):
-        cmd = [
-            'qemu-system-aarch64',
-            '-cpu', 'cortex-a57',
-        ] + self.Qemu_Common_Params + self.Qemu_Qemu_Efi_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/AAVMF/AAVMF_CODE.fd',
-            '/usr/share/AAVMF/AAVMF_VARS.fd',
-        )
-        cmd = cmd + pflash.params
-        self.run_cmd_check_shell(cmd)
+        q = QemuUefiAavmfCommand()
+        self.run_cmd_check_shell(q.command)
 
     def test_aavmf32(self):
-        cmd = [
-            'qemu-system-aarch64',
-            '-cpu', 'cortex-a15',
-        ] + self.Qemu_Common_Params + self.Qemu_Qemu_Efi_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/AAVMF/AAVMF32_CODE.fd',
-            '/usr/share/AAVMF/AAVMF32_VARS.fd',
-        )
-        cmd = cmd + pflash.params
-        self.run_cmd_check_shell(cmd)
+        q = QemuUefiAavmf32Command()
+        self.run_cmd_check_shell(q.command)
 
     def test_ovmf_pc(self):
-        cmd = [
-            'qemu-system-x86_64',
-            '-machine', 'pc,accel=tcg'
-        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/OVMF/OVMF_CODE.fd',
-            '/usr/share/OVMF/OVMF_VARS.fd',
-        )
-        cmd = cmd + pflash.params
-        self.run_cmd_check_shell(cmd)
+        q = QemuUefiOvmfPcCommand(2)
+        self.run_cmd_check_shell(q.command)
 
     def test_ovmf_q35(self):
-        cmd = [
-            'qemu-system-x86_64',
-            '-machine', 'q35,accel=tcg'
-        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/OVMF/OVMF_CODE.fd',
-            '/usr/share/OVMF/OVMF_VARS.fd',
-        )
-        cmd = cmd + pflash.params
-        self.run_cmd_check_shell(cmd)
+        q = QemuUefiOvmfQ35Command(2)
+        self.run_cmd_check_shell(q.command)
 
     def test_ovmf_secboot(self):
-        cmd = [
-            'qemu-system-x86_64',
-            '-machine', 'q35,accel=tcg',
-            '-global', 'ICH9-LPC.disable_s3=1',
-        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/OVMF/OVMF_CODE.secboot.fd',
-            '/usr/share/OVMF/OVMF_VARS.fd',
-        )
-        cmd = cmd + pflash.params
-        self.run_cmd_check_shell(cmd)
+        q = QemuUefiOvmfQ35Command(2, flavor=OvmfFlavor.SECBOOT)
+        self.run_cmd_check_shell(q.command)
 
     def test_ovmf_ms(self):
-        cmd = [
-            'qemu-system-x86_64',
-            '-machine', 'q35,accel=tcg',
-            '-global', 'ICH9-LPC.disable_s3=1',
-        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/OVMF/OVMF_CODE.ms.fd',
-            '/usr/share/OVMF/OVMF_VARS.ms.fd',
-        )
-        cmd = cmd + pflash.params
-        self.run_cmd_check_shell(cmd)
+        q = QemuUefiOvmfQ35Command(2, flavor=OvmfFlavor.MS)
+        self.run_cmd_check_shell(q.command)
 
     @unittest.skipUnless(DPKG_ARCH == 'amd64', "amd64-only")
     def test_ovmf_ms_secure_boot_signed(self):
-        cmd = [
-            'qemu-system-x86_64',
-            '-machine', 'q35,accel=tcg',
-            '-global', 'ICH9-LPC.disable_s3=1',
-        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/OVMF/OVMF_CODE.ms.fd',
-            '/usr/share/OVMF/OVMF_VARS.ms.fd',
-        )
-        cmd = cmd + pflash.params
+        q = QemuUefiOvmfQ35Command(2, flavor=OvmfFlavor.MS)
         iso = GrubShellBootableIsoImage('X64', use_signed=True)
-        cmd = cmd + ['-drive', 'file=%s,format=raw' % (iso.path)]
-        self.run_cmd_check_secure_boot(cmd, True)
+        q.add_disk(iso.path)
+        self.run_cmd_check_secure_boot(q.command, True)
 
     @unittest.skipUnless(DPKG_ARCH == 'amd64', "amd64-only")
     def test_ovmf_ms_secure_boot_unsigned(self):
-        cmd = [
-            'qemu-system-x86_64',
-            '-machine', 'q35,accel=tcg',
-            '-global', 'ICH9-LPC.disable_s3=1',
-        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/OVMF/OVMF_CODE.ms.fd',
-            '/usr/share/OVMF/OVMF_VARS.ms.fd',
-        )
-        cmd = cmd + pflash.params
+        q = QemuUefiOvmfQ35Command(2, flavor=OvmfFlavor.MS)
         iso = GrubShellBootableIsoImage('X64', use_signed=False)
-        cmd = cmd + ['-drive', 'file=%s,format=raw' % (iso.path)]
-        self.run_cmd_check_secure_boot(cmd, False)
+        q.add_disk(iso.path)
+        self.run_cmd_check_secure_boot(q.command, False)
 
     def test_ovmf_4m(self):
-        cmd = [
-            'qemu-system-x86_64',
-            '-machine', 'q35,accel=tcg'
-        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/OVMF/OVMF_CODE_4M.fd',
-            '/usr/share/OVMF/OVMF_VARS_4M.fd',
-        )
-        cmd = cmd + pflash.params
-        self.run_cmd_check_shell(cmd)
+        q = QemuUefiOvmfQ35Command(4)
+        self.run_cmd_check_shell(q.command)
 
     def test_ovmf_4m_secboot(self):
-        cmd = [
-            'qemu-system-x86_64',
-            '-machine', 'q35,accel=tcg',
-        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/OVMF/OVMF_CODE_4M.secboot.fd',
-            '/usr/share/OVMF/OVMF_VARS_4M.fd',
-        )
-        cmd = cmd + pflash.params
-        self.run_cmd_check_shell(cmd)
+        q = QemuUefiOvmfQ35Command(4, flavor=OvmfFlavor.SECBOOT)
+        self.run_cmd_check_shell(q.command)
 
     def test_ovmf_4m_ms(self):
-        cmd = [
-            'qemu-system-x86_64',
-            '-machine', 'q35,accel=tcg',
-        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/OVMF/OVMF_CODE_4M.ms.fd',
-            '/usr/share/OVMF/OVMF_VARS_4M.ms.fd',
-        )
-        cmd = cmd + pflash.params
-        self.run_cmd_check_shell(cmd)
+        q = QemuUefiOvmfQ35Command(4, flavor=OvmfFlavor.MS)
+        self.run_cmd_check_shell(q.command)
 
     @unittest.skipUnless(DPKG_ARCH == 'amd64', "amd64-only")
     def test_ovmf_4m_ms_secure_boot_signed(self):
-        cmd = [
-            'qemu-system-x86_64',
-            '-machine', 'q35,accel=tcg',
-        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/OVMF/OVMF_CODE_4M.ms.fd',
-            '/usr/share/OVMF/OVMF_VARS_4M.ms.fd',
-        )
-        cmd = cmd + pflash.params
+        q = QemuUefiOvmfQ35Command(4, flavor=OvmfFlavor.MS)
         iso = GrubShellBootableIsoImage('X64', use_signed=True)
-        cmd = cmd + ['-drive', 'file=%s,format=raw' % (iso.path)]
-        self.run_cmd_check_secure_boot(cmd, True)
+        q.add_disk(iso.path)
+        self.run_cmd_check_secure_boot(q.command, True)
 
     @unittest.skipUnless(DPKG_ARCH == 'amd64', "amd64-only")
     def test_ovmf_4m_ms_secure_boot_unsigned(self):
-        cmd = [
-            'qemu-system-x86_64',
-            '-machine', 'q35,accel=tcg',
-        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/OVMF/OVMF_CODE_4M.ms.fd',
-            '/usr/share/OVMF/OVMF_VARS_4M.ms.fd',
-        )
-        cmd = cmd + pflash.params
+        q = QemuUefiOvmfQ35Command(4, flavor=OvmfFlavor.MS)
         iso = GrubShellBootableIsoImage('X64', use_signed=False)
-        cmd = cmd + ['-drive', 'file=%s,format=raw' % (iso.path)]
-        self.run_cmd_check_secure_boot(cmd, False)
+        q.add_disk(iso.path)
+        self.run_cmd_check_secure_boot(q.command, False)
 
     def test_ovmf32_4m_secboot(self):
-        cmd = [
-            'qemu-system-i386',
-            '-machine', 'q35,accel=tcg'
-        ] + self.Qemu_Common_Params + self.Qemu_Ovmf_Common_Params
-        pflash = self.PflashParams(
-            '/usr/share/OVMF/OVMF32_CODE_4M.secboot.fd',
-            '/usr/share/OVMF/OVMF32_VARS_4M.fd',
-        )
-        cmd = cmd + pflash.params
-        self.run_cmd_check_shell(cmd)
+        q = QemuUefiOvmf32Command()
+        self.run_cmd_check_shell(q.command)
 
 
 if __name__ == '__main__':
