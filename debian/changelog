@@ -7,6 +7,8 @@ edk2 (2020.11-3) UNRELEASED; urgency=medium
     that is intended to shutdown the guest.
   * autopkgtest: Require guest shutdown to complete.
   * autopkgtest: Add tests to validate secureboot.
+  * autopkgtest: Refactor create_efi_bootable_iso() into a subclass of
+    EfiBootableIsoImage.
 
  -- dann frazier <dannf@debian.org>  Wed, 06 Jan 2021 18:58:31 -0700
 

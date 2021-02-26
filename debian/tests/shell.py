@@ -86,42 +86,42 @@ class EfiBootableIsoImage:
         os.unlink(self.path)
 
 
-def create_efi_bootable_iso(efi_arch, use_signed):
-    EfiArchToGrubArch = {
-        'X64': "x86_64",
-        'AA64': "arm64",
-    }
-    efi_img = FatFsImage(64)
-    removable_media_path = os.path.join(
-        'EFI', 'BOOT', 'BOOT%s.EFI' % (efi_arch.upper())
-    )
-    parent_dirs = removable_media_path.split(os.path.sep)[:-1]
-    for dir_idx in range(1, len(parent_dirs)+1):
-        next_dir = os.path.sep.join(parent_dirs[:dir_idx])
-        efi_img.mkdir(next_dir)
-    efi_ext = 'efi'
-    grub_subdir = "%s-efi" % EfiArchToGrubArch[efi_arch.upper()]
-    if use_signed:
-        efi_ext = "%s.signed" % (efi_ext)
-        grub_subdir = "%s-signed" % (grub_subdir)
+class GrubShellBootableIsoImage(EfiBootableIsoImage):
+    def __init__(self, efi_arch, use_signed):
+        EfiArchToGrubArch = {
+            'X64': "x86_64",
+            'AA64': "arm64",
+        }
+        efi_img = FatFsImage(64)
+        removable_media_path = os.path.join(
+            'EFI', 'BOOT', 'BOOT%s.EFI' % (efi_arch.upper())
+        )
+        parent_dirs = removable_media_path.split(os.path.sep)[:-1]
+        for dir_idx in range(1, len(parent_dirs)+1):
+            next_dir = os.path.sep.join(parent_dirs[:dir_idx])
+            efi_img.mkdir(next_dir)
+        efi_ext = 'efi'
+        grub_subdir = "%s-efi" % EfiArchToGrubArch[efi_arch.upper()]
+        if use_signed:
+            efi_ext = "%s.signed" % (efi_ext)
+            grub_subdir = "%s-signed" % (grub_subdir)
 
-    shim_src = os.path.join(
-        os.path.sep, 'usr', 'lib', 'shim',
-        'shim%s.%s' % (efi_arch.lower(), efi_ext)
-    )
-    grub_src = os.path.join(
-        os.path.sep, 'usr', 'lib', 'grub',
-        '%s' % (grub_subdir),
-        "" if use_signed else "monolithic",
-        'grub%s.%s' % (efi_arch.lower(), efi_ext)
-    )
-    grub_dest = os.path.join(
-        'EFI', 'BOOT', 'GRUB%s.EFI' % (efi_arch.upper())
-    )
-    efi_img.insert_file(shim_src, removable_media_path)
-    efi_img.insert_file(grub_src, grub_dest)
-
-    return EfiBootableIsoImage(efi_img)
+        shim_src = os.path.join(
+            os.path.sep, 'usr', 'lib', 'shim',
+            'shim%s.%s' % (efi_arch.lower(), efi_ext)
+        )
+        grub_src = os.path.join(
+            os.path.sep, 'usr', 'lib', 'grub',
+            '%s' % (grub_subdir),
+            "" if use_signed else "monolithic",
+            'grub%s.%s' % (efi_arch.lower(), efi_ext)
+        )
+        grub_dest = os.path.join(
+            'EFI', 'BOOT', 'GRUB%s.EFI' % (efi_arch.upper())
+        )
+        efi_img.insert_file(shim_src, removable_media_path)
+        efi_img.insert_file(grub_src, grub_dest)
+        super().__init__(efi_img)
 
 
 class BootToShellTest(unittest.TestCase):
@@ -320,7 +320,7 @@ class BootToShellTest(unittest.TestCase):
             '/usr/share/OVMF/OVMF_VARS.ms.fd',
         )
         cmd = cmd + pflash.params
-        iso = create_efi_bootable_iso('X64', use_signed=True)
+        iso = GrubShellBootableIsoImage('X64', use_signed=True)
         cmd = cmd + ['-drive', 'file=%s,format=raw' % (iso.path)]
         self.run_cmd_check_secure_boot(cmd, True)
 
@@ -336,7 +336,7 @@ class BootToShellTest(unittest.TestCase):
             '/usr/share/OVMF/OVMF_VARS.ms.fd',
         )
         cmd = cmd + pflash.params
-        iso = create_efi_bootable_iso('X64', use_signed=False)
+        iso = GrubShellBootableIsoImage('X64', use_signed=False)
         cmd = cmd + ['-drive', 'file=%s,format=raw' % (iso.path)]
         self.run_cmd_check_secure_boot(cmd, False)
 
@@ -387,7 +387,7 @@ class BootToShellTest(unittest.TestCase):
             '/usr/share/OVMF/OVMF_VARS_4M.ms.fd',
         )
         cmd = cmd + pflash.params
-        iso = create_efi_bootable_iso('X64', use_signed=True)
+        iso = GrubShellBootableIsoImage('X64', use_signed=True)
         cmd = cmd + ['-drive', 'file=%s,format=raw' % (iso.path)]
         self.run_cmd_check_secure_boot(cmd, True)
 
@@ -402,7 +402,7 @@ class BootToShellTest(unittest.TestCase):
             '/usr/share/OVMF/OVMF_VARS_4M.ms.fd',
         )
         cmd = cmd + pflash.params
-        iso = create_efi_bootable_iso('X64', use_signed=False)
+        iso = GrubShellBootableIsoImage('X64', use_signed=False)
         cmd = cmd + ['-drive', 'file=%s,format=raw' % (iso.path)]
         self.run_cmd_check_secure_boot(cmd, False)
 
