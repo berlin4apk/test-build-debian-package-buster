@@ -6,3 +6,4 @@ Conf/tools_def.txt
 EdkShellBinPkg/FullShell/X64/Shell_Full.efi
 FatBinPkg/EnhancedFatDxe/X64/Fat.efi
 UefiCpuPkg/ResetVector/Vtf0/Bin/*.raw
+debian/python/UEFI/__pycache__/

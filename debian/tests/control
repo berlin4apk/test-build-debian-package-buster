@@ -1,4 +1,4 @@
-Test-Command: python3 debian/tests/shell.py
+Test-Command: PYTHONPATH=./debian/python python3 debian/tests/shell.py
 Restrictions: allow-stderr
 Depends:
  dosfstools [amd64],
