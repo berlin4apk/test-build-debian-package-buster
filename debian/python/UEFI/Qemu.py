@@ -46,6 +46,12 @@ class Command:
             '-drive', 'file=%s,format=raw' % (path)
         ]
 
+    def add_oem_string(self, type, string):
+        string = string.replace(",", ",,")
+        self.command = self.command + [
+            '-smbios', f'type={type},value={string}'
+        ]
+
     class PflashParams:
         '''
         Used to generate the appropriate -pflash arguments for QEMU. Mostly
