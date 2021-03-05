@@ -77,8 +77,8 @@ class Command:
 
 
 class OvmfFlavor(enum.Enum):
-    MS = 1
-    SECBOOT = 2
+    MS = enum.auto()
+    SECBOOT = enum.auto()
 
 
 class OvmfCommand(Command):
