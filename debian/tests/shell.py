@@ -188,6 +188,13 @@ class BootToShellTest(unittest.TestCase):
         )
         self.run_cmd_check_shell(q.command)
 
+    def test_ovmf_snakeoil(self):
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_Q35,
+            variant=QemuEfiVariant.SNAKEOIL,
+        )
+        self.run_cmd_check_shell(q.command)
+
     @unittest.skipUnless(DPKG_ARCH == 'amd64', "amd64-only")
     def test_ovmf_4m_ms_secure_boot_signed(self):
         q = Qemu.QemuCommand(
