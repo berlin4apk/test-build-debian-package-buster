@@ -23,7 +23,7 @@ import sys
 import unittest
 
 from UEFI.Filesystems import GrubShellBootableIsoImage
-from UEFI.Qemu import OvmfFlavor
+from UEFI.Qemu import QemuEfiMachine, QemuEfiVariant, QemuEfiFlashSize
 from UEFI import Qemu
 
 DPKG_ARCH = subprocess.check_output(
@@ -108,71 +108,114 @@ class BootToShellTest(unittest.TestCase):
         self.assertEqual(should_verify, verified)
 
     def test_aavmf(self):
-        q = Qemu.AavmfCommand()
+        q = Qemu.QemuCommand(QemuEfiMachine.AAVMF)
         self.run_cmd_check_shell(q.command)
 
     def test_aavmf32(self):
-        q = Qemu.Aavmf32Command()
+        q = Qemu.QemuCommand(QemuEfiMachine.AAVMF32)
         self.run_cmd_check_shell(q.command)
 
     def test_ovmf_pc(self):
-        q = Qemu.OvmfPcCommand(2)
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_PC, flash_size=QemuEfiFlashSize.SIZE_2MB,
+        )
         self.run_cmd_check_shell(q.command)
 
     def test_ovmf_q35(self):
-        q = Qemu.OvmfQ35Command(2)
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_Q35, flash_size=QemuEfiFlashSize.SIZE_2MB,
+        )
         self.run_cmd_check_shell(q.command)
 
     def test_ovmf_secboot(self):
-        q = Qemu.OvmfQ35Command(2, flavor=OvmfFlavor.SECBOOT)
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_Q35,
+            variant=QemuEfiVariant.SECBOOT,
+            flash_size=QemuEfiFlashSize.SIZE_2MB,
+        )
         self.run_cmd_check_shell(q.command)
 
     def test_ovmf_ms(self):
-        q = Qemu.OvmfQ35Command(2, flavor=OvmfFlavor.MS)
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_Q35,
+            variant=QemuEfiVariant.MS,
+            flash_size=QemuEfiFlashSize.SIZE_2MB,
+        )
         self.run_cmd_check_shell(q.command)
 
     @unittest.skipUnless(DPKG_ARCH == 'amd64', "amd64-only")
     def test_ovmf_ms_secure_boot_signed(self):
-        q = Qemu.OvmfQ35Command(2, flavor=OvmfFlavor.MS)
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_Q35,
+            variant=QemuEfiVariant.MS,
+            flash_size=QemuEfiFlashSize.SIZE_2MB,
+        )
         iso = GrubShellBootableIsoImage('X64', use_signed=True)
         q.add_disk(iso.path)
         self.run_cmd_check_secure_boot(q.command, True)
 
     @unittest.skipUnless(DPKG_ARCH == 'amd64', "amd64-only")
     def test_ovmf_ms_secure_boot_unsigned(self):
-        q = Qemu.OvmfQ35Command(2, flavor=OvmfFlavor.MS)
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_Q35,
+            variant=QemuEfiVariant.MS,
+            flash_size=QemuEfiFlashSize.SIZE_2MB,
+        )
         iso = GrubShellBootableIsoImage('X64', use_signed=False)
         q.add_disk(iso.path)
         self.run_cmd_check_secure_boot(q.command, False)
 
     def test_ovmf_4m(self):
-        q = Qemu.OvmfQ35Command(4)
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_Q35,
+            flash_size=QemuEfiFlashSize.SIZE_4MB,
+        )
         self.run_cmd_check_shell(q.command)
 
     def test_ovmf_4m_secboot(self):
-        q = Qemu.OvmfQ35Command(4, flavor=OvmfFlavor.SECBOOT)
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_Q35,
+            variant=QemuEfiVariant.SECBOOT,
+            flash_size=QemuEfiFlashSize.SIZE_4MB,
+        )
         self.run_cmd_check_shell(q.command)
 
     def test_ovmf_4m_ms(self):
-        q = Qemu.OvmfQ35Command(4, flavor=OvmfFlavor.MS)
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_Q35,
+            variant=QemuEfiVariant.MS,
+            flash_size=QemuEfiFlashSize.SIZE_4MB,
+        )
         self.run_cmd_check_shell(q.command)
 
     @unittest.skipUnless(DPKG_ARCH == 'amd64', "amd64-only")
     def test_ovmf_4m_ms_secure_boot_signed(self):
-        q = Qemu.OvmfQ35Command(4, flavor=OvmfFlavor.MS)
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_Q35,
+            variant=QemuEfiVariant.MS,
+            flash_size=QemuEfiFlashSize.SIZE_4MB,
+        )
         iso = GrubShellBootableIsoImage('X64', use_signed=True)
         q.add_disk(iso.path)
         self.run_cmd_check_secure_boot(q.command, True)
 
     @unittest.skipUnless(DPKG_ARCH == 'amd64', "amd64-only")
     def test_ovmf_4m_ms_secure_boot_unsigned(self):
-        q = Qemu.OvmfQ35Command(4, flavor=OvmfFlavor.MS)
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_Q35,
+            variant=QemuEfiVariant.MS,
+            flash_size=QemuEfiFlashSize.SIZE_4MB,
+        )
         iso = GrubShellBootableIsoImage('X64', use_signed=False)
         q.add_disk(iso.path)
         self.run_cmd_check_secure_boot(q.command, False)
 
     def test_ovmf32_4m_secboot(self):
-        q = Qemu.Ovmf32Command()
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF32,
+            variant=QemuEfiVariant.SECBOOT,
+            flash_size=QemuEfiFlashSize.SIZE_4MB,
+        )
         self.run_cmd_check_shell(q.command)
 
 
