@@ -33,6 +33,7 @@ class QemuEfiMachine(enum.Enum):
 class QemuEfiVariant(enum.Enum):
     MS = enum.auto()
     SECBOOT = enum.auto()
+    SNAKEOIL = enum.auto()
 
 
 class QemuEfiFlashSize(enum.Enum):
@@ -108,12 +109,17 @@ class QemuCommand:
         # Remaining possibilities are OVMF variants
         if machine == QemuEfiMachine.OVMF_PC:
             assert(variant is None)
+        if variant == QemuEfiVariant.SNAKEOIL:
+            # We provide one size - you don't get to pick.
+            assert(flash_size == QemuEfiFlashSize.DEFAULT)
         size_ext = '' if flash_size == QemuEfiFlashSize.SIZE_2MB else '_4M'
         code_ext = vars_ext = ''
         if variant == QemuEfiVariant.MS:
             code_ext = vars_ext = '.ms'
         elif variant == QemuEfiVariant.SECBOOT:
             code_ext = '.secboot'
+        elif variant == QemuEfiVariant.SNAKEOIL:
+            vars_ext = '.snakeoil'
         return (
             f'/usr/share/OVMF/OVMF_CODE{size_ext}{code_ext}.fd',
             f'/usr/share/OVMF/OVMF_VARS{size_ext}{vars_ext}.fd'
