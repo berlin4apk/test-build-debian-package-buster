@@ -22,6 +22,7 @@ edk2 (2020.11-3) UNRELEASED; urgency=medium
     distributions.
   * autopkgtest: Enable debug output to make it easier to diagnose
     failures.
+  * qemu-efi-arm, qemu-efi-aarch64: Enable TPM support. LP: #1901014.
 
  -- dann frazier <dannf@debian.org>  Wed, 06 Jan 2021 18:58:31 -0700
 
