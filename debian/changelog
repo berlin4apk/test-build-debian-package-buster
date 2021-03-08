@@ -12,6 +12,9 @@ edk2 (2020.11-3) UNRELEASED; urgency=medium
   * autopkgtest: Introduce a series of QemuUefi*Command classes.
   * autopkgtest: Reorganize code into a python package.
   * autopkgtest: Test booting to shell w/ snakeoil vars.
+  * Add edk2-vars-generator.py and use it instead of ovmf-vars-generator.
+    This tool reuses the UEFI python package, which should allow us to
+    more easily add pre-enrolled images for additional architectures.
 
  -- dann frazier <dannf@debian.org>  Wed, 06 Jan 2021 18:58:31 -0700
 

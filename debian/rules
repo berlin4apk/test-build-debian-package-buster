@@ -130,51 +130,29 @@ debian/oem-string-%: debian/PkKek-1-%.pem
 	tr -d '\n' < $< | \
 		sed -e 's/.*-----BEGIN CERTIFICATE-----/4e32566d-8e9e-4f52-81d3-5bb9715f9727:/' -e 's/-----END CERTIFICATE-----//' > $@
 
-debian/shell.aa64.img: VFAT_ROOT=debian/vfat-root-aa64
-debian/shell.aa64.img: SHELL_BIN=$(AAVMF_SHELL)
-debian/shell.aa64.img: ENROLL_BIN=$(AAVMF_ENROLL)
-debian/shell.aa64.img: $(AAVMF_SHELL) $(AAVMF_ENROLL)
-debian/shell.x64.img: VFAT_ROOT=debian/vfat-root-x64
-debian/shell.x64.img: SHELL_BIN=$(OVMF_SHELL)
-debian/shell.x64.img: ENROLL_BIN=$(OVMF_ENROLL)
-debian/shell.x64.img: $(OVMF_SHELL) $(OVMF_ENROLL)
-debian/shell.%.img:
-	rm -rf $(VFAT_ROOT)
-	mkdir -p $(VFAT_ROOT)/efi/boot
-	cp $(SHELL_BIN) \
-		$(VFAT_ROOT)/efi/boot/boot`echo $@ | cut -d. -f2`.efi
-	cp $(ENROLL_BIN) $(VFAT_ROOT)
-	qemu-img convert --image-opts \
-		driver=vvfat,floppy=on,fat-type=12,label=UEFI_SHELL,dir=$(VFAT_ROOT) $@
+%/OVMF_VARS.ms.fd: %/OVMF_CODE.fd %/OVMF_VARS.fd debian/oem-string-vendor $(OVMF_ENROLL) $(OVMF_SHELL)
+	PYTHONPATH=$(CURDIR)/debian/python \
+	./debian/edk2-vars-generator.py \
+		-f OVMF -e $(OVMF_ENROLL) -s $(OVMF_SHELL) \
+		-c debian/ovmf-install/OVMF_CODE.fd \
+		-V debian/ovmf-install/OVMF_VARS.fd \
+		-C `< debian/oem-string-vendor` -o $@
 
-debian/UefiShell.%.iso: debian/shell.%.img
-	rm -rf debian/iso-root-`echo $@ | cut -d. -f2`
-	mkdir -p debian/iso-root-`echo $@ | cut -d. -f2`
-	cp $< debian/iso-root-`echo $@ | cut -d. -f2`
-	xorriso --as mkisofs -input-charset ASCII -J -rational-rock \
-		-e `basename $<` -no-emul-boot -o $@ \
-		debian/iso-root-`echo $@ | cut -d. -f2`
+%/OVMF_VARS_4M.ms.fd: %/OVMF_CODE_4M.fd %/OVMF_VARS_4M.fd debian/oem-string-vendor $(OVMF_ENROLL) $(OVMF_SHELL)
+	PYTHONPATH=$(CURDIR)/debian/python \
+	./debian/edk2-vars-generator.py \
+		-f OVMF_4M -e $(OVMF_ENROLL) -s $(OVMF_SHELL) \
+		-c debian/ovmf-install/OVMF_CODE_4M.fd \
+		-V debian/ovmf-install/OVMF_VARS_4M.fd \
+		-C `< debian/oem-string-vendor` -o $@
 
-%.ms.fd: %.fd debian/UefiShell.x64.iso debian/oem-string-vendor
-	python3 $(OVMF_VARS_GENERATOR) --qemu-binary /usr/bin/qemu-system-x86_64 \
-		--print-output \
-		--disable-smm \
-		--skip-testing \
-		--oem-string `< debian/oem-string-vendor` \
-		--ovmf-binary $(subst VARS,CODE,$<) \
-		--ovmf-template-vars $< \
-		--uefi-shell-iso debian/UefiShell.x64.iso $@
-
-%.snakeoil.fd: %.fd debian/UefiShell.x64.iso debian/oem-string-snakeoil
-	python3 $(OVMF_VARS_GENERATOR) --qemu-binary /usr/bin/qemu-system-x86_64 \
-		--print-output \
-		--disable-smm \
-		--skip-testing \
-		--no-default \
-		--oem-string `< debian/oem-string-snakeoil` \
-		--ovmf-binary $(subst VARS,CODE,$<) \
-		--ovmf-template-vars $< \
-		--uefi-shell-iso debian/UefiShell.x64.iso $@
+%/OVMF_VARS_4M.snakeoil.fd: %/OVMF_CODE_4M.fd %/OVMF_VARS_4M.fd debian/oem-string-snakeoil $(OVMF_ENROLL) $(OVMF_SHELL)
+	PYTHONPATH=$(CURDIR)/debian/python \
+	./debian/edk2-vars-generator.py \
+		-f OVMF_4M -e $(OVMF_ENROLL) -s $(OVMF_SHELL) \
+		-c debian/ovmf-install/OVMF_CODE_4M.fd \
+		-V debian/ovmf-install/OVMF_VARS_4M.fd \
+		-C `< debian/oem-string-snakeoil` -o $@
 
 ArmPkg/Library/GccLto/liblto-aarch64.a:	ArmPkg/Library/GccLto/liblto-aarch64.s
 	$($(EDK2_TOOLCHAIN)_AARCH64_PREFIX)gcc -c -fpic $< -o $@
@@ -204,10 +182,8 @@ override_dh_auto_clean:
 	make -C BaseTools clean
 	rm -rf Conf/.cache Build .pc-post
 	rm -rf debian/ovmf-install debian/ovmf32-install
-	rm -rf debian/iso-root-* debian/vfat-root-*
 	rm -f debian/PkKek-1-vendor.pem
 	rm -f debian/oem-string-vendor debian/oem-string-snakeoil
-	rm -f debian/shell.*.img debian/UefiShell.*.iso
 	rm -f ArmPkg/Library/GccLto/liblto-*.a
 	rm -f debian/setup-build-stamp
 
