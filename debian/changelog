@@ -20,6 +20,8 @@ edk2 (2020.11-3) UNRELEASED; urgency=medium
     appropriate image to use with OVMF_VARS_4M.snakeoil.fd.
   * debian/rules: Update PkKek-1 selection to allow for derivative
     distributions.
+  * autopkgtest: Enable debug output to make it easier to diagnose
+    failures.
 
  -- dann frazier <dannf@debian.org>  Wed, 06 Jan 2021 18:58:31 -0700
 

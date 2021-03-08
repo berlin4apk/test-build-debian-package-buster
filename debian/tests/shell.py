@@ -33,7 +33,7 @@ DPKG_ARCH = subprocess.check_output(
 
 
 class BootToShellTest(unittest.TestCase):
-    debug = False
+    debug = True
 
     def run_cmd_check_shell(self, cmd):
         child = pexpect.spawn(' '.join(cmd))
