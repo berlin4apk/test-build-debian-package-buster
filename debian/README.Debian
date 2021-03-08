@@ -49,12 +49,12 @@ OVMF_VARS.ms.fd
   using a 2MB flash device. 2MB flash is no longer considered sufficient for
   use with Secure Boot. This is provided only for backwards compatibility.
 
+OVMF_CODE_4M.snakeoil.fd
 OVMF_VARS_4M.snakeoil.fd
   This image is **for testing purposes only**. It includes an insecure
   "snakeoil" key in PK, KEK & DB. The private key and cert are also
   shipped in this package as well, so that testers can easily sign
-  binaries that will be considered valid. Intended for use with
-  OVMF_CODE_4M.secboot.fd.
+  binaries that will be considered valid.
 
 PkKek-1-snakeoil.key
 PkKek-1-snakeoil.pem
@@ -63,4 +63,4 @@ PkKek-1-snakeoil.pem
   OVMF_VARS.snakeoil.fd template. The password for the key is
   'snakeoil'.
 
- -- dann frazier <dannf@debian.org>, Fri, 11 Dec 2020 17:30:59 -0700
+ -- dann frazier <dannf@debian.org>, Mon,  8 Mar 2021 10:58:55 -0700

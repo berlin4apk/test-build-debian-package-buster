@@ -16,6 +16,8 @@ edk2 (2020.11-3) UNRELEASED; urgency=medium
     This tool reuses the UEFI python package, which should allow us to
     more easily add pre-enrolled images for additional architectures.
   * debian/rules: Consolidate list of files to cleanup into debian/clean.
+  * Add a OVMF_CODE_4M.snakeoil.fd symlink to help users discover the
+    appropriate image to use with OVMF_VARS_4M.snakeoil.fd.
 
  -- dann frazier <dannf@debian.org>  Wed, 06 Jan 2021 18:58:31 -0700
 
