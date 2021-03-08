@@ -6,6 +6,7 @@ Uploaders: Steve Langasek <vorlon@debian.org>, Serge Hallyn <serge.hallyn@ubuntu
 Build-Depends: bc,
  debhelper-compat (= 12),
  dosfstools,
+ dpkg (>= 1.19.3),
  gcc-aarch64-linux-gnu,
  gcc-arm-linux-gnueabihf,
  gcc-multilib [i386],

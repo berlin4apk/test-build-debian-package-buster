@@ -123,7 +123,11 @@ $(OVMF_BINARIES) $(OVMF_IMAGES): debian/setup-build-stamp
 	cp $(OVMF3264_BUILD_DIR)/FV/OVMF_CODE.fd \
 		debian/ovmf-install/OVMF_CODE_4M.secboot.fd
 
-debian/PkKek-1-vendor.pem: debian/PkKek-1-$(DEB_VENDOR).pem
+ifeq ($(call dpkg_vendor_derives_from_v1,ubuntu),yes)
+debian/PkKek-1-vendor.pem: debian/PkKek-1-Ubuntu.pem
+else
+debian/PkKek-1-vendor.pem: debian/PkKek-1-Debian.pem
+endif
 	ln -sf `basename $<` $@
 
 debian/oem-string-%: debian/PkKek-1-%.pem
