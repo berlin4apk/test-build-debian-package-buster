@@ -4,6 +4,7 @@ edk2 (2021.02-1) UNRELEASED; urgency=medium
   * Drop qemu-ovmf-secureboot which is no longer used.
   * debian/control: Make versioned build-dep on qemu-system-x86 backport
     safe.
+  * Add pre-enrolled "ms" and "snakeoil" variants of AAVMF templates.
 
  -- dann frazier <dannf@debian.org>  Tue, 09 Mar 2021 09:51:01 -0700
 

@@ -81,12 +81,19 @@ class QemuCommand:
         assert(variant is None or variant in QemuEfiVariant)
         assert(flash_size in QemuEfiFlashSize)
 
+        code_ext = vars_ext = ''
+        if variant == QemuEfiVariant.MS:
+            code_ext = vars_ext = '.ms'
+        elif variant == QemuEfiVariant.SECBOOT:
+            code_ext = '.secboot'
+        elif variant == QemuEfiVariant.SNAKEOIL:
+            vars_ext = '.snakeoil'
+
         if machine == QemuEfiMachine.AAVMF:
-            assert(variant is None)
             assert(flash_size == QemuEfiFlashSize.DEFAULT)
             return (
-                '/usr/share/AAVMF/AAVMF_CODE.fd',
-                '/usr/share/AAVMF/AAVMF_VARS.fd'
+                f'/usr/share/AAVMF/AAVMF_CODE{code_ext}.fd',
+                f'/usr/share/AAVMF/AAVMF_VARS{code_ext}.fd',
             )
         if machine == QemuEfiMachine.AAVMF32:
             assert(variant is None)
@@ -113,13 +120,6 @@ class QemuCommand:
             # We provide one size - you don't get to pick.
             assert(flash_size == QemuEfiFlashSize.DEFAULT)
         size_ext = '' if flash_size == QemuEfiFlashSize.SIZE_2MB else '_4M'
-        code_ext = vars_ext = ''
-        if variant == QemuEfiVariant.MS:
-            code_ext = vars_ext = '.ms'
-        elif variant == QemuEfiVariant.SECBOOT:
-            code_ext = '.secboot'
-        elif variant == QemuEfiVariant.SNAKEOIL:
-            vars_ext = '.snakeoil'
         return (
             f'/usr/share/OVMF/OVMF_CODE{size_ext}{code_ext}.fd',
             f'/usr/share/OVMF/OVMF_VARS{size_ext}{vars_ext}.fd'

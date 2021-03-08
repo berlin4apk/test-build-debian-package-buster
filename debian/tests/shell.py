@@ -60,7 +60,7 @@ class BootToShellTest(unittest.TestCase):
         except pexpect.TIMEOUT as err:
             self.fail("%s\n" % (err))
 
-    def run_cmd_check_secure_boot(self, cmd, should_verify):
+    def run_cmd_check_secure_boot(self, cmd, efiarch, should_verify):
         class State(enum.Enum):
             PRE_EXEC = 1
             POST_EXEC = 2
@@ -90,7 +90,7 @@ class BootToShellTest(unittest.TestCase):
                     continue
                 if i == 2:
                     if state == State.PRE_EXEC:
-                        child.sendline('\\efi\\boot\\bootx64.efi\r')
+                        child.sendline(f'\\efi\\boot\\boot{efiarch}.efi\r')
                         state = State.POST_EXEC
                     elif state == State.POST_EXEC:
                         child.sendline('reset -s\r')
@@ -110,6 +110,33 @@ class BootToShellTest(unittest.TestCase):
 
     def test_aavmf(self):
         q = Qemu.QemuCommand(QemuEfiMachine.AAVMF)
+        self.run_cmd_check_shell(q.command)
+
+    @unittest.skipUnless(DPKG_ARCH == 'arm64', "Requires grub-efi-arm64")
+    def test_aavmf_ms_secure_boot_signed(self):
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.AAVMF,
+            variant=QemuEfiVariant.MS,
+        )
+        iso = GrubShellBootableIsoImage('AA64', use_signed=True)
+        q.add_disk(iso.path)
+        self.run_cmd_check_secure_boot(q.command, 'aa64', True)
+
+    @unittest.skipUnless(DPKG_ARCH == 'arm64', "Requires grub-efi-arm64")
+    def test_aavmf_ms_secure_boot_unsigned(self):
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.AAVMF,
+            variant=QemuEfiVariant.MS,
+        )
+        iso = GrubShellBootableIsoImage('AA64', use_signed=False)
+        q.add_disk(iso.path)
+        self.run_cmd_check_secure_boot(q.command, 'aa64', False)
+
+    def test_aavmf_snakeoil(self):
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.AAVMF,
+            variant=QemuEfiVariant.SNAKEOIL,
+        )
         self.run_cmd_check_shell(q.command)
 
     def test_aavmf32(self):
@@ -153,7 +180,7 @@ class BootToShellTest(unittest.TestCase):
         )
         iso = GrubShellBootableIsoImage('X64', use_signed=True)
         q.add_disk(iso.path)
-        self.run_cmd_check_secure_boot(q.command, True)
+        self.run_cmd_check_secure_boot(q.command, 'x64', True)
 
     @unittest.skipUnless(DPKG_ARCH == 'amd64', "amd64-only")
     def test_ovmf_ms_secure_boot_unsigned(self):
@@ -164,7 +191,7 @@ class BootToShellTest(unittest.TestCase):
         )
         iso = GrubShellBootableIsoImage('X64', use_signed=False)
         q.add_disk(iso.path)
-        self.run_cmd_check_secure_boot(q.command, False)
+        self.run_cmd_check_secure_boot(q.command, 'x64', False)
 
     def test_ovmf_4m(self):
         q = Qemu.QemuCommand(
@@ -205,7 +232,7 @@ class BootToShellTest(unittest.TestCase):
         )
         iso = GrubShellBootableIsoImage('X64', use_signed=True)
         q.add_disk(iso.path)
-        self.run_cmd_check_secure_boot(q.command, True)
+        self.run_cmd_check_secure_boot(q.command, 'x64', True)
 
     @unittest.skipUnless(DPKG_ARCH == 'amd64', "amd64-only")
     def test_ovmf_4m_ms_secure_boot_unsigned(self):
@@ -216,7 +243,7 @@ class BootToShellTest(unittest.TestCase):
         )
         iso = GrubShellBootableIsoImage('X64', use_signed=False)
         q.add_disk(iso.path)
-        self.run_cmd_check_secure_boot(q.command, False)
+        self.run_cmd_check_secure_boot(q.command, 'x64', False)
 
     def test_ovmf32_4m_secboot(self):
         q = Qemu.QemuCommand(
