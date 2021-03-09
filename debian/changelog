@@ -1,9 +1,9 @@
-edk2 (2020.11-4) UNRELEASED; urgency=medium
+edk2 (2020.11-4) unstable; urgency=medium
 
   * UEFI/Filesystems.py: Force "/sbin" into $PATH before calling
     mkdosfs, fixing autopkgtest failures.
 
- -- dann frazier <dannf@debian.org>  Tue, 09 Mar 2021 09:15:18 -0700
+ -- dann frazier <dannf@debian.org>  Tue, 09 Mar 2021 09:20:12 -0700
 
 edk2 (2020.11-3) unstable; urgency=medium
 
