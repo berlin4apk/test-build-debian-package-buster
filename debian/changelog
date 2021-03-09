@@ -7,6 +7,7 @@ edk2 (2021.02-1) UNRELEASED; urgency=medium
   * Add pre-enrolled "ms" and "snakeoil" variants of AAVMF templates.
   * d/p/BaseTools-Fix-the-lib-order-in-static_library_files..patch:
     Remove orphaned patch.
+  * debian/control: Drop unnecessary Testsuite field.
 
  -- dann frazier <dannf@debian.org>  Tue, 09 Mar 2021 09:51:01 -0700
 
