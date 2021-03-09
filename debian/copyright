@@ -8,10 +8,6 @@ Files: *
 Copyright: 1999-2013, Intel Corporation
 License: BSD-2-clause
 
-Files: qemu-ovmf-secureboot-*
-Copyright: 2017 Red Hat
-License: MIT
-
 Files: StdLib/PosixLib/Stringlist/stringlist.c StdLib/PosixLib/Gen/dirname.c
        StdLib/LibC/Time/strptime.c StdLib/LibC/Locale/aliasname_local.h
        StdLib/LibC/Locale/wcsxfrm.c StdLib/LibC/Locale/wcstold.c

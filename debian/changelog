@@ -1,6 +1,7 @@
 edk2 (2021.02-1) UNRELEASED; urgency=medium
 
   * New upstream release, based on edk2-stable202102 tag.
+  * Drop qemu-ovmf-secureboot which is no longer used.
 
  -- dann frazier <dannf@debian.org>  Tue, 09 Mar 2021 09:51:01 -0700
 
