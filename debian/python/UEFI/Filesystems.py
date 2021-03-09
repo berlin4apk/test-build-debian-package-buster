@@ -33,7 +33,9 @@ class FatFsImage:
                 'count=0', 'bs=1M', 'seek=%d' % (size_in_mb), 'status=none'
             ]
         )
-        subprocess.check_call(['mkdosfs', '-F', '32', self.path])
+        new_env = os.environ.copy()
+        new_env['PATH'] = f"{os.environ['PATH']}:/sbin"
+        subprocess.check_call(['mkdosfs', '-F', '32', self.path], env=new_env)
 
     def __del__(self):
         os.unlink(self.path)
