@@ -1,3 +1,9 @@
+edk2 (2021.02-1) UNRELEASED; urgency=medium
+
+  * New upstream release, based on edk2-stable202102 tag.
+
+ -- dann frazier <dannf@debian.org>  Tue, 09 Mar 2021 09:51:01 -0700
+
 edk2 (2020.11-4) unstable; urgency=medium
 
   * UEFI/Filesystems.py: Force "/sbin" into $PATH before calling
