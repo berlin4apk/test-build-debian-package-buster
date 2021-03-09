@@ -1,4 +1,4 @@
-edk2 (2021.02-1) UNRELEASED; urgency=medium
+edk2 (2021.02-1) experimental; urgency=medium
 
   * New upstream release, based on edk2-stable202102 tag.
   * Drop qemu-ovmf-secureboot which is no longer used.
@@ -9,7 +9,7 @@ edk2 (2021.02-1) UNRELEASED; urgency=medium
     Remove orphaned patch.
   * debian/control: Drop unnecessary Testsuite field.
 
- -- dann frazier <dannf@debian.org>  Tue, 09 Mar 2021 09:51:01 -0700
+ -- dann frazier <dannf@debian.org>  Tue, 09 Mar 2021 13:23:59 -0700
 
 edk2 (2020.11-4) unstable; urgency=medium
 
