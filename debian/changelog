@@ -1,3 +1,9 @@
+edk2 (2021.05-1) UNRELEASED; urgency=medium
+
+  * New upstream release, based on edk2-stable202105 tag.
+
+ -- dann frazier <dannf@debian.org>  Fri, 28 May 2021 13:35:51 -0600
+
 edk2 (2021.02-1) experimental; urgency=medium
 
   * New upstream release, based on edk2-stable202102 tag.
