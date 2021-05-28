@@ -1,9 +1,9 @@
-edk2 (2021.05-1) UNRELEASED; urgency=medium
+edk2 (2021.05-1) experimental; urgency=medium
 
   * New upstream release, based on edk2-stable202105 tag.
   * debian/rules: Only embed required git submodules.
 
- -- dann frazier <dannf@debian.org>  Fri, 28 May 2021 13:35:51 -0600
+ -- dann frazier <dannf@debian.org>  Fri, 28 May 2021 13:56:57 -0600
 
 edk2 (2021.02-1) experimental; urgency=medium
 
