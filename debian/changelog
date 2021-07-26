@@ -1,6 +1,7 @@
 edk2 (2021.08~rc0-1) UNRELEASED; urgency=medium
 
   * New upstream release, based on edk2-stable202108-rc0 tag.
+  * qemu-efi: Set Multi-Arch: foreign, thanks to the Multiarch hinter.
 
  -- dann frazier <dannf@debian.org>  Mon, 09 Aug 2021 16:10:10 -0600
 

@@ -66,6 +66,7 @@ Description: UEFI firmware for 64-bit ARM virtual machines
 Package: qemu-efi
 Architecture: all
 Depends: qemu-efi-aarch64, ${misc:Depends}
+Multi-Arch: foreign
 Description: transitional dummy package
  This is a transitional dummy package. It contains a compatibility symlink
  of /usr/share/qemu-efi/QEMU_EFI.fd to /usr/share/qemu-efi-aarch64/QEMU_EFI.fd.
