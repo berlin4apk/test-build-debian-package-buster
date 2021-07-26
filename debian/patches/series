@@ -3,3 +3,4 @@ brotlicompress-disable.diff
 ovmf-vars-generator-Pass-OEM-Strings-to-the-guest.patch
 ovmf-vars-generator-ignore-qemu-warnings.patch
 ovmf-vars-generator-no-defaults.patch
+UefiCpuPkg-Move-MigrateGdt-from-DiscoverMemory-to-Te.patch
