@@ -1,0 +1,189 @@
+From f6ec1dd34fb6b9757b5ead465ee2ea20c182b0ac Mon Sep 17 00:00:00 2001
+From: Guomin Jiang <guomin.jiang@intel.com>
+Date: Wed, 13 Jan 2021 18:08:09 +0800
+Subject: [PATCH] UefiCpuPkg: Move MigrateGdt from DiscoverMemory to
+ TempRamDone. (CVE-2019-11098)
+
+REF: https://bugzilla.tianocore.org/show_bug.cgi?id=1614
+REF: https://bugzilla.tianocore.org/show_bug.cgi?id=3160
+
+The GDT still in flash with commit 60b12e69fb1c8c7180fdda92f008248b9ec83db1
+after TempRamDone
+
+So move the action to TempRamDone event to avoid reading GDT from flash.
+
+Signed-off-by: Guomin Jiang <guomin.jiang@intel.com>
+Cc: Eric Dong <eric.dong@intel.com>
+Cc: Ray Ni <ray.ni@intel.com>
+Cc: Laszlo Ersek <lersek@redhat.com>
+Cc: Rahul Kumar <rahul1.kumar@intel.com>
+Cc: Debkumar De <debkumar.de@intel.com>
+Cc: Harry Han <harry.han@intel.com>
+Cc: Catharine West <catharine.west@intel.com>
+Reviewed-by: Ray Ni <ray.ni@intel.com>
+
+Bug: https://bugzilla.tianocore.org/show_bug.cgi?id=1614
+Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=991495
+Origin: upstream, https://github.com/tianocore/edk2/commit/f6ec1dd34fb6b9757b5ead465ee2ea20c182b0ac
+Last-Updated: 2021-07-26
+
+diff --git a/UefiCpuPkg/CpuMpPei/CpuMpPei.c b/UefiCpuPkg/CpuMpPei/CpuMpPei.c
+index 40729a09b9..3c1bad6470 100644
+--- a/UefiCpuPkg/CpuMpPei/CpuMpPei.c
++++ b/UefiCpuPkg/CpuMpPei/CpuMpPei.c
+@@ -429,43 +429,6 @@ GetGdtr (
+   AsmReadGdtr ((IA32_DESCRIPTOR *)Buffer);
+ }
+ 
+-/**
+-  Migrates the Global Descriptor Table (GDT) to permanent memory.
+-
+-  @retval   EFI_SUCCESS           The GDT was migrated successfully.
+-  @retval   EFI_OUT_OF_RESOURCES  The GDT could not be migrated due to lack of available memory.
+-
+-**/
+-EFI_STATUS
+-MigrateGdt (
+-  VOID
+-  )
+-{
+-  EFI_STATUS          Status;
+-  UINTN               GdtBufferSize;
+-  IA32_DESCRIPTOR     Gdtr;
+-  VOID                *GdtBuffer;
+-
+-  AsmReadGdtr ((IA32_DESCRIPTOR *) &Gdtr);
+-  GdtBufferSize = sizeof (IA32_SEGMENT_DESCRIPTOR) -1 + Gdtr.Limit + 1;
+-
+-  Status =  PeiServicesAllocatePool (
+-              GdtBufferSize,
+-              &GdtBuffer
+-              );
+-  ASSERT (GdtBuffer != NULL);
+-  if (EFI_ERROR (Status)) {
+-    return EFI_OUT_OF_RESOURCES;
+-  }
+-
+-  GdtBuffer = ALIGN_POINTER (GdtBuffer, sizeof (IA32_SEGMENT_DESCRIPTOR));
+-  CopyMem (GdtBuffer, (VOID *) Gdtr.Base, Gdtr.Limit + 1);
+-  Gdtr.Base = (UINTN) GdtBuffer;
+-  AsmWriteGdtr (&Gdtr);
+-
+-  return EFI_SUCCESS;
+-}
+-
+ /**
+   Initializes CPU exceptions handlers for the sake of stack switch requirement.
+ 
+diff --git a/UefiCpuPkg/CpuMpPei/CpuMpPei.inf b/UefiCpuPkg/CpuMpPei/CpuMpPei.inf
+index ba829d816e..7444bdb968 100644
+--- a/UefiCpuPkg/CpuMpPei/CpuMpPei.inf
++++ b/UefiCpuPkg/CpuMpPei/CpuMpPei.inf
+@@ -67,7 +67,6 @@
+   gUefiCpuPkgTokenSpaceGuid.PcdCpuStackSwitchExceptionList              ## SOMETIMES_CONSUMES
+   gUefiCpuPkgTokenSpaceGuid.PcdCpuKnownGoodStackSize                    ## SOMETIMES_CONSUMES
+   gUefiCpuPkgTokenSpaceGuid.PcdCpuApStackSize                           ## SOMETIMES_CONSUMES
+-  gEfiMdeModulePkgTokenSpaceGuid.PcdMigrateTemporaryRamFirmwareVolumes  ## CONSUMES
+ 
+ [Depex]
+   TRUE
+diff --git a/UefiCpuPkg/CpuMpPei/CpuPaging.c b/UefiCpuPkg/CpuMpPei/CpuPaging.c
+index 50ad4277af..3e261d6657 100644
+--- a/UefiCpuPkg/CpuMpPei/CpuPaging.c
++++ b/UefiCpuPkg/CpuMpPei/CpuPaging.c
+@@ -605,17 +605,9 @@ MemoryDiscoveredPpiNotifyCallback (
+ {
+   EFI_STATUS              Status;
+   BOOLEAN                 InitStackGuard;
+-  BOOLEAN                 InterruptState;
+   EDKII_MIGRATED_FV_INFO  *MigratedFvInfo;
+   EFI_PEI_HOB_POINTERS    Hob;
+ 
+-  if (PcdGetBool (PcdMigrateTemporaryRamFirmwareVolumes)) {
+-    InterruptState = SaveAndDisableInterrupts ();
+-    Status = MigrateGdt ();
+-    ASSERT_EFI_ERROR (Status);
+-    SetInterruptState (InterruptState);
+-  }
+-
+   //
+   // Paging must be setup first. Otherwise the exception TSS setup during MP
+   // initialization later will not contain paging information and then fail
+diff --git a/UefiCpuPkg/SecCore/SecCore.inf b/UefiCpuPkg/SecCore/SecCore.inf
+index 545781d6b4..ded83beb52 100644
+--- a/UefiCpuPkg/SecCore/SecCore.inf
++++ b/UefiCpuPkg/SecCore/SecCore.inf
+@@ -77,6 +77,7 @@
+ 
+ [Pcd]
+   gUefiCpuPkgTokenSpaceGuid.PcdPeiTemporaryRamStackSize  ## CONSUMES
++  gEfiMdeModulePkgTokenSpaceGuid.PcdMigrateTemporaryRamFirmwareVolumes  ## CONSUMES
+ 
+ [UserExtensions.TianoCore."ExtraFiles"]
+   SecCoreExtra.uni
+diff --git a/UefiCpuPkg/SecCore/SecMain.c b/UefiCpuPkg/SecCore/SecMain.c
+index 155be49a60..2416c4ce56 100644
+--- a/UefiCpuPkg/SecCore/SecMain.c
++++ b/UefiCpuPkg/SecCore/SecMain.c
+@@ -35,6 +35,43 @@ EFI_PEI_PPI_DESCRIPTOR            mPeiSecPlatformInformationPpi[] = {
+   }
+ };
+ 
++/**
++  Migrates the Global Descriptor Table (GDT) to permanent memory.
++
++  @retval   EFI_SUCCESS           The GDT was migrated successfully.
++  @retval   EFI_OUT_OF_RESOURCES  The GDT could not be migrated due to lack of available memory.
++
++**/
++EFI_STATUS
++MigrateGdt (
++  VOID
++  )
++{
++  EFI_STATUS          Status;
++  UINTN               GdtBufferSize;
++  IA32_DESCRIPTOR     Gdtr;
++  VOID                *GdtBuffer;
++
++  AsmReadGdtr ((IA32_DESCRIPTOR *) &Gdtr);
++  GdtBufferSize = sizeof (IA32_SEGMENT_DESCRIPTOR) -1 + Gdtr.Limit + 1;
++
++  Status =  PeiServicesAllocatePool (
++              GdtBufferSize,
++              &GdtBuffer
++              );
++  ASSERT (GdtBuffer != NULL);
++  if (EFI_ERROR (Status)) {
++    return EFI_OUT_OF_RESOURCES;
++  }
++
++  GdtBuffer = ALIGN_POINTER (GdtBuffer, sizeof (IA32_SEGMENT_DESCRIPTOR));
++  CopyMem (GdtBuffer, (VOID *) Gdtr.Base, Gdtr.Limit + 1);
++  Gdtr.Base = (UINTN) GdtBuffer;
++  AsmWriteGdtr (&Gdtr);
++
++  return EFI_SUCCESS;
++}
++
+ //
+ // These are IDT entries pointing to 10:FFFFFFE4h.
+ //
+@@ -409,6 +446,14 @@ SecTemporaryRamDone (
+   //
+   State = SaveAndDisableInterrupts ();
+ 
++  //
++  // Migrate GDT before NEM near down
++  //
++  if (PcdGetBool (PcdMigrateTemporaryRamFirmwareVolumes)) {
++    Status = MigrateGdt ();
++    ASSERT_EFI_ERROR (Status);
++  }
++
+   //
+   // Disable Temporary RAM after Stack and Heap have been migrated at this point.
+   //
+-- 
+2.32.0
+

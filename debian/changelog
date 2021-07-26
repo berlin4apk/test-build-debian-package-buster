@@ -1,3 +1,9 @@
+edk2 (2020.11-5) UNRELEASED; urgency=medium
+
+  * Address Boot Guard TOCTOU vulnerability (CVE-2019-11098) (Closes: #991495)
+
+ -- dann frazier <dannf@debian.org>  Mon, 26 Jul 2021 08:37:55 -0600
+
 edk2 (2020.11-4) unstable; urgency=medium
 
   * UEFI/Filesystems.py: Force "/sbin" into $PATH before calling
