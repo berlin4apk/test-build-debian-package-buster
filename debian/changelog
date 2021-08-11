@@ -1,3 +1,10 @@
+edk2 (2021.08~rc0-2) experimental; urgency=medium
+
+  * d/p/ftbfs-gcc-11.patch: Use -march=armv7-a+fp instead of -march=armv7-a
+    to fix FTBFS w/ the new gcc-11 defaults. (Closes: #992100)
+
+ -- dann frazier <dannf@debian.org>  Wed, 11 Aug 2021 11:24:42 -0600
+
 edk2 (2021.08~rc0-1) experimental; urgency=medium
 
   * New upstream release, based on edk2-stable202108-rc0 tag.

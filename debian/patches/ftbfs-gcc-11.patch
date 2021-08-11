@@ -1,0 +1,26 @@
+Description: Explicitly enable FPU on ARM builds to fix FTBFS w/ gcc-11
+ Starting with gcc-11, Debian's armhf compiler no longer builds with
+ a default -mfpu= option. Instead it enables the FPU via an extension
+ to the -march flag (--with-arch=armv7-a+fp). edk2 explicitly passes
+ its own -march=armv7-a setting, which overrides the +fp default, so we
+ end up with no FPU:
+   cc1: error: ‘-mfloat-abi=hard’: selected architecture lacks an FPU
+ Fix this by adding +fp to edk2's -march override.
+Author: dann frazier <dannf@debian.org>
+Bug-Debian: https://bugs.debian.org/992100
+Forwarded: no
+Last-Update: 2021-08-11
+
+Index: edk2/BaseTools/Conf/tools_def.template
+===================================================================
+--- edk2.orig/BaseTools/Conf/tools_def.template
++++ edk2/BaseTools/Conf/tools_def.template
+@@ -2379,7 +2379,7 @@ RELEASE_GCC5_X64_DLINK_FLAGS     = DEF(G
+ *_GCC5_ARM_ASM_FLAGS             = DEF(GCC5_ARM_ASM_FLAGS)
+ *_GCC5_ARM_DLINK2_FLAGS          = DEF(GCC5_ARM_DLINK2_FLAGS)
+ *_GCC5_ARM_DTCPP_FLAGS           = DEF(GCC_DTCPP_FLAGS)
+-*_GCC5_ARM_PLATFORM_FLAGS        = -march=armv7-a
++*_GCC5_ARM_PLATFORM_FLAGS        = -march=armv7-a+fp
+ *_GCC5_ARM_PP_FLAGS              = $(ARCHCC_FLAGS) $(PLATFORM_FLAGS) DEF(GCC_PP_FLAGS)
+ *_GCC5_ARM_RC_FLAGS              = DEF(GCC_ARM_RC_FLAGS)
+ *_GCC5_ARM_VFRPP_FLAGS           = $(ARCHCC_FLAGS) $(PLATFORM_FLAGS) DEF(GCC_VFRPP_FLAGS)
