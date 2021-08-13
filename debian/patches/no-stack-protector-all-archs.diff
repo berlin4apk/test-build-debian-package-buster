@@ -8,7 +8,7 @@ Index: edk2/BaseTools/Conf/tools_def.template
 ===================================================================
 --- edk2.orig/BaseTools/Conf/tools_def.template
 +++ edk2/BaseTools/Conf/tools_def.template
-@@ -1952,7 +1952,7 @@ DEFINE GCC_RISCV64_RC_FLAGS        = -I
+@@ -1900,7 +1900,7 @@ DEFINE GCC_RISCV64_RC_FLAGS        = -I
  # GCC Build Flag for included header file list generation
  DEFINE GCC_DEPS_FLAGS              = -MMD -MF $@.deps
  

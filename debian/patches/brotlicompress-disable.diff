@@ -12,7 +12,7 @@ Index: edk2/BaseTools/Source/C/GNUmakefile
 ===================================================================
 --- edk2.orig/BaseTools/Source/C/GNUmakefile
 +++ edk2/BaseTools/Source/C/GNUmakefile
-@@ -45,7 +45,6 @@ all: makerootdir subdirs
+@@ -48,7 +48,6 @@ all: makerootdir subdirs
  LIBRARIES = Common
  VFRAUTOGEN = VfrCompile/VfrLexer.h
  APPLICATIONS = \
