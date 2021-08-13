@@ -3,6 +3,7 @@ ArmPkg/Library/GccLto/liblto-*.a
 Build/
 CryptoPkg/Include/openssl/*.h
 Conf/.cache/
+Conf/.AutoGenIdFile.txt
 Conf/BuildEnv.sh
 Conf/build_rule.txt
 Conf/target.txt
