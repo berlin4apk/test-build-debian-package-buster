@@ -1,8 +1,8 @@
-edk2 (2020.11-2+deb11u1) UNRELEASED; urgency=medium
+edk2 (2020.11-2+deb11u1) bullseye; urgency=medium
 
   * Address Boot Guard TOCTOU vulnerability (CVE-2019-11098) (Closes: #991495)
 
- -- dann frazier <dannf@debian.org>  Wed, 18 Aug 2021 16:53:22 -0600
+ -- dann frazier <dannf@debian.org>  Wed, 18 Aug 2021 16:57:56 -0600
 
 edk2 (2020.11-2) unstable; urgency=medium
 
