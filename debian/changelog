@@ -1,6 +1,8 @@
 edk2 (2021.08-1) UNRELEASED; urgency=medium
 
   * New upstream release, based on edk2-stable202108 tag.
+  * d/p/ftbfs-gcc-11.patch: Drop; no longer needed now that
+    gcc-11 has restored its previous behavior.
 
  -- dann frazier <dannf@debian.org>  Tue, 07 Sep 2021 11:16:28 -0600
 
