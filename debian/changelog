@@ -1,3 +1,9 @@
+edk2 (2021.08-1) UNRELEASED; urgency=medium
+
+  * New upstream release, based on edk2-stable202108 tag.
+
+ -- dann frazier <dannf@debian.org>  Tue, 07 Sep 2021 11:16:28 -0600
+
 edk2 (2021.08~rc0-2) experimental; urgency=medium
 
   * d/p/ftbfs-gcc-11.patch: Use -march=armv7-a+fp instead of -march=armv7-a

@@ -14,7 +14,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <Guid/MmramMemoryReserve.h>
 #include <Guid/MpInformation.h>
 
-#include <Library/AArch64/StandaloneMmCoreEntryPoint.h>
+#include <Library/Arm/StandaloneMmCoreEntryPoint.h>
 #include <Library/ArmMmuLib.h>
 #include <Library/ArmSvcLib.h>
 #include <Library/DebugLib.h>
@@ -72,14 +72,14 @@ CreateHobListFromBootInfo (
 
   // Create a hoblist with a PHIT and EOH
   HobStart = HobConstructor (
-               (VOID *) PayloadBootInfo->SpMemBase,
+               (VOID *) (UINTN) PayloadBootInfo->SpMemBase,
                (UINTN)  PayloadBootInfo->SpMemLimit - PayloadBootInfo->SpMemBase,
-               (VOID *) PayloadBootInfo->SpHeapBase,
-               (VOID *) (PayloadBootInfo->SpHeapBase + PayloadBootInfo->SpHeapSize)
+               (VOID *) (UINTN) PayloadBootInfo->SpHeapBase,
+               (VOID *) (UINTN) (PayloadBootInfo->SpHeapBase + PayloadBootInfo->SpHeapSize)
                );
 
   // Check that the Hoblist starts at the bottom of the Heap
-  ASSERT (HobStart == (VOID *) PayloadBootInfo->SpHeapBase);
+  ASSERT (HobStart == (VOID *) (UINTN) PayloadBootInfo->SpHeapBase);
 
   // Build a Boot Firmware Volume HOB
   BuildFvHob (PayloadBootInfo->SpImageBase, PayloadBootInfo->SpImageSize);
@@ -190,9 +190,9 @@ CreateHobListFromBootInfo (
   MmramRanges[3].RegionState   = EFI_CACHEABLE | EFI_ALLOCATED;
 
   // Base and size of heap memory shared by all cpus
-  MmramRanges[4].PhysicalStart = (EFI_PHYSICAL_ADDRESS) HobStart;
-  MmramRanges[4].CpuStart      = (EFI_PHYSICAL_ADDRESS) HobStart;
-  MmramRanges[4].PhysicalSize  = HobStart->EfiFreeMemoryBottom - (EFI_PHYSICAL_ADDRESS) HobStart;
+  MmramRanges[4].PhysicalStart = (EFI_PHYSICAL_ADDRESS) (UINTN) HobStart;
+  MmramRanges[4].CpuStart      = (EFI_PHYSICAL_ADDRESS) (UINTN) HobStart;
+  MmramRanges[4].PhysicalSize  = HobStart->EfiFreeMemoryBottom - (EFI_PHYSICAL_ADDRESS) (UINTN) HobStart;
   MmramRanges[4].RegionState   = EFI_CACHEABLE | EFI_ALLOCATED;
 
   // Base and size of heap memory shared by all cpus
