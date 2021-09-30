@@ -49,6 +49,17 @@ OVMF_VARS.ms.fd
   using a 2MB flash device. 2MB flash is no longer considered sufficient for
   use with Secure Boot. This is provided only for backwards compatibility.
 
+OVMF.fd
+  This is a unified image that includes the contents of both OVMF_CODE.fd
+  and OVMF_VARS.fd. If VMs need to update their variables, they will
+  need to have their own writeable copy of this image. A downside of this
+  is that the OVMF_CODE content in those images will not automatically
+  benefit from updates to the ovmf package, as would be the case for VMs
+  that use the system OVMF_CODE.fd image and their own writeable
+  OVMF_VARS.fd image. These unified images are provided for backwards
+  compatibility only. New unified images are not being provided for
+  additional variants (4M, secboot, etc).
+
 OVMF_CODE_4M.snakeoil.fd
 OVMF_VARS_4M.snakeoil.fd
   This image is **for testing purposes only**. It includes an insecure
@@ -63,4 +74,4 @@ PkKek-1-snakeoil.pem
   OVMF_VARS.snakeoil.fd template. The password for the key is
   'snakeoil'.
 
- -- dann frazier <dannf@debian.org>, Mon,  8 Mar 2021 10:58:55 -0700
+ -- dann frazier <dannf@debian.org>, Thu, 30 Sep 2021 10:33:08 -0600
