@@ -1,3 +1,9 @@
+edk2 (2021.11~rc1-1) UNRELEASED; urgency=medium
+
+  * New upstream release, based on edk2-stable202111-rc1 tag.
+
+ -- dann frazier <dannf@debian.org>  Mon, 15 Nov 2021 13:51:10 -0700
+
 edk2 (2021.08-3) unstable; urgency=medium
 
   * d/p/ftbfs-gcc-11.patch: Resurrect, since gcc-11 has changed defaults
