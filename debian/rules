@@ -218,7 +218,7 @@ get-orig-source:
 	# stuff we don't need
 	set -e; cd edk2.tmp; \
 	for submodule in $(EMBEDDED_SUBMODULES); do \
-		git submodule update --init $$submodule; \
+		git submodule update --depth 1 --init $$submodule; \
 	done
 	rm -rf edk2-$(DEB_VERSION_UPSTREAM) && \
 		mkdir edk2-$(DEB_VERSION_UPSTREAM)

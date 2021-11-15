@@ -3,6 +3,7 @@ edk2 (2021.11~rc1-1) UNRELEASED; urgency=medium
   * New upstream release, based on edk2-stable202111-rc1 tag.
     - d/binary-check.blacklist: Update ResetVector file list to match
       upstream.
+  * d/rules: Use shallow clones to save time when initializing submodules.
 
  -- dann frazier <dannf@debian.org>  Mon, 15 Nov 2021 13:51:10 -0700
 
