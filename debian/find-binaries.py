@@ -2,7 +2,7 @@
 
 # Use heuristics to identify new files that maybe binaries.
 # Flagged files need to be manually inspected and either added to the
-# whitelist (because they are safe to redistribute), or to the blacklist
+# allow list (because they are safe to redistribute), or to the reject list
 # (so that they'll be removed prior to orig.tar.xz generation).
 
 import os
@@ -43,13 +43,13 @@ def extensionOK(name):
 if __name__ == '__main__':
     top = './'
     for root, dirs, files in os.walk(top):
-        with open('./debian/binary-check.whitelist', 'r') as f:
-            whitelist = list(map(lambda s: s.strip(), f.readlines()))
+        with open('./debian/binary-check.allow', 'r') as f:
+            allowlist = list(map(lambda s: s.strip(), f.readlines()))
 
         ret = 0
         for name in files:
             relpath = os.path.join(root, name)[len(top):]
-            if relpath in whitelist:
+            if relpath in allowlist:
                 continue
             if nameOK(name):
                 continue

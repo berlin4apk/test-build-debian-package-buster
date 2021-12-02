@@ -2,6 +2,9 @@ edk2 (2021.11-1) UNRELEASED; urgency=medium
 
   * New upstream release, based on edk2-stable202111 tag.
   * d/find-binaries.py: Cleanup pyflake issues
+  * Inclusivity cleanup:
+    - Rename d/binary-check.blacklist -> d/binary-check.remove
+    - Rename d/binary-check.whitelist -> d/binary-check.allow
 
  -- dann frazier <dannf@debian.org>  Wed, 01 Dec 2021 17:18:58 -0700
 
