@@ -1,6 +1,7 @@
 edk2 (2021.11-1) UNRELEASED; urgency=medium
 
   * New upstream release, based on edk2-stable202111 tag.
+  * d/find-binaries.py: Cleanup pyflake issues
 
  -- dann frazier <dannf@debian.org>  Wed, 01 Dec 2021 17:18:58 -0700
 
