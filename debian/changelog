@@ -1,3 +1,9 @@
+edk2 (2022.02~rc1-1) UNRELEASED; urgency=medium
+
+  * New upstream release, based on edk2-stable202202-rc1 tag.
+
+ -- dann frazier <dannf@debian.org>  Fri, 11 Feb 2022 14:31:48 -0700
+
 edk2 (2021.11-2) unstable; urgency=medium
 
   * Set NETWORK_IP6_ENABLE to support IPv6 PXE. (Closes: #1004147)
