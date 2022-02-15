@@ -1,3 +1,4 @@
 no-stack-protector-all-archs.diff
 brotlicompress-disable.diff
 ftbfs-gcc-11.patch
+0001-OvmfPkg-FvbServicesSmm-use-the-VmgExitLibNull.patch

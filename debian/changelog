@@ -1,6 +1,8 @@
 edk2 (2022.02~rc1-1) UNRELEASED; urgency=medium
 
   * New upstream release, based on edk2-stable202202-rc1 tag.
+  * d/p/0001-OvmfPkg-FvbServicesSmm-use-the-VmgExitLibNull.patch:
+    Fix regression causing OVMF builds w/ SMM to crash.
 
  -- dann frazier <dannf@debian.org>  Fri, 11 Feb 2022 14:31:48 -0700
 
