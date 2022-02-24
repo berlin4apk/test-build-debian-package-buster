@@ -1,9 +1,9 @@
-edk2 (2022.02~rc1-2) UNRELEASED; urgency=medium
+edk2 (2022.02~rc1-1ubuntu1) jammy; urgency=medium
 
   * qemu-efi-arm: Build with non-hard-float ARM compiler, allowing
     us to stop carrying debian/patches/ftbfs-gcc-11.patch.
 
- -- dann frazier <dannf@debian.org>  Thu, 24 Feb 2022 12:42:13 -0700
+ -- dann frazier <dannf@ubuntu.com>  Thu, 24 Feb 2022 13:14:21 -0700
 
 edk2 (2022.02~rc1-1) unstable; urgency=medium
 
