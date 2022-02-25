@@ -1,4 +1,4 @@
-edk2 (2022.02-1) UNRELEASED; urgency=medium
+edk2 (2022.02-1) unstable; urgency=medium
 
   * New upstream release, based on edk2-stable202202 tag.
   * Drop patch merged upstream:
@@ -6,7 +6,7 @@ edk2 (2022.02-1) UNRELEASED; urgency=medium
   * qemu-efi-arm: Build with non-hard-float ARM compiler, allowing
     us to stop carrying debian/patches/ftbfs-gcc-11.patch.
 
- -- dann frazier <dannf@debian.org>  Fri, 25 Feb 2022 12:01:26 -0700
+ -- dann frazier <dannf@debian.org>  Fri, 25 Feb 2022 12:12:36 -0700
 
 edk2 (2022.02~rc1-1) unstable; urgency=medium
 
