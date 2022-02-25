@@ -1,6 +1,8 @@
 edk2 (2022.02-1) UNRELEASED; urgency=medium
 
   * New upstream release, based on edk2-stable202202 tag.
+  * Drop patch merged upstream:
+    - 0001-OvmfPkg-FvbServicesSmm-use-the-VmgExitLibNull.patch
   * qemu-efi-arm: Build with non-hard-float ARM compiler, allowing
     us to stop carrying debian/patches/ftbfs-gcc-11.patch.
 
