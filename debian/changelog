@@ -1,11 +1,11 @@
-edk2 (2022.02-3) UNRELEASED; urgency=medium
+edk2 (2022.02-3) unstable; urgency=medium
 
   * Fix NVMe controller support in QEMU (Closes: #1007793).
     - d/p/0001-MdeModulePkg-NvmExpressDxe-fix-check-for-Cap.Css.patch
     - d/p/0002-MdeModulePkg-NvmExpressPei-fix-check-for-NVM-command.patch
     Thanks to Mara Sophie Grosch!
 
- -- dann frazier <dannf@debian.org>  Mon, 28 Mar 2022 14:52:37 -0600
+ -- dann frazier <dannf@debian.org>  Mon, 28 Mar 2022 14:59:17 -0600
 
 edk2 (2022.02-2) unstable; urgency=medium
 
