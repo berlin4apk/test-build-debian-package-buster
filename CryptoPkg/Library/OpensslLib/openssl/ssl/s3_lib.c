@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2022 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright (c) 2002, Oracle and/or its affiliates. All rights reserved
  * Copyright 2005 Nokia. All rights reserved.
  *
@@ -2171,7 +2171,7 @@ static SSL_CIPHER ssl3_ciphers[] = {
      TLS1_TXT_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA256,
      TLS1_RFC_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA256,
      TLS1_CK_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA256,
-     SSL_kEDH,
+     SSL_kDHE,
      SSL_aDSS,
      SSL_CAMELLIA128,
      SSL_SHA256,
@@ -2187,7 +2187,7 @@ static SSL_CIPHER ssl3_ciphers[] = {
      TLS1_TXT_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA256,
      TLS1_RFC_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA256,
      TLS1_CK_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA256,
-     SSL_kEDH,
+     SSL_kDHE,
      SSL_aRSA,
      SSL_CAMELLIA128,
      SSL_SHA256,
@@ -2203,7 +2203,7 @@ static SSL_CIPHER ssl3_ciphers[] = {
      TLS1_TXT_ADH_WITH_CAMELLIA_128_CBC_SHA256,
      TLS1_RFC_ADH_WITH_CAMELLIA_128_CBC_SHA256,
      TLS1_CK_ADH_WITH_CAMELLIA_128_CBC_SHA256,
-     SSL_kEDH,
+     SSL_kDHE,
      SSL_aNULL,
      SSL_CAMELLIA128,
      SSL_SHA256,
@@ -2235,7 +2235,7 @@ static SSL_CIPHER ssl3_ciphers[] = {
      TLS1_TXT_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA256,
      TLS1_RFC_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA256,
      TLS1_CK_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA256,
-     SSL_kEDH,
+     SSL_kDHE,
      SSL_aDSS,
      SSL_CAMELLIA256,
      SSL_SHA256,
@@ -2251,7 +2251,7 @@ static SSL_CIPHER ssl3_ciphers[] = {
      TLS1_TXT_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256,
      TLS1_RFC_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256,
      TLS1_CK_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256,
-     SSL_kEDH,
+     SSL_kDHE,
      SSL_aRSA,
      SSL_CAMELLIA256,
      SSL_SHA256,
@@ -2267,7 +2267,7 @@ static SSL_CIPHER ssl3_ciphers[] = {
      TLS1_TXT_ADH_WITH_CAMELLIA_256_CBC_SHA256,
      TLS1_RFC_ADH_WITH_CAMELLIA_256_CBC_SHA256,
      TLS1_CK_ADH_WITH_CAMELLIA_256_CBC_SHA256,
-     SSL_kEDH,
+     SSL_kDHE,
      SSL_aNULL,
      SSL_CAMELLIA256,
      SSL_SHA256,
@@ -4629,6 +4629,7 @@ int ssl_generate_master_secret(SSL *s, unsigned char *pms, size_t pmslen,
 
         OPENSSL_clear_free(s->s3->tmp.psk, psklen);
         s->s3->tmp.psk = NULL;
+        s->s3->tmp.psklen = 0;
         if (!s->method->ssl3_enc->generate_master_secret(s,
                     s->session->master_key, pskpms, pskpmslen,
                     &s->session->master_key_length)) {
@@ -4658,8 +4659,10 @@ int ssl_generate_master_secret(SSL *s, unsigned char *pms, size_t pmslen,
         else
             OPENSSL_cleanse(pms, pmslen);
     }
-    if (s->server == 0)
+    if (s->server == 0) {
         s->s3->tmp.pms = NULL;
+        s->s3->tmp.pmslen = 0;
+    }
     return ret;
 }
 
