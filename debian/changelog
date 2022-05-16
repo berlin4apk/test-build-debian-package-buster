@@ -1,6 +1,9 @@
 edk2 (2022.05~rc1-1) UNRELEASED; urgency=medium
 
   * New upstream release, based on edk2-stable202205-rc1 tag.
+  * Drop patches merged upstream:
+    - d/p/0001-MdeModulePkg-NvmExpressDxe-fix-check-for-Cap.Css.patch
+    - d/p/0002-MdeModulePkg-NvmExpressPei-fix-check-for-NVM-command.patch
 
  -- dann frazier <dannf@debian.org>  Mon, 16 May 2022 12:57:08 -0600
 
