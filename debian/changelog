@@ -1,4 +1,4 @@
-edk2 (2022.05~rc1-1) UNRELEASED; urgency=medium
+edk2 (2022.05~rc1-1) unstable; urgency=medium
 
   * New upstream release, based on edk2-stable202205-rc1 tag.
   * Drop patches merged upstream:
@@ -7,7 +7,7 @@ edk2 (2022.05~rc1-1) UNRELEASED; urgency=medium
   * ovmf: Fix boot hang with SMM enabled:
     - d/p/0001-OvmfPkg-OvmfPkgX64-Use-different-CcProbeLib-when-SMM.patch
 
- -- dann frazier <dannf@debian.org>  Mon, 16 May 2022 12:57:08 -0600
+ -- dann frazier <dannf@debian.org>  Tue, 17 May 2022 09:59:17 -0600
 
 edk2 (2022.02-3) unstable; urgency=medium
 
