@@ -1,3 +1,9 @@
+edk2 (2022.05-1) UNRELEASED; urgency=medium
+
+  * New upstream release, based on edk2-stable202205 tag.
+
+ -- dann frazier <dannf@debian.org>  Sat, 28 May 2022 10:59:55 -0600
+
 edk2 (2022.05~rc1-1) unstable; urgency=medium
 
   * New upstream release, based on edk2-stable202205-rc1 tag.

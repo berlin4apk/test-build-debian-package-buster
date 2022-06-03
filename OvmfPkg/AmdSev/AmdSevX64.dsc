@@ -196,6 +196,7 @@
   VarCheckLib|MdeModulePkg/Library/VarCheckLib/VarCheckLib.inf
   VariablePolicyLib|MdeModulePkg/Library/VariablePolicyLib/VariablePolicyLib.inf
   VariablePolicyHelperLib|MdeModulePkg/Library/VariablePolicyHelperLib/VariablePolicyHelperLib.inf
+  VariableFlashInfoLib|MdeModulePkg/Library/BaseVariableFlashInfoLib/BaseVariableFlashInfoLib.inf
 
 !if $(BUILD_SHELL) == TRUE
   ShellLib|ShellPkg/Library/UefiShellLib/UefiShellLib.inf
@@ -577,7 +578,7 @@
 
 !include OvmfPkg/OvmfTpmPcds.dsc.inc
 
-  gEfiMdePkgTokenSpaceGuid.PcdFSBClock|100000000
+  gEfiMdePkgTokenSpaceGuid.PcdFSBClock|1000000000
 
 [PcdsDynamicHii]
 !include OvmfPkg/OvmfTpmPcdsHii.dsc.inc

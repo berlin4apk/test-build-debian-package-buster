@@ -69,7 +69,7 @@ MailBoxWakeUp:
     mov        rax, [rbx + WakeupVectorOffset]
     ; OS sends a wakeup command for a given APIC ID, firmware is supposed to reset
     ; the command field back to zero as acknowledgement.
-    mov        qword [rbx + WakeupVectorOffset], 0
+    mov        qword [rbx + CommandOffset], 0
     jmp        rax
 MailBoxSleep:
     jmp       $
@@ -83,7 +83,7 @@ AsmRelocateApMailBoxLoopEnd:
 ;-------------------------------------------------------------------------------------
 global ASM_PFX(AsmGetRelocationMap)
 ASM_PFX(AsmGetRelocationMap):
-    lea        rax, [ASM_PFX(AsmRelocateApMailBoxLoopStart)]
+    lea        rax, [AsmRelocateApMailBoxLoopStart]
     mov        qword [rcx], rax
     mov        qword [rcx +  8h], AsmRelocateApMailBoxLoopEnd - AsmRelocateApMailBoxLoopStart
     ret
