@@ -1,6 +1,8 @@
 edk2 (2022.05-1) UNRELEASED; urgency=medium
 
   * New upstream release, based on edk2-stable202205 tag.
+  * Drop patches merged upstream:
+    - d/p/0001-OvmfPkg-OvmfPkgX64-Use-different-CcProbeLib-when-SMM.patch
 
  -- dann frazier <dannf@debian.org>  Sat, 28 May 2022 10:59:55 -0600
 

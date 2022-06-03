@@ -1,3 +1,2 @@
 no-stack-protector-all-archs.diff
 brotlicompress-disable.diff
-0001-OvmfPkg-OvmfPkgX64-Use-different-CcProbeLib-when-SMM.patch
