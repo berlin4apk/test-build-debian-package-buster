@@ -1,9 +1,9 @@
-edk2 (2022.05-2) UNRELEASED; urgency=medium
+edk2 (2022.05-2) unstable; urgency=medium
 
   * d/p/x64-baseline-abi.patch: Override microarchitecture ABI for x64
     to retain compatibility with generic x86-64 platforms. LP: #1976267.
 
- -- dann frazier <dannf@debian.org>  Mon, 06 Jun 2022 18:11:01 +0100
+ -- dann frazier <dannf@debian.org>  Mon, 06 Jun 2022 18:48:56 +0100
 
 edk2 (2022.05-1) unstable; urgency=medium
 
