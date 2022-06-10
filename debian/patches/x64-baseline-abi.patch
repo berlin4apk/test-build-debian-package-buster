@@ -4,9 +4,9 @@ Description: Explicitly target generic x86-64 ABI
  with older machine types.
 Author: dann frazier <dannf@debian.org>
 Bug-Ubuntu: http://launchpad.net/bugs/1976267
-Forwarded: no
 Author: dann frazier <dannf@debian.org>
-Last-Update: 2022-06-06
+Forwarded: https://edk2.groups.io/g/devel/message/90447
+Last-Update: 2022-06-10
 
 --- a/BaseTools/Conf/tools_def.template
 +++ b/BaseTools/Conf/tools_def.template
