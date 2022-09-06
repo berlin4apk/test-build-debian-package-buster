@@ -25,6 +25,7 @@ import sys
 import unittest
 
 from UEFI.Filesystems import GrubShellBootableIsoImage
+from UEFI.SignedBinary import SignedBinary
 from UEFI.Qemu import QemuEfiMachine, QemuEfiVariant, QemuEfiFlashSize
 from UEFI import Qemu
 
@@ -288,6 +289,41 @@ class BootToShellTest(unittest.TestCase):
             QemuEfiMachine.OVMF_Q35,
             variant=QemuEfiVariant.MS,
             flash_size=QemuEfiFlashSize.SIZE_4MB,
+        )
+        grub = get_local_grub_path('X64', signed=False)
+        shim = get_local_shim_path('X64', signed=False)
+        iso = GrubShellBootableIsoImage('X64', shim, grub)
+        q.add_disk(iso.path)
+        self.run_cmd_check_secure_boot(q.command, 'x64', False)
+
+    @unittest.skipUnless(DPKG_ARCH == 'amd64', "amd64-only")
+    def test_ovmf_snakeoil_secure_boot_signed(self):
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_Q35,
+            variant=QemuEfiVariant.SNAKEOIL,
+        )
+        shim = SignedBinary(
+            get_local_shim_path('X64', signed=False),
+            "/usr/share/ovmf/PkKek-1-snakeoil.key",
+            "/usr/share/ovmf/PkKek-1-snakeoil.pem",
+            "snakeoil",
+        )
+        grub = SignedBinary(
+            get_local_grub_path('X64', signed=False),
+            "/usr/share/ovmf/PkKek-1-snakeoil.key",
+            "/usr/share/ovmf/PkKek-1-snakeoil.pem",
+            "snakeoil",
+        )
+        iso = GrubShellBootableIsoImage('X64', shim.path, grub.path)
+        q.add_disk(iso.path)
+        self.run_cmd_check_secure_boot(q.command, 'x64', True)
+
+    @unittest.skipUnless(DPKG_ARCH == 'amd64', "amd64-only")
+    def test_ovmf_snakeoil_secure_boot_unsigned(self):
+        q = Qemu.QemuCommand(
+            QemuEfiMachine.OVMF_Q35,
+            variant=QemuEfiVariant.SNAKEOIL,
+            flash_size=QemuEfiFlashSize.DEFAULT,
         )
         grub = get_local_grub_path('X64', signed=False)
         shim = get_local_shim_path('X64', signed=False)

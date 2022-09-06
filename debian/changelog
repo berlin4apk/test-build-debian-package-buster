@@ -4,6 +4,7 @@ edk2 (2022.02-3ubuntu0.22.04.1) UNRELEASED; urgency=medium
     a regression introduced with the transition to edk2-vars-generator.py.
     LP: #1986692.
   * autopkgtest: Move bootloader selection logic out of Filesystems.py.
+  * autopkgtest: Add snakeoil regression tests.
 
  -- dann frazier <dannf@ubuntu.com>  Mon, 12 Sep 2022 20:41:26 -0600
 
