@@ -155,6 +155,7 @@ debian/oem-string-%: debian/PkKek-1-%.pem
 	./debian/edk2-vars-generator.py \
 		-f AAVMF -e $(AAVMF_ENROLL) -s $(AAVMF_SHELL) \
 		-c $(AAVMF_CODE) -V $(AAVMF_VARS) \
+		--no-default \
 		-C `< debian/oem-string-snakeoil` -o $@
 
 %/OVMF_VARS.ms.fd: %/OVMF_CODE.fd %/OVMF_VARS.fd debian/oem-string-vendor $(OVMF_ENROLL) $(OVMF_SHELL)
@@ -179,6 +180,7 @@ debian/oem-string-%: debian/PkKek-1-%.pem
 		-f OVMF_4M -e $(OVMF_ENROLL) -s $(OVMF_SHELL) \
 		-c debian/ovmf-install/OVMF_CODE_4M.fd \
 		-V debian/ovmf-install/OVMF_VARS_4M.fd \
+		--no-default \
 		-C `< debian/oem-string-snakeoil` -o $@
 
 ArmPkg/Library/GccLto/liblto-aarch64.a:	ArmPkg/Library/GccLto/liblto-aarch64.s
