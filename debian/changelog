@@ -1,3 +1,11 @@
+edk2 (2022.05-3) UNRELEASED; urgency=medium
+
+  * Enroll snakeoil keys w/ EnrollDefaultKeys.efi --no-default, fixing
+    a regression introduced with the transition to edk2-vars-generator.py.
+    LP: #1986692.
+
+ -- dann frazier <dannf@debian.org>  Tue, 06 Sep 2022 08:19:39 -0600
+
 edk2 (2022.05-2) unstable; urgency=medium
 
   * d/p/x64-baseline-abi.patch: Override microarchitecture ABI for x64
