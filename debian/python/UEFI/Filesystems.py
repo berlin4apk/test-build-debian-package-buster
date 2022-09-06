@@ -1,5 +1,5 @@
 #
-# Copyright 2019-2021 Canonical Ltd.
+# Copyright 2019-2022 Canonical Ltd.
 # Authors:
 # - dann frazier <dann.frazier@canonical.com>
 #
