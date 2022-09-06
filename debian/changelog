@@ -5,6 +5,7 @@ edk2 (2022.05-3) UNRELEASED; urgency=medium
     LP: #1986692.
   * Clear the BootOrder EFI variable after enrolling keys.
     (Closes: #1015759)
+  * autopkgtest: Move bootloader selection logic out of Filesystems.py.
 
  -- dann frazier <dannf@debian.org>  Tue, 06 Sep 2022 08:19:39 -0600
 

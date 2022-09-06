@@ -18,6 +18,7 @@
 #
 
 import enum
+import os
 import pexpect
 import subprocess
 import sys
@@ -30,6 +31,39 @@ from UEFI import Qemu
 DPKG_ARCH = subprocess.check_output(
     ['dpkg', '--print-architecture']
 ).decode().rstrip()
+
+
+EfiArchToGrubArch = {
+    'X64': "x86_64",
+    'AA64': "arm64",
+}
+
+
+def get_local_grub_path(efi_arch, signed=False):
+    grub_subdir = "%s-efi" % EfiArchToGrubArch[efi_arch.upper()]
+    ext = "efi"
+    if signed:
+        grub_subdir = f"{grub_subdir}-signed"
+        ext = f"{ext}.signed"
+
+    grub_path = os.path.join(
+        os.path.sep, 'usr', 'lib', 'grub',
+        '%s' % (grub_subdir),
+        "" if signed else "monolithic",
+        'grub%s.%s' % (efi_arch.lower(), ext)
+    )
+    return grub_path
+
+
+def get_local_shim_path(efi_arch, signed=False):
+    ext = 'efi'
+    if signed:
+        ext = f"{ext}.signed"
+    shim_path = os.path.join(
+        os.path.sep, 'usr', 'lib', 'shim',
+        'shim%s.%s' % (efi_arch.lower(), ext)
+    )
+    return shim_path
 
 
 class BootToShellTest(unittest.TestCase):
@@ -124,7 +158,9 @@ class BootToShellTest(unittest.TestCase):
             QemuEfiMachine.AAVMF,
             variant=QemuEfiVariant.MS,
         )
-        iso = GrubShellBootableIsoImage('AA64', use_signed=True)
+        grub = get_local_grub_path('AA64', signed=True)
+        shim = get_local_shim_path('AA64', signed=True)
+        iso = GrubShellBootableIsoImage('AA64', shim, grub)
         q.add_disk(iso.path)
         self.run_cmd_check_secure_boot(q.command, 'aa64', True)
 
@@ -184,7 +220,9 @@ class BootToShellTest(unittest.TestCase):
             variant=QemuEfiVariant.MS,
             flash_size=QemuEfiFlashSize.SIZE_2MB,
         )
-        iso = GrubShellBootableIsoImage('X64', use_signed=True)
+        grub = get_local_grub_path('X64', signed=True)
+        shim = get_local_shim_path('X64', signed=True)
+        iso = GrubShellBootableIsoImage('X64', shim, grub)
         q.add_disk(iso.path)
         self.run_cmd_check_secure_boot(q.command, 'x64', True)
 
@@ -195,7 +233,9 @@ class BootToShellTest(unittest.TestCase):
             variant=QemuEfiVariant.MS,
             flash_size=QemuEfiFlashSize.SIZE_2MB,
         )
-        iso = GrubShellBootableIsoImage('X64', use_signed=False)
+        grub = get_local_grub_path('X64', signed=False)
+        shim = get_local_shim_path('X64', signed=False)
+        iso = GrubShellBootableIsoImage('X64', shim, grub)
         q.add_disk(iso.path)
         self.run_cmd_check_secure_boot(q.command, 'x64', False)
 
@@ -236,7 +276,9 @@ class BootToShellTest(unittest.TestCase):
             variant=QemuEfiVariant.MS,
             flash_size=QemuEfiFlashSize.SIZE_4MB,
         )
-        iso = GrubShellBootableIsoImage('X64', use_signed=True)
+        grub = get_local_grub_path('X64', signed=True)
+        shim = get_local_shim_path('X64', signed=True)
+        iso = GrubShellBootableIsoImage('X64', shim, grub)
         q.add_disk(iso.path)
         self.run_cmd_check_secure_boot(q.command, 'x64', True)
 
@@ -247,7 +289,9 @@ class BootToShellTest(unittest.TestCase):
             variant=QemuEfiVariant.MS,
             flash_size=QemuEfiFlashSize.SIZE_4MB,
         )
-        iso = GrubShellBootableIsoImage('X64', use_signed=False)
+        grub = get_local_grub_path('X64', signed=False)
+        shim = get_local_shim_path('X64', signed=False)
+        iso = GrubShellBootableIsoImage('X64', shim, grub)
         q.add_disk(iso.path)
         self.run_cmd_check_secure_boot(q.command, 'x64', False)
 
