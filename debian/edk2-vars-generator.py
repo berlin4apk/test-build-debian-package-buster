@@ -132,6 +132,9 @@ if __name__ == '__main__':
         enrollcmd.append("--no-default")
     child.sendline(f'{" ".join(enrollcmd)}\r')
     child.expect(['FS0:\\\\> '])
+    # Clear the BootOrder. See #1015759
+    child.sendline('setvar BootOrder =\r')
+    child.expect(['FS0:\\\\> '])
     child.sendline('reset -s\r')
     child.wait()
     shutil.copy(q.pflash.varfile_path, args.out_file)

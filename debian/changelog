@@ -3,6 +3,8 @@ edk2 (2022.05-3) UNRELEASED; urgency=medium
   * Enroll snakeoil keys w/ EnrollDefaultKeys.efi --no-default, fixing
     a regression introduced with the transition to edk2-vars-generator.py.
     LP: #1986692.
+  * Clear the BootOrder EFI variable after enrolling keys.
+    (Closes: #1015759)
 
  -- dann frazier <dannf@debian.org>  Tue, 06 Sep 2022 08:19:39 -0600
 
