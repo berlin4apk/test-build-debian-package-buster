@@ -1,9 +1,9 @@
-edk2 (2022.05-4) UNRELEASED; urgency=medium
+edk2 (2022.05-4) unstable; urgency=medium
 
   * autopkgtest: Fix regression in test_aavmf_ms_secure_boot_unsigned
     by porting it to the new GrubShellBootableIsoImage interface.
 
- -- dann frazier <dannf@debian.org>  Wed, 07 Sep 2022 07:09:07 -0600
+ -- dann frazier <dannf@debian.org>  Wed, 07 Sep 2022 07:23:15 -0600
 
 edk2 (2022.05-3) unstable; urgency=medium
 
