@@ -171,7 +171,9 @@ class BootToShellTest(unittest.TestCase):
             QemuEfiMachine.AAVMF,
             variant=QemuEfiVariant.MS,
         )
-        iso = GrubShellBootableIsoImage('AA64', use_signed=False)
+        grub = get_local_grub_path('AA64', signed=False)
+        shim = get_local_shim_path('AA64', signed=False)
+        iso = GrubShellBootableIsoImage('AA64', shim, grub)
         q.add_disk(iso.path)
         self.run_cmd_check_secure_boot(q.command, 'aa64', False)
 

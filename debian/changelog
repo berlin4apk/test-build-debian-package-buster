@@ -5,6 +5,8 @@ edk2 (2022.02-3ubuntu0.22.04.1) UNRELEASED; urgency=medium
     LP: #1986692.
   * autopkgtest: Move bootloader selection logic out of Filesystems.py.
   * autopkgtest: Add snakeoil regression tests.
+  * autopkgtest: Fix regression in test_aavmf_ms_secure_boot_unsigned
+    by porting it to the new GrubShellBootableIsoImage interface.
 
  -- dann frazier <dannf@ubuntu.com>  Mon, 12 Sep 2022 20:41:26 -0600
 
