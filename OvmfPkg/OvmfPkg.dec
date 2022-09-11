@@ -125,6 +125,10 @@
   #
   PeilessStartupLib|Include/Library/PeilessStartupLib.h
 
+  ##  @libraryclass  HardwareInfoLib
+  #
+  HardwareInfoLib|Include/Library/HardwareInfoLib.h
+
 [Guids]
   gUefiOvmfPkgTokenSpaceGuid            = {0x93bb96af, 0xb9f2, 0x4eb8, {0x94, 0x62, 0xe0, 0xba, 0x74, 0x56, 0x42, 0x36}}
   gEfiXenInfoGuid                       = {0xd3b46f3b, 0xd441, 0x1244, {0x9a, 0x12, 0x0, 0x12, 0x27, 0x3f, 0xc1, 0x4d}}
@@ -440,6 +444,12 @@
   #    1 - set from PlatformConfig
   #    2 - set by GOP Driver.
   gUefiOvmfPkgTokenSpaceGuid.PcdVideoResolutionSource|0|UINT8|0x64
+
+  ## This PCD records LAML field in CC EVENTLOG ACPI table.
+  gUefiOvmfPkgTokenSpaceGuid.PcdCcEventlogAcpiTableLaml|0|UINT32|0x66
+
+  ## This PCD records LASA field in CC EVENTLOG ACPI table.
+  gUefiOvmfPkgTokenSpaceGuid.PcdCcEventlogAcpiTableLasa|0|UINT64|0x67
 
 [PcdsFeatureFlag]
   gUefiOvmfPkgTokenSpaceGuid.PcdQemuBootOrderPciTranslation|TRUE|BOOLEAN|0x1c

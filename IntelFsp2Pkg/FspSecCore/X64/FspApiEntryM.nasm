@@ -22,12 +22,13 @@ struc FSPM_UPD_COMMON_FSP24
     .Revision:                  resb  1
     .Reserved:                  resb  3
     .Length                     resd  1
+    .NvsBufferPtr               resq  1
     .StackBase:                 resq  1
     .StackSize:                 resq  1
     .BootLoaderTolumSize:       resd  1
     .BootMode:                  resd  1
     .FspEventHandler            resq  1
-    .Reserved1:                 resb 24
+    .Reserved1:                 resb 16
     ; }
     .size:
 endstruc
@@ -55,7 +56,7 @@ FSP_HEADER_CFGREG_OFFSET     EQU   24h
 ;----------------------------------------------------------------------------
 global ASM_PFX(FspMemoryInitApi)
 ASM_PFX(FspMemoryInitApi):
-  mov    eax,  3 ; FSP_API_INDEX.FspMemoryInitApiIndex
+  mov    rax,  3 ; FSP_API_INDEX.FspMemoryInitApiIndex
   jmp    ASM_PFX(FspApiCommon)
 
 ;----------------------------------------------------------------------------
@@ -66,7 +67,7 @@ ASM_PFX(FspMemoryInitApi):
 ;----------------------------------------------------------------------------
 global ASM_PFX(TempRamExitApi)
 ASM_PFX(TempRamExitApi):
-  mov    eax,  4 ; FSP_API_INDEX.TempRamExitApiIndex
+  mov    rax,  4 ; FSP_API_INDEX.TempRamExitApiIndex
   jmp    ASM_PFX(FspApiCommon)
 
 ;----------------------------------------------------------------------------
