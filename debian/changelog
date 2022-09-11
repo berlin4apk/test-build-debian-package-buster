@@ -1,8 +1,8 @@
-edk2 (2022.08-1) UNRELEASED; urgency=medium
+edk2 (2022.08-1) unstable; urgency=medium
 
   * New upstream release, based on edk2-stable202208 tag.
 
- -- dann frazier <dannf@debian.org>  Sun, 11 Sep 2022 11:10:46 -0600
+ -- dann frazier <dannf@debian.org>  Sun, 11 Sep 2022 11:33:08 -0600
 
 edk2 (2022.05-4) unstable; urgency=medium
 
