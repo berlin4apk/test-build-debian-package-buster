@@ -1,11 +1,11 @@
-edk2 (2022.02-3ubuntu0.22.04.1) UNRELEASED; urgency=medium
+edk2 (2022.02-3ubuntu0.22.04.1) jammy; urgency=medium
 
   * Enroll snakeoil keys w/ EnrollDefaultKeys.efi --no-default, fixing
     a regression introduced with the transition to edk2-vars-generator.py.
     LP: #1986692.
   * autopkgtest: Add regression tests for snakeoil images.
 
- -- dann frazier <dannf@ubuntu.com>  Mon, 12 Sep 2022 20:44:20 -0600
+ -- dann frazier <dannf@ubuntu.com>  Mon, 12 Sep 2022 21:05:26 -0600
 
 edk2 (2022.02-3) unstable; urgency=medium
 
