@@ -1,0 +1,62 @@
+From 929d1a24d12822942fd4f9fa83582e27f92de243 Mon Sep 17 00:00:00 2001
+From: Jian J Wang <jian.j.wang@intel.com>
+Date: Thu, 10 Oct 2019 14:28:36 +0800
+Subject: [PATCH 10/17] SecurityPkg/DxeImageVerificationLib: avoid bypass in
+ fetching dbx (CVE-2019-14575)
+
+REF: https://bugzilla.tianocore.org/show_bug.cgi?id=1608
+
+In timestamp check after the cert is found in db, the original code jumps
+to 'Done' if any error happens in fetching dbx variable. At any of the
+jump, VerifyStatus equals to TRUE, which means allowed-by-db. This should
+not be allowed except to EFI_NOT_FOUND case (meaning dbx doesn't exist),
+because it could be used to bypass timestamp check.
+
+This patch add code to change VerifyStatus to FALSE in the case of memory
+allocation failure and dbx fetching failure to avoid potential bypass
+issue.
+
+Cc: Jiewen Yao <jiewen.yao@intel.com>
+Cc: Chao Zhang <chao.b.zhang@intel.com>
+Signed-off-by: Jian J Wang <jian.j.wang@intel.com>
+Reviewed-by: Jiewen Yao <jiewen.yao@intel.com>
+
+Origin: https://github.com/tianocore/edk2/commit/929d1a24d12822942fd4f9fa83582e27f92de243
+Bug: https://bugzilla.tianocore.org/show_bug.cgi?id=1608
+Bug-Debian: https://bugs.debian.org/952935
+Last-Update: 2020-03-16
+
+diff --git a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+index 1efb2f96cd..ed5dbf26b0 100644
+--- a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
++++ b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+@@ -1459,15 +1459,26 @@ IsAllowedByDb (
+             DbxDataSize = 0;
+             Status   = gRT->GetVariable (EFI_IMAGE_SECURITY_DATABASE1, &gEfiImageSecurityDatabaseGuid, NULL, &DbxDataSize, NULL);
+             if (Status != EFI_BUFFER_TOO_SMALL) {
++              if (Status != EFI_NOT_FOUND) {
++                VerifyStatus = FALSE;
++              }
+               goto Done;
+             }
+             DbxData = (UINT8 *) AllocateZeroPool (DbxDataSize);
+             if (DbxData == NULL) {
++              //
++              // Force not-allowed-by-db to avoid bypass
++              //
++              VerifyStatus = FALSE;
+               goto Done;
+             }
+ 
+             Status = gRT->GetVariable (EFI_IMAGE_SECURITY_DATABASE1, &gEfiImageSecurityDatabaseGuid, NULL, &DbxDataSize, (VOID *) DbxData);
+             if (EFI_ERROR (Status)) {
++              //
++              // Force not-allowed-by-db to avoid bypass
++              //
++              VerifyStatus = FALSE;
+               goto Done;
+             }
+ 
+-- 
+2.25.1
+

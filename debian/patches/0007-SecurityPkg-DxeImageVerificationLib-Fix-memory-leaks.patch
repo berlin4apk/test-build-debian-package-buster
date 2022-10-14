@@ -1,0 +1,38 @@
+From fbb96072233b5eaecf4d229cbee47b13dcab39e1 Mon Sep 17 00:00:00 2001
+From: Jian J Wang <jian.j.wang@intel.com>
+Date: Thu, 10 Oct 2019 11:06:53 +0800
+Subject: [PATCH 07/17] SecurityPkg/DxeImageVerificationLib: Fix memory leaks
+ (CVE-2019-14575)
+
+REF: https://bugzilla.tianocore.org/show_bug.cgi?id=1608
+
+Pointer HashCtx used in IsCertHashFoundInDatabase() is not freed inside
+the while-loop, if it will run more than once.
+
+Cc: Jiewen Yao <jiewen.yao@intel.com>
+Cc: Chao Zhang <chao.b.zhang@intel.com>
+Signed-off-by: Jian J Wang <jian.j.wang@intel.com>
+Reviewed-by: Jiewen Yao <jiewen.yao@intel.com>
+
+Origin: https://github.com/tianocore/edk2/commit/fbb96072233b5eaecf4d229cbee47b13dcab39e1
+Bug: https://bugzilla.tianocore.org/show_bug.cgi?id=1608
+Bug-Debian: https://bugs.debian.org/952935
+Last-Update: 2020-03-16
+
+diff --git a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+index dbfbfcb4fb..74dbffa122 100644
+--- a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
++++ b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+@@ -908,6 +908,9 @@ IsCertHashFoundInDatabase (
+       goto Done;
+     }
+ 
++    FreePool (HashCtx);
++    HashCtx = NULL;
++
+     SiglistHeaderSize = sizeof (EFI_SIGNATURE_LIST) + DbxList->SignatureHeaderSize;
+     CertHash          = (EFI_SIGNATURE_DATA *) ((UINT8 *) DbxList + SiglistHeaderSize);
+     CertHashCount     = (DbxList->SignatureListSize - SiglistHeaderSize) / DbxList->SignatureSize;
+-- 
+2.25.1
+

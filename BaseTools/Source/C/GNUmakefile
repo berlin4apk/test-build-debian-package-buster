@@ -45,7 +45,6 @@ all: makerootdir subdirs
 LIBRARIES = Common
 VFRAUTOGEN = VfrCompile/VfrLexer.h
 APPLICATIONS = \
-  BrotliCompress \
   VfrCompile \
   EfiRom \
   GenFfs \

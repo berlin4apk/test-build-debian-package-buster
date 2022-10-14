@@ -1,0 +1,53 @@
+From 9e569700901857d0ba418ebdd30b8086b908688c Mon Sep 17 00:00:00 2001
+From: Jian J Wang <jian.j.wang@intel.com>
+Date: Thu, 10 Oct 2019 11:46:16 +0800
+Subject: [PATCH 09/17] SecurityPkg/DxeImageVerificationLib: fix wrong fetch
+ dbx in IsAllowedByDb (CVE-2019-14575)
+
+REF: https://bugzilla.tianocore.org/show_bug.cgi?id=1608
+
+Normally two times of calling gRT->GetVariable() are needed to get
+the data of a variable: get the variable size by passing zero variable
+size, and then allocate enough memory and pass the correct variable size
+and buffer.
+
+But in the inner loop in IsAllowedByDb(), the DbxDataSize was not
+initialized to zero before calling gRT->GetVariable(). It won't cause
+problem if dbx does not exist. But it will give wrong result if dbx
+exists and the DbxDataSize happens to be a small enough value. In this
+situation, EFI_BUFFER_TOO_SMALL will be returned. Then the result check
+code followed will jump to 'Done', which is not correct because it's
+actually the value expected.
+
+            if (Status == EFI_BUFFER_TOO_SMALL) {
+              goto Done;
+            }
+
+Cc: Jiewen Yao <jiewen.yao@intel.com>
+Cc: Chao Zhang <chao.b.zhang@intel.com>
+Signed-off-by: Jian J Wang <jian.j.wang@intel.com>
+Reviewed-by: Jiewen Yao <jiewen.yao@intel.com>
+
+Origin: https://github.com/tianocore/edk2/commit/9e569700901857d0ba418ebdd30b8086b908688c
+Bug: https://bugzilla.tianocore.org/show_bug.cgi?id=1608
+Bug-Debian: https://bugs.debian.org/952935
+Last-Update: 2020-03-16
+
+diff --git a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+index 5dcd6efed5..1efb2f96cd 100644
+--- a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
++++ b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+@@ -1456,8 +1456,9 @@ IsAllowedByDb (
+             //
+             // Here We still need to check if this RootCert's Hash is revoked
+             //
++            DbxDataSize = 0;
+             Status   = gRT->GetVariable (EFI_IMAGE_SECURITY_DATABASE1, &gEfiImageSecurityDatabaseGuid, NULL, &DbxDataSize, NULL);
+-            if (Status == EFI_BUFFER_TOO_SMALL) {
++            if (Status != EFI_BUFFER_TOO_SMALL) {
+               goto Done;
+             }
+             DbxData = (UINT8 *) AllocateZeroPool (DbxDataSize);
+-- 
+2.25.1
+

@@ -1,0 +1,109 @@
+From 578bcdc2605e3438b9cbdac4e68339f90f5bf8af Mon Sep 17 00:00:00 2001
+From: Jiaxin Wu <Jiaxin.wu@intel.com>
+Date: Mon, 29 Apr 2019 09:51:53 +0800
+Subject: [PATCH 06/17] NetworkPkg/Ip4Dxe: Check the received package length
+ (CVE-2019-14559).
+
+v3: correct the coding style.
+v2: correct the commit message & add BZ number.
+
+REF: https://bugzilla.tianocore.org/show_bug.cgi?id=1610
+
+This patch is to check the received package length to make sure the package
+has a valid length field.
+
+Cc: Fu Siyuan <siyuan.fu@intel.com>
+Cc: Maciej Rabeda <maciej.rabeda@linux.intel.com>
+Signed-off-by: Wu Jiaxin <jiaxin.wu@intel.com>
+Reviewed-by: Siyuan Fu <siyuan.fu@intel.com>
+
+Origin: https://github.com/tianocore/edk2/commit/578bcdc2605e3438b9cbdac4e68339f90f5bf8af
+Bug: https://bugzilla.tianocore.org/show_bug.cgi?id=1610
+Bug-Debian: https://bugs.debian.org/952926
+Last-Update: 2020-03-16
+
+Index: edk2-0~20191122.bd85bf54/NetworkPkg/Ip4Dxe/Ip4Input.c
+===================================================================
+--- edk2-0~20191122.bd85bf54.orig/NetworkPkg/Ip4Dxe/Ip4Input.c
++++ edk2-0~20191122.bd85bf54/NetworkPkg/Ip4Dxe/Ip4Input.c
+@@ -1,7 +1,7 @@
+ /** @file
+   IP4 input process.
+ 
+-Copyright (c) 2005 - 2018, Intel Corporation. All rights reserved.<BR>
++Copyright (c) 2005 - 2020, Intel Corporation. All rights reserved.<BR>
+ (C) Copyright 2015 Hewlett-Packard Development Company, L.P.<BR>
+ 
+ SPDX-License-Identifier: BSD-2-Clause-Patent
+@@ -711,10 +711,6 @@ Ip4PreProcessPacket (
+   //
+   // Check if the IP4 header is correctly formatted.
+   //
+-  if ((*Packet)->TotalSize < IP4_MIN_HEADLEN) {
+-    return EFI_INVALID_PARAMETER;
+-  }
+-
+   HeadLen  = (Head->HeadLen << 2);
+   TotalLen = NTOHS (Head->TotalLen);
+ 
+@@ -809,6 +805,30 @@ Ip4PreProcessPacket (
+ }
+ 
+ /**
++  This function checks the IPv4 packet length.
++
++  @param[in]       Packet          Pointer to the IPv4 Packet to be checked.
++
++  @retval TRUE                   The input IPv4 packet length is valid.
++  @retval FALSE                  The input IPv4 packet length is invalid.
++
++**/
++BOOLEAN
++Ip4IsValidPacketLength (
++  IN NET_BUF        *Packet
++  )
++{
++  //
++  // Check the IP4 packet length.
++  //
++  if (Packet->TotalSize < IP4_MIN_HEADLEN) {
++    return FALSE;
++  }
++
++  return TRUE;
++}
++
++/**
+   The IP4 input routine. It is called by the IP4_INTERFACE when a
+   IP4 fragment is received from MNP.
+ 
+@@ -844,6 +864,10 @@ Ip4AccpetFrame (
+     goto DROP;
+   }
+ 
++  if (!Ip4IsValidPacketLength (Packet)) {
++    goto RESTART;
++  }
++
+   Head      = (IP4_HEAD *) NetbufGetByte (Packet, 0, NULL);
+   ASSERT (Head != NULL);
+   OptionLen = (Head->HeadLen << 2) - IP4_MIN_HEADLEN;
+@@ -890,10 +914,14 @@ Ip4AccpetFrame (
+   //
+   ZeroMem (&ZeroHead, sizeof (IP4_HEAD));
+   if (0 == CompareMem (Head, &ZeroHead, sizeof (IP4_HEAD))) {
+-  // Packet may have been changed. Head, HeadLen, TotalLen, and
+-  // info must be reloaded bofore use. The ownership of the packet
+-  // is transfered to the packet process logic.
+-  //
++    // Packet may have been changed. Head, HeadLen, TotalLen, and
++    // info must be reloaded before use. The ownership of the packet
++    // is transferred to the packet process logic.
++    //
++    if (!Ip4IsValidPacketLength (Packet)) {
++      goto RESTART;
++    }
++
+     Head = (IP4_HEAD *) NetbufGetByte (Packet, 0, NULL);
+     ASSERT (Head != NULL);
+     Status = Ip4PreProcessPacket (

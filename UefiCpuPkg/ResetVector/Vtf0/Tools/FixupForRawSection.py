@@ -15,6 +15,6 @@ c = ((len(d) + 4 + 7) & ~7) - 4
 if c > len(d):
     c -= len(d)
     f = open(sys.argv[1], 'wb')
-    f.write('\x90' * c)
+    f.write(b'\x90' * c)
     f.write(d)
     f.close()

@@ -1,0 +1,63 @@
+From 5cd8be6079ea7e5638903b2f3da0f4c10ec7f1da Mon Sep 17 00:00:00 2001
+From: Jian J Wang <jian.j.wang@intel.com>
+Date: Tue, 17 Sep 2019 11:04:33 +0800
+Subject: [PATCH 13/17] SecurityPkg/DxeImageVerificationLib: tighten default
+ result (CVE-2019-14575)
+
+REF: https://bugzilla.tianocore.org/show_bug.cgi?id=1608
+
+All intermediate results inside this function will be checked and
+returned immediately upon any failure or error, like out-of-resource,
+hash calculation error or certificate retrieval failure.
+
+Cc: Jiewen Yao <jiewen.yao@intel.com>
+Cc: Chao Zhang <chao.b.zhang@intel.com>
+Signed-off-by: Jian J Wang <jian.j.wang@intel.com>
+Signed-off-by: Laszlo Ersek <lersek@redhat.com>
+Reviewed-by: Jiewen Yao <jiewen.yao@intel.com>
+
+Origin: https://github.com/tianocore/edk2/commit/5cd8be6079ea7e5638903b2f3da0f4c10ec7f1da
+Bug: https://bugzilla.tianocore.org/show_bug.cgi?id=1608
+Bug-Debian: https://bugs.debian.org/952935
+Last-Update: 2020-03-16
+
+diff --git a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+index 85261ba7f2..470a0d20ef 100644
+--- a/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
++++ b/SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c
+@@ -1240,7 +1240,7 @@ IsForbiddenByDbx (
+   //
+   // Variable Initialization
+   //
+-  IsForbidden       = FALSE;
++  IsForbidden       = TRUE;
+   Data              = NULL;
+   CertList          = NULL;
+   CertData          = NULL;
+@@ -1257,7 +1257,14 @@ IsForbiddenByDbx (
+   //
+   DataSize = 0;
+   Status   = gRT->GetVariable (EFI_IMAGE_SECURITY_DATABASE1, &gEfiImageSecurityDatabaseGuid, NULL, &DataSize, NULL);
++  ASSERT (EFI_ERROR (Status));
+   if (Status != EFI_BUFFER_TOO_SMALL) {
++    if (Status == EFI_NOT_FOUND) {
++      //
++      // Evidently not in dbx if the database doesn't exist.
++      //
++      IsForbidden = FALSE;
++    }
+     return IsForbidden;
+   }
+   Data = (UINT8 *) AllocateZeroPool (DataSize);
+@@ -1374,6 +1381,8 @@ IsForbiddenByDbx (
+ 
+   }
+ 
++  IsForbidden = FALSE;
++
+ Done:
+   if (Data != NULL) {
+     FreePool (Data);
+-- 
+2.25.1
+
