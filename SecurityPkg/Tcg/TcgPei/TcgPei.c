@@ -21,6 +21,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <Guid/TcgEventHob.h>
 #include <Guid/MeasuredFvHob.h>
 #include <Guid/TpmInstance.h>
+#include <Guid/MigratedFvInfo.h>
 
 #include <Library/DebugLib.h>
 #include <Library/BaseMemoryLib.h>
@@ -378,6 +379,10 @@ MeasureFvImage (
   EFI_STATUS                        Status;
   EFI_PLATFORM_FIRMWARE_BLOB        FvBlob;
   TCG_PCR_EVENT_HDR                 TcgEventHdr;
+  EFI_PHYSICAL_ADDRESS              FvOrgBase;
+  EFI_PHYSICAL_ADDRESS              FvDataBase;
+  EFI_PEI_HOB_POINTERS              Hob;
+  EDKII_MIGRATED_FV_INFO            *MigratedFvInfo;
 
   //
   // Check if it is in Excluded FV list
@@ -402,9 +407,29 @@ MeasureFvImage (
   }
 
   //
+  // Search the matched migration FV info
+  //
+  FvOrgBase  = FvBase;
+  FvDataBase = FvBase;
+  Hob.Raw  = GetFirstGuidHob (&gEdkiiMigratedFvInfoGuid);
+  while (Hob.Raw != NULL) {
+    MigratedFvInfo = GET_GUID_HOB_DATA (Hob);
+    if ((MigratedFvInfo->FvNewBase == (UINT32) FvBase) && (MigratedFvInfo->FvLength == (UINT32) FvLength)) {
+      //
+      // Found the migrated FV info
+      //
+      FvOrgBase  = (EFI_PHYSICAL_ADDRESS) (UINTN) MigratedFvInfo->FvOrgBase;
+      FvDataBase = (EFI_PHYSICAL_ADDRESS) (UINTN) MigratedFvInfo->FvDataBase;
+      break;
+    }
+    Hob.Raw = GET_NEXT_HOB (Hob);
+    Hob.Raw = GetNextGuidHob (&gEdkiiMigratedFvInfoGuid, Hob.Raw);
+  }
+
+  //
   // Measure and record the FV to the TPM
   //
-  FvBlob.BlobBase   = FvBase;
+  FvBlob.BlobBase   = FvOrgBase;
   FvBlob.BlobLength = FvLength;
 
   DEBUG ((DEBUG_INFO, "The FV which is measured by TcgPei starts at: 0x%x\n", FvBlob.BlobBase));
@@ -416,7 +441,7 @@ MeasureFvImage (
 
   Status = HashLogExtendEvent (
              (EFI_PEI_SERVICES **) GetPeiServicesTablePointer(),
-             (UINT8*) (UINTN) FvBlob.BlobBase,
+             (UINT8*) (UINTN) FvDataBase,
              (UINTN) FvBlob.BlobLength,
              &TcgEventHdr,
              (UINT8*) &FvBlob

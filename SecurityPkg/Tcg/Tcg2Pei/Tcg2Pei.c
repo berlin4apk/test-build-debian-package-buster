@@ -21,6 +21,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <Guid/TcgEventHob.h>
 #include <Guid/MeasuredFvHob.h>
 #include <Guid/TpmInstance.h>
+#include <Guid/MigratedFvInfo.h>
 
 #include <Library/DebugLib.h>
 #include <Library/BaseMemoryLib.h>
@@ -478,6 +479,10 @@ MeasureFvImage (
   EDKII_PEI_FIRMWARE_VOLUME_INFO_PREHASHED_FV_PPI       *PrehashedFvPpi;
   HASH_INFO                                             *PreHashInfo;
   UINT32                                                HashAlgoMask;
+  EFI_PHYSICAL_ADDRESS                                  FvOrgBase;
+  EFI_PHYSICAL_ADDRESS                                  FvDataBase;
+  EFI_PEI_HOB_POINTERS                                  Hob;
+  EDKII_MIGRATED_FV_INFO                                *MigratedFvInfo;
 
   //
   // Check Excluded FV list
@@ -564,9 +569,29 @@ MeasureFvImage (
   } while (!EFI_ERROR(Status));
 
   //
+  // Search the matched migration FV info
+  //
+  FvOrgBase  = FvBase;
+  FvDataBase = FvBase;
+  Hob.Raw  = GetFirstGuidHob (&gEdkiiMigratedFvInfoGuid);
+  while (Hob.Raw != NULL) {
+    MigratedFvInfo = GET_GUID_HOB_DATA (Hob);
+    if ((MigratedFvInfo->FvNewBase == (UINT32) FvBase) && (MigratedFvInfo->FvLength == (UINT32) FvLength)) {
+      //
+      // Found the migrated FV info
+      //
+      FvOrgBase  = (EFI_PHYSICAL_ADDRESS) (UINTN) MigratedFvInfo->FvOrgBase;
+      FvDataBase = (EFI_PHYSICAL_ADDRESS) (UINTN) MigratedFvInfo->FvDataBase;
+      break;
+    }
+    Hob.Raw = GET_NEXT_HOB (Hob);
+    Hob.Raw = GetNextGuidHob (&gEdkiiMigratedFvInfoGuid, Hob.Raw);
+  }
+
+  //
   // Init the log event for FV measurement
   //
-  FvBlob.BlobBase       = FvBase;
+  FvBlob.BlobBase       = FvOrgBase;
   FvBlob.BlobLength     = FvLength;
   TcgEventHdr.PCRIndex  = 0;
   TcgEventHdr.EventType = EV_EFI_PLATFORM_FIRMWARE_BLOB;
@@ -599,8 +624,8 @@ MeasureFvImage (
     //
     Status = HashLogExtendEvent (
                0,
-               (UINT8*) (UINTN) FvBlob.BlobBase,
-               (UINTN) FvBlob.BlobLength,
+               (UINT8*) (UINTN) FvDataBase, // HashData
+               (UINTN) FvLength,        // HashDataLen
                &TcgEventHdr,
                (UINT8*) &FvBlob
                );

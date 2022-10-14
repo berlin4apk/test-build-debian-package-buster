@@ -1,3 +1,20 @@
+edk2 (0~20191122.bd85bf54-2ubuntu3.3) focal-security; urgency=medium
+
+  * SECURITY UPDATE: Insufficient input validation in MdeModulePkg
+    - debian/patches/CVE-2019-11098-*.patch
+    - CVE-2019-11098
+  * SECURITY UPDATE: overflow in openssl EVP_DecryptUpdate
+    - debian/patches/CVE-2021-23840.patch
+    - CVE-2021-23840
+  * SECURITY UPDATE: DoS via incorrect ASN.1 string termination in openssl
+    - debian/patches/CVE-2021-3712-*.patch
+    - CVE-2021-3712
+  * SECURITY UPDATE: remote buffer overflow in IScsiHexToBin
+    - debian/patches/CVE-2021-38575-*.patch
+    - CVE-2021-38575
+
+ -- Marc Deslauriers <marc.deslauriers@ubuntu.com>  Mon, 20 Sep 2021 09:11:31 -0400
+
 edk2 (0~20191122.bd85bf54-2ubuntu3.2) focal-security; urgency=medium
 
   * SECURITY UPDATE: unlimited FV recursion

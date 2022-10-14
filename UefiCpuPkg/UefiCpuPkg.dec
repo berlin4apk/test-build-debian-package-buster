@@ -78,6 +78,9 @@
 [Ppis]
   gEdkiiPeiMpServices2PpiGuid =    { 0x5cb9cb3d, 0x31a4, 0x480c, { 0x94, 0x98, 0x29, 0xd2, 0x69, 0xba, 0xcf, 0xba}}
 
+  ## Include/Ppi/RepublishSecPpi.h
+  gRepublishSecPpiPpiGuid   = { 0x27a71b1e, 0x73ee, 0x43d6, { 0xac, 0xe3, 0x52, 0x1a, 0x2d, 0xc5, 0xd0, 0x92 }}
+
 [PcdsFeatureFlag]
   ## Indicates if SMM Profile will be enabled.
   #  If enabled, instruction executions in and data accesses to memory outside of SMRAM will be logged.
