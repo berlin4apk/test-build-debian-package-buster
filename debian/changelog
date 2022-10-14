@@ -1,3 +1,22 @@
+edk2 (0~20191122.bd85bf54-2ubuntu2) focal; urgency=medium
+
+  * Bring back (and fix) the "ms" option and restore the behavior of the
+    "secboot" option, which had changed when libvirt moved from built-in
+    nvram configs to parsing external firmware descriptors. LP: #1864532.
+    - Reintroduce OVMF_CODE.ms.fd symlink, but now it points to
+      OVMF_CODE.secboot.fd instead of OVMF_CODE.fd, which enforces SMM.
+    - Update firmware descriptor JSON files:
+      + Update the existing secboot descriptor to use an empty variable
+        store. This makes it Secure Boot-capable, but with Secure Boot
+        initially disabled. Note that previously it used a store w/ keys
+        pre-enrolled, without advertising that feature.
+      + Add a new "ms" descriptor which has keys pre-enrolled, has Secure
+        Boot enabled, and advertises the "enrolled-keys" feature.
+      + Provide more details in "description" fields.
+    - README.Debian: Improve the use-case description for each image.
+
+ -- dann frazier <dannf@ubuntu.com>  Fri, 03 Apr 2020 07:47:19 -0600
+
 edk2 (0~20191122.bd85bf54-2ubuntu1) focal; urgency=medium
 
   * Fix numeric truncation in S3BootScript[Save]*() API. (CVE-2019-14563)

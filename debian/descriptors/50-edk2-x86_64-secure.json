@@ -1,5 +1,5 @@
 {
-    "description": "UEFI firmware for x86_64, with Secure Boot and SMM",
+    "description": "UEFI firmware for x86_64, with Secure Boot and SMM, empty varstore",
     "interface-types": [
         "uefi"
     ],
@@ -10,7 +10,7 @@
             "format": "raw"
         },
         "nvram-template": {
-            "filename": "/usr/share/OVMF/OVMF_VARS.ms.fd",
+            "filename": "/usr/share/OVMF/OVMF_VARS.fd",
             "format": "raw"
         }
     },
