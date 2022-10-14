@@ -1,3 +1,9 @@
+edk2 (0~20191122.bd85bf54-2ubuntu3) focal; urgency=medium
+
+  * Actually install the new "ms" descriptor.
+
+ -- dann frazier <dannf@ubuntu.com>  Sat, 11 Apr 2020 10:19:44 -0600
+
 edk2 (0~20191122.bd85bf54-2ubuntu2) focal; urgency=medium
 
   * Bring back (and fix) the "ms" option and restore the behavior of the
