@@ -1,3 +1,10 @@
+edk2 (0~20191122.bd85bf54-2ubuntu3.1) focal-security; urgency=medium
+
+  * Fix integer overflow in DxeImageVerificationHandler. (CVE-2019-14562)
+  * CryptoPkg/BaseCryptLib: fix NULL dereference. (CVE-2019-14584)
+
+ -- dann frazier <dannf@ubuntu.com>  Tue, 15 Dec 2020 15:33:20 -0700
+
 edk2 (0~20191122.bd85bf54-2ubuntu3) focal; urgency=medium
 
   * Actually install the new "ms" descriptor.
