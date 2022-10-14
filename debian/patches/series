@@ -26,3 +26,6 @@ ovmf-vars-generator-no-defaults.patch
 0002-SecurityPkg-DxeImageVerificationLib-assign-WinCertif.patch
 0003-SecurityPkg-DxeImageVerificationLib-catch-alignment-.patch
 CryptoPkg-BaseCryptLib-fix-NULL-dereference-CVE-2019.patch
+CVE-2021-28210-1.patch
+CVE-2021-28210-2.patch
+CVE-2021-28211.patch

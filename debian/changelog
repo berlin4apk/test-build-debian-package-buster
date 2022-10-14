@@ -1,3 +1,23 @@
+edk2 (0~20191122.bd85bf54-2ubuntu3.2) focal-security; urgency=medium
+
+  * SECURITY UPDATE: unlimited FV recursion
+    - debian/patches/CVE-2021-28210-1.patch: assert SectionInstance
+      invariant in FindChildNode() in
+      MdeModulePkg/Core/Dxe/SectionExtraction/CoreSectionExtraction.c.
+    - debian/patches/CVE-2021-28210-2.patch: limit FwVol encapsulation
+      section recursion in MdeModulePkg/Core/Dxe/DxeMain.inf,
+      MdeModulePkg/Core/Dxe/SectionExtraction/CoreSectionExtraction.c,
+      MdeModulePkg/MdeModulePkg.dec, MdeModulePkg/MdeModulePkg.uni.
+    - CVE-2021-28210
+  * SECURITY UPDATE: possible heap corruption in LzmaUefiDecompressGetInfo
+    - debian/patches/CVE-2021-28211.patch: catch 4GB+ uncompressed
+      buffer sizes in
+      MdeModulePkg/Library/LzmaCustomDecompressLib/LzmaDecompress.c,
+      MdeModulePkg/Library/LzmaCustomDecompressLib/LzmaDecompressLibInternal.h.
+    - CVE-2021-28211
+
+ -- Marc Deslauriers <marc.deslauriers@ubuntu.com>  Mon, 12 Apr 2021 08:18:49 -0400
+
 edk2 (0~20191122.bd85bf54-2ubuntu3.1) focal-security; urgency=medium
 
   * Fix integer overflow in DxeImageVerificationHandler. (CVE-2019-14562)
