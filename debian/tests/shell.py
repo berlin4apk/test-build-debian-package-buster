@@ -31,7 +31,9 @@ ArchImageMap = {
     'ARM': ['/usr/share/AAVMF/AAVMF32_CODE.fd',
             '/usr/share/AAVMF/AAVMF32_VARS.fd'],
     'X64': ['/usr/share/OVMF/OVMF_CODE.fd',
-            '/usr/share/OVMF/OVMF_VARS.fd']
+            '/usr/share/OVMF/OVMF_VARS.fd'],
+    'X64_4M': ['/usr/share/OVMF/OVMF_CODE_4M.fd',
+               '/usr/share/OVMF/OVMF_VARS_4M.fd'],
 }
 
 
@@ -40,7 +42,7 @@ def cleanup_file(f):
 
 
 def spawn_qemu(arch):
-    if arch == 'X64':
+    if arch == 'X64' or arch == 'X64_4M':
         cmd = ['/usr/bin/qemu-system-x86_64']
     elif arch in ['AARCH64', 'ARM']:
         cmd = ['/usr/bin/qemu-system-aarch64']
@@ -52,7 +54,7 @@ def spawn_qemu(arch):
                  '-smp', '2,sockets=2,cores=1,threads=1', '-display', 'none',
                  '-serial', 'stdio']
 
-    if arch == 'X64':
+    if arch == 'X64' or arch == 'X64_4M':
         cmd = cmd + ['-machine', 'pc,accel=tcg']
         cmd = cmd + ['-chardev', 'pty,id=charserial1',
                      '-device', 'isa-serial,chardev=charserial1,id=serial1']
