@@ -1,3 +1,23 @@
+edk2 (0~20191122.bd85bf54-2ubuntu3.4) focal; urgency=medium
+
+  [ dann frazier ]
+  * Provide 4MB OVMF images: The existing 2MB images no longer
+    have sufficient variable space for the current Secure Boot
+    Forbidden Signature Database. (LP: #1885662)
+    - Convert targets for pre-enrolled variable template images
+      into pattern rules. This will be useful for adding additional
+      pre-enrolled variable templates.
+    - Update fw descriptors to reference 4M images instead of their
+      2M counterparts. This will migrate tools that use the descriptor
+      interface (like libvirt) over to the 4M images when creating new
+      VMs. Existing 2M VMs will require manual migration.
+  * Increase autopkgtest timeout from 30s to 60s. (LP: #1885186)
+
+  [ Mustafa Kemal Gilor ]
+  * Added autopkg tests for 4MB OVMF images. (LP: #1885662)
+
+ -- Mustafa Kemal GILOR <mustafa.gilor@canonical.com>  Tue, 08 Nov 2022 11:40:07 +0300
+
 edk2 (0~20191122.bd85bf54-2ubuntu3.3) focal-security; urgency=medium
 
   * SECURITY UPDATE: Insufficient input validation in MdeModulePkg
