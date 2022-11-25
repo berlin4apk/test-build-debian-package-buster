@@ -76,6 +76,16 @@ GET_OBJECT_LIST (
   CM_ARM_LPI_INFO
   );
 
+/**
+  This macro expands to a function that retrieves the CPC
+  information from the Configuration Manager.
+*/
+GET_OBJECT_LIST (
+  EObjNameSpaceArm,
+  EArmObjCpcInfo,
+  CM_ARM_CPC_INFO
+  );
+
 /** Initialize the TokenTable.
 
   One entry should be allocated for each CM_ARM_PROC_HIERARCHY_INFO
@@ -227,6 +237,93 @@ WriteAslName (
   }
 
   return EFI_SUCCESS;
+}
+
+/** Create and add an _CPC Node to Cpu Node.
+
+  For instance, transform an AML node from:
+  Device (C002)
+  {
+      Name (_UID, 2)
+      Name (_HID, "ACPI0007")
+  }
+
+  To:
+  Device (C002)
+  {
+      Name (_UID, 2)
+      Name (_HID, "ACPI0007")
+      Name(_CPC, Package()
+      {
+        NumEntries,                              // Integer
+        Revision,                                // Integer
+        HighestPerformance,                      // Integer or Buffer (Resource Descriptor)
+        NominalPerformance,                      // Integer or Buffer (Resource Descriptor)
+        LowestNonlinearPerformance,              // Integer or Buffer (Resource Descriptor)
+        LowestPerformance,                       // Integer or Buffer (Resource Descriptor)
+        GuaranteedPerformanceRegister,           // Buffer (Resource Descriptor)
+        DesiredPerformanceRegister ,             // Buffer (Resource Descriptor)
+        MinimumPerformanceRegister ,             // Buffer (Resource Descriptor)
+        MaximumPerformanceRegister ,             // Buffer (Resource Descriptor)
+        PerformanceReductionToleranceRegister,   // Buffer (Resource Descriptor)
+        TimeWindowRegister,                      // Buffer (Resource Descriptor)
+        CounterWraparoundTime,                   // Integer or Buffer (Resource Descriptor)
+        ReferencePerformanceCounterRegister,     // Buffer (Resource Descriptor)
+        DeliveredPerformanceCounterRegister,     // Buffer (Resource Descriptor)
+        PerformanceLimitedRegister,              // Buffer (Resource Descriptor)
+        CPPCEnableRegister                       // Buffer (Resource Descriptor)
+        AutonomousSelectionEnable,               // Integer or Buffer (Resource Descriptor)
+        AutonomousActivityWindowRegister,        // Buffer (Resource Descriptor)
+        EnergyPerformancePreferenceRegister,     // Buffer (Resource Descriptor)
+        ReferencePerformance                     // Integer or Buffer (Resource Descriptor)
+        LowestFrequency,                         // Integer or Buffer (Resource Descriptor)
+        NominalFrequency                         // Integer or Buffer (Resource Descriptor)
+      })
+  }
+
+  @param [in]  Generator              The SSDT Cpu Topology generator.
+  @param [in]  CfgMgrProtocol         Pointer to the Configuration Manager
+                                      Protocol Interface.
+  @param [in]  GicCInfo               Pointer to the CM_ARM_GICC_INFO object
+                                      describing the Cpu.
+  @param [in]  Node                   CPU Node to which the _CPC node is
+                                      attached.
+
+  @retval EFI_SUCCESS             The function completed successfully.
+  @retval EFI_INVALID_PARAMETER   Invalid parameter.
+  @retval EFI_OUT_OF_RESOURCES    Failed to allocate memory.
+**/
+STATIC
+EFI_STATUS
+EFIAPI
+CreateAmlCpcNode (
+  IN  ACPI_CPU_TOPOLOGY_GENERATOR                         *Generator,
+  IN  CONST EDKII_CONFIGURATION_MANAGER_PROTOCOL  *CONST  CfgMgrProtocol,
+  IN  CM_ARM_GICC_INFO                                    *GicCInfo,
+  IN  AML_OBJECT_NODE_HANDLE                              *Node
+  )
+{
+  EFI_STATUS       Status;
+  CM_ARM_CPC_INFO  *CpcInfo;
+
+  Status = GetEArmObjCpcInfo (
+             CfgMgrProtocol,
+             GicCInfo->CpcToken,
+             &CpcInfo,
+             NULL
+             );
+  if (EFI_ERROR (Status)) {
+    ASSERT (0);
+    return Status;
+  }
+
+  Status = AmlCreateCpcNode (
+             CpcInfo,
+             Node,
+             NULL
+             );
+  ASSERT_EFI_ERROR (Status);
+  return Status;
 }
 
 /** Create and add an _LPI method to Cpu/Cluster Node.
@@ -581,16 +678,29 @@ CreateAmlCpuFromProcHierarchy (
   // CM_ARM_PROC_HIERARCHY_INFO, create an _LPI method returning them.
   if (ProcHierarchyNodeInfo->LpiToken != CM_NULL_TOKEN) {
     Status = CreateAmlLpiMethod (Generator, ProcHierarchyNodeInfo, CpuNode);
-    ASSERT_EFI_ERROR (Status);
+    if (EFI_ERROR (Status)) {
+      ASSERT_EFI_ERROR (Status);
+      return Status;
+    }
+  }
+
+  // If a CPC info is associated with the
+  // GicCinfo, create an _CPC method returning them.
+  if (GicCInfo->CpcToken != CM_NULL_TOKEN) {
+    Status = CreateAmlCpcNode (Generator, CfgMgrProtocol, GicCInfo, CpuNode);
+    if (EFI_ERROR (Status)) {
+      ASSERT_EFI_ERROR (Status);
+      return Status;
+    }
   }
 
   return Status;
 }
 
-/** Create a Cluster in the AML namespace.
+/** Create a Processor Container in the AML namespace.
 
   Any CM_ARM_PROC_HIERARCHY_INFO object with the following flags is
-  assumed to be a cluster:
+  assumed to be a processor container:
    - EFI_ACPI_6_3_PPTT_PACKAGE_NOT_PHYSICAL
    - EFI_ACPI_6_3_PPTT_PROCESSOR_ID_INVALID
    - EFI_ACPI_6_3_PPTT_NODE_IS_NOT_LEAF
@@ -605,13 +715,13 @@ CreateAmlCpuFromProcHierarchy (
   @param [in]  Generator              The SSDT Cpu Topology generator.
   @param [in]  CfgMgrProtocol         Pointer to the Configuration Manager
                                       Protocol Interface.
-  @param [in]  ParentNode             Parent node to attach the Cluster
-                                      node to.
+  @param [in]  ParentNode             Parent node to attach the processor
+                                      container node to.
   @param [in]  ProcHierarchyNodeInfo  CM_ARM_PROC_HIERARCHY_INFO object used
                                       to create the node.
-  @param [in]  ClusterIndex           Index used to generate the node name.
-  @param [out] ClusterNodePtr         If success, contains the created Cluster
-                                      node.
+  @param [in]  ProcContainerIndex     Index used to generate the node name.
+  @param [out] ProcContainerNodePtr   If success, contains the created processor
+                                      container node.
 
   @retval EFI_SUCCESS             Success.
   @retval EFI_INVALID_PARAMETER   Invalid parameter.
@@ -620,43 +730,43 @@ CreateAmlCpuFromProcHierarchy (
 STATIC
 EFI_STATUS
 EFIAPI
-CreateAmlCluster (
+CreateAmlProcessorContainer (
   IN        ACPI_CPU_TOPOLOGY_GENERATOR                   *Generator,
   IN  CONST EDKII_CONFIGURATION_MANAGER_PROTOCOL  *CONST  CfgMgrProtocol,
   IN        AML_NODE_HANDLE                               ParentNode,
   IN        CM_ARM_PROC_HIERARCHY_INFO                    *ProcHierarchyNodeInfo,
-  IN        UINT32                                        ClusterIndex,
-  OUT       AML_OBJECT_NODE_HANDLE                        *ClusterNodePtr
+  IN        UINT32                                        ProcContainerIndex,
+  OUT       AML_OBJECT_NODE_HANDLE                        *ProcContainerNodePtr
   )
 {
   EFI_STATUS              Status;
-  AML_OBJECT_NODE_HANDLE  ClusterNode;
-  CHAR8                   AslNameCluster[AML_NAME_SEG_SIZE + 1];
+  AML_OBJECT_NODE_HANDLE  ProcContainerNode;
+  CHAR8                   AslNameProcContainer[AML_NAME_SEG_SIZE + 1];
 
   ASSERT (Generator != NULL);
   ASSERT (CfgMgrProtocol != NULL);
   ASSERT (ParentNode != NULL);
   ASSERT (ProcHierarchyNodeInfo != NULL);
-  ASSERT (ClusterNodePtr != NULL);
+  ASSERT (ProcContainerNodePtr != NULL);
 
-  Status = WriteAslName ('C', ClusterIndex, AslNameCluster);
+  Status = WriteAslName ('C', ProcContainerIndex, AslNameProcContainer);
   if (EFI_ERROR (Status)) {
     ASSERT (0);
     return Status;
   }
 
-  Status = AmlCodeGenDevice (AslNameCluster, ParentNode, &ClusterNode);
+  Status = AmlCodeGenDevice (AslNameProcContainer, ParentNode, &ProcContainerNode);
   if (EFI_ERROR (Status)) {
     ASSERT (0);
     return Status;
   }
 
-  // Use the ClusterIndex for the _UID value as there is no AcpiProcessorUid
+  // Use the ProcContainerIndex for the _UID value as there is no AcpiProcessorUid
   // and EFI_ACPI_6_3_PPTT_PROCESSOR_ID_INVALID is set for non-Cpus.
   Status = AmlCodeGenNameInteger (
              "_UID",
-             ClusterIndex,
-             ClusterNode,
+             ProcContainerIndex,
+             ProcContainerNode,
              NULL
              );
   if (EFI_ERROR (Status)) {
@@ -667,7 +777,7 @@ CreateAmlCluster (
   Status = AmlCodeGenNameString (
              "_HID",
              ACPI_HID_PROCESSOR_CONTAINER_DEVICE,
-             ClusterNode,
+             ProcContainerNode,
              NULL
              );
   if (EFI_ERROR (Status)) {
@@ -681,7 +791,7 @@ CreateAmlCluster (
     Status = CreateAmlLpiMethod (
                Generator,
                ProcHierarchyNodeInfo,
-               ClusterNode
+               ProcContainerNode
                );
     if (EFI_ERROR (Status)) {
       ASSERT (0);
@@ -689,23 +799,25 @@ CreateAmlCluster (
     }
   }
 
-  *ClusterNodePtr = ClusterNode;
+  *ProcContainerNodePtr = ProcContainerNode;
 
   return Status;
 }
 
 /** Create an AML representation of the Cpu topology.
 
-  A cluster is by extension any non-leave device in the cpu topology.
+  A processor container is by extension any non-leave device in the cpu topology.
 
-  @param [in] Generator          The SSDT Cpu Topology generator.
-  @param [in] CfgMgrProtocol     Pointer to the Configuration Manager
-                                 Protocol Interface.
-  @param [in] NodeToken          Token of the CM_ARM_PROC_HIERARCHY_INFO
-                                 currently handled.
-                                 Cannot be CM_NULL_TOKEN.
-  @param [in] ParentNode         Parent node to attach the created
-                                 node to.
+  @param [in] Generator               The SSDT Cpu Topology generator.
+  @param [in] CfgMgrProtocol          Pointer to the Configuration Manager
+                                      Protocol Interface.
+  @param [in] NodeToken               Token of the CM_ARM_PROC_HIERARCHY_INFO
+                                      currently handled.
+                                      Cannot be CM_NULL_TOKEN.
+  @param [in] ParentNode              Parent node to attach the created
+                                      node to.
+  @param [in,out] ProcContainerIndex  Pointer to the current processor container
+                                      index to be used as UID.
 
   @retval EFI_SUCCESS             Success.
   @retval EFI_INVALID_PARAMETER   Invalid parameter.
@@ -718,14 +830,14 @@ CreateAmlCpuTopologyTree (
   IN        ACPI_CPU_TOPOLOGY_GENERATOR                   *Generator,
   IN  CONST EDKII_CONFIGURATION_MANAGER_PROTOCOL  *CONST  CfgMgrProtocol,
   IN        CM_OBJECT_TOKEN                               NodeToken,
-  IN        AML_NODE_HANDLE                               ParentNode
+  IN        AML_NODE_HANDLE                               ParentNode,
+  IN OUT    UINT32                                        *ProcContainerIndex
   )
 {
   EFI_STATUS              Status;
   UINT32                  Index;
   UINT32                  CpuIndex;
-  UINT32                  ClusterIndex;
-  AML_OBJECT_NODE_HANDLE  ClusterNode;
+  AML_OBJECT_NODE_HANDLE  ProcContainerNode;
 
   ASSERT (Generator != NULL);
   ASSERT (Generator->ProcNodeList != NULL);
@@ -733,9 +845,9 @@ CreateAmlCpuTopologyTree (
   ASSERT (CfgMgrProtocol != NULL);
   ASSERT (NodeToken != CM_NULL_TOKEN);
   ASSERT (ParentNode != NULL);
+  ASSERT (ProcContainerIndex != NULL);
 
-  CpuIndex     = 0;
-  ClusterIndex = 0;
+  CpuIndex = 0;
 
   for (Index = 0; Index < Generator->ProcNodeCount; Index++) {
     // Find the children of the CM_ARM_PROC_HIERARCHY_INFO
@@ -770,7 +882,7 @@ CreateAmlCpuTopologyTree (
 
         CpuIndex++;
       } else {
-        // If this is not a Cpu, then this is a cluster.
+        // If this is not a Cpu, then this is a processor container.
 
         // Acpi processor Id for clusters is not handled.
         if ((Generator->ProcNodeList[Index].Flags & PPTT_PROCESSOR_MASK) !=
@@ -785,13 +897,13 @@ CreateAmlCpuTopologyTree (
           return EFI_INVALID_PARAMETER;
         }
 
-        Status = CreateAmlCluster (
+        Status = CreateAmlProcessorContainer (
                    Generator,
                    CfgMgrProtocol,
                    ParentNode,
                    &Generator->ProcNodeList[Index],
-                   ClusterIndex,
-                   &ClusterNode
+                   *ProcContainerIndex,
+                   &ProcContainerNode
                    );
         if (EFI_ERROR (Status)) {
           ASSERT (0);
@@ -799,8 +911,8 @@ CreateAmlCpuTopologyTree (
         }
 
         // Nodes must have a unique name in the ASL namespace.
-        // Reset the Cpu index whenever we create a new Cluster.
-        ClusterIndex++;
+        // Reset the Cpu index whenever we create a new processor container.
+        (*ProcContainerIndex)++;
         CpuIndex = 0;
 
         // Recursively continue creating an AML tree.
@@ -808,7 +920,8 @@ CreateAmlCpuTopologyTree (
                    Generator,
                    CfgMgrProtocol,
                    Generator->ProcNodeList[Index].Token,
-                   ClusterNode
+                   ProcContainerNode,
+                   ProcContainerIndex
                    );
         if (EFI_ERROR (Status)) {
           ASSERT (0);
@@ -845,6 +958,7 @@ CreateTopologyFromProcHierarchy (
   EFI_STATUS  Status;
   UINT32      Index;
   UINT32      TopLevelProcNodeIndex;
+  UINT32      ProcContainerIndex;
 
   ASSERT (Generator != NULL);
   ASSERT (Generator->ProcNodeCount != 0);
@@ -853,6 +967,7 @@ CreateTopologyFromProcHierarchy (
   ASSERT (ScopeNode != NULL);
 
   TopLevelProcNodeIndex = MAX_UINT32;
+  ProcContainerIndex    = 0;
 
   Status = TokenTableInitialize (Generator, Generator->ProcNodeCount);
   if (EFI_ERROR (Status)) {
@@ -887,7 +1002,8 @@ CreateTopologyFromProcHierarchy (
              Generator,
              CfgMgrProtocol,
              Generator->ProcNodeList[TopLevelProcNodeIndex].Token,
-             ScopeNode
+             ScopeNode,
+             &ProcContainerIndex
              );
   if (EFI_ERROR (Status)) {
     ASSERT (0);
@@ -908,7 +1024,7 @@ exit_handler:
 /** Create the processor hierarchy AML tree from CM_ARM_GICC_INFO
     CM objects.
 
-  A cluster is by extension any non-leave device in the cpu topology.
+  A processor container is by extension any non-leave device in the cpu topology.
 
   @param [in] Generator        The SSDT Cpu Topology generator.
   @param [in] CfgMgrProtocol   Pointer to the Configuration Manager
@@ -928,10 +1044,11 @@ CreateTopologyFromGicC (
   IN        AML_OBJECT_NODE_HANDLE                        ScopeNode
   )
 {
-  EFI_STATUS        Status;
-  CM_ARM_GICC_INFO  *GicCInfo;
-  UINT32            GicCInfoCount;
-  UINT32            Index;
+  EFI_STATUS              Status;
+  CM_ARM_GICC_INFO        *GicCInfo;
+  UINT32                  GicCInfoCount;
+  UINT32                  Index;
+  AML_OBJECT_NODE_HANDLE  CpuNode;
 
   ASSERT (Generator != NULL);
   ASSERT (CfgMgrProtocol != NULL);
@@ -955,11 +1072,21 @@ CreateTopologyFromGicC (
                ScopeNode,
                &GicCInfo[Index],
                Index,
-               NULL
+               &CpuNode
                );
     if (EFI_ERROR (Status)) {
       ASSERT (0);
       break;
+    }
+
+    // If a CPC info is associated with the
+    // GicCinfo, create an _CPC method returning them.
+    if (GicCInfo->CpcToken != CM_NULL_TOKEN) {
+      Status = CreateAmlCpcNode (Generator, CfgMgrProtocol, &GicCInfo[Index], CpuNode);
+      if (EFI_ERROR (Status)) {
+        ASSERT_EFI_ERROR (Status);
+        break;
+      }
     }
   } // for
 

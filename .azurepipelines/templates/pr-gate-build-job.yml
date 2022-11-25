@@ -21,6 +21,10 @@ jobs:
   #Use matrix to speed up the build process
   strategy:
     matrix:
+      ${{ if eq(parameters.tool_chain_tag, 'GCC5') }}:
+        TARGET_GCC_ONLY:
+          Build.Pkgs: 'EmbeddedPkg'
+          Build.Targets: 'DEBUG,RELEASE,NO-TARGET,NOOPT'
       TARGET_ARM_ARMPLATFORM:
         Build.Pkgs: 'ArmPkg,ArmPlatformPkg'
         Build.Targets: 'DEBUG,RELEASE,NO-TARGET,NOOPT'
@@ -37,13 +41,16 @@ jobs:
         Build.Pkgs: 'NetworkPkg,RedfishPkg'
         Build.Targets: 'DEBUG,RELEASE,NO-TARGET,NOOPT'
       TARGET_OTHER:
-        Build.Pkgs: 'PcAtChipsetPkg,PrmPkg,ShellPkg,StandaloneMmPkg'
+        Build.Pkgs: 'PcAtChipsetPkg,PrmPkg,ShellPkg,SourceLevelDebugPkg,StandaloneMmPkg,SignedCapsulePkg'
         Build.Targets: 'DEBUG,RELEASE,NO-TARGET,NOOPT'
       TARGET_FMP_FAT_TEST:
         Build.Pkgs: 'FmpDevicePkg,FatPkg,UnitTestFrameworkPkg,DynamicTablesPkg'
         Build.Targets: 'DEBUG,RELEASE,NO-TARGET,NOOPT'
       TARGET_CRYPTO:
         Build.Pkgs: 'CryptoPkg'
+        Build.Targets: 'DEBUG,RELEASE,NO-TARGET,NOOPT'
+      TARGET_FSP:
+        Build.Pkgs: 'IntelFsp2Pkg,IntelFsp2WrapperPkg'
         Build.Targets: 'DEBUG,RELEASE,NO-TARGET,NOOPT'
       TARGET_SECURITY:
         Build.Pkgs: 'SecurityPkg'

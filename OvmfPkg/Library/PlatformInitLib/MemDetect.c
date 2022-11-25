@@ -42,6 +42,8 @@ Module Name:
 
 #include <Library/PlatformInitLib.h>
 
+#define MEGABYTE_SHIFT  20
+
 VOID
 EFIAPI
 PlatformQemuUc32BaseInitialization (
@@ -55,15 +57,25 @@ PlatformQemuUc32BaseInitialization (
   }
 
   if (PlatformInfoHob->HostBridgeDevId == INTEL_Q35_MCH_DEVICE_ID) {
-    //
-    // On q35, the 32-bit area that we'll mark as UC, through variable MTRRs,
-    // starts at PcdPciExpressBaseAddress. The platform DSC is responsible for
-    // setting PcdPciExpressBaseAddress such that describing the
-    // [PcdPciExpressBaseAddress, 4GB) range require a very small number of
-    // variable MTRRs (preferably 1 or 2).
-    //
+    LowerMemorySize = PlatformGetSystemMemorySizeBelow4gb (PlatformInfoHob);
     ASSERT (PcdGet64 (PcdPciExpressBaseAddress) <= MAX_UINT32);
-    PlatformInfoHob->Uc32Base = (UINT32)PcdGet64 (PcdPciExpressBaseAddress);
+    ASSERT (PcdGet64 (PcdPciExpressBaseAddress) >= LowerMemorySize);
+
+    if (LowerMemorySize <= BASE_2GB) {
+      // Newer qemu with gigabyte aligned memory,
+      // 32-bit pci mmio window is 2G -> 4G then.
+      PlatformInfoHob->Uc32Base = BASE_2GB;
+    } else {
+      //
+      // On q35, the 32-bit area that we'll mark as UC, through variable MTRRs,
+      // starts at PcdPciExpressBaseAddress. The platform DSC is responsible for
+      // setting PcdPciExpressBaseAddress such that describing the
+      // [PcdPciExpressBaseAddress, 4GB) range require a very small number of
+      // variable MTRRs (preferably 1 or 2).
+      //
+      PlatformInfoHob->Uc32Base = (UINT32)PcdGet64 (PcdPciExpressBaseAddress);
+    }
+
     return;
   }
 
@@ -493,39 +505,132 @@ PlatformGetFirstNonAddress (
 }
 
 /*
- * Use CPUID to figure physical address width.  Does *not* work
- * reliable on qemu.  For historical reasons qemu returns phys-bits=40
- * even in case the host machine supports less than that.
+ * Use CPUID to figure physical address width.
  *
- * qemu has a cpu property (host-phys-bits={on,off}) to change that
- * and make sure guest phys-bits are not larger than host phys-bits.,
- * but it is off by default.  Exception: microvm machine type
- * hard-wires that property to on.
+ * Does *not* work reliable on qemu.  For historical reasons qemu
+ * returns phys-bits=40 by default even in case the host machine
+ * supports less than that.
+ *
+ * So we apply the following rules (which can be enabled/disabled
+ * using the QemuQuirk parameter) to figure whenever we can work with
+ * the returned physical address width or not:
+ *
+ *   (1) If it is 41 or higher consider it valid.
+ *   (2) If it is 40 or lower consider it valid in case it matches a
+ *       known-good value for the CPU vendor, which is:
+ *         ->  36 or 39 for Intel
+ *         ->  40 for AMD
+ *   (3) Otherwise consider it invalid.
+ *
+ * Recommendation: Run qemu with host-phys-bits=on.  That will make
+ * sure guest phys-bits is not larger than host phys-bits.  Some
+ * distro builds do that by default.
  */
 VOID
 EFIAPI
 PlatformAddressWidthFromCpuid (
-  IN OUT EFI_HOB_PLATFORM_INFO  *PlatformInfoHob
+  IN OUT EFI_HOB_PLATFORM_INFO  *PlatformInfoHob,
+  IN     BOOLEAN                QemuQuirk
   )
 {
-  UINT32  RegEax;
+  UINT32   RegEax, RegEbx, RegEcx, RegEdx, Max;
+  UINT8    PhysBits;
+  CHAR8    Signature[13] = { 0 };
+  BOOLEAN  Valid         = FALSE;
+  BOOLEAN  Page1GSupport = FALSE;
 
-  AsmCpuid (0x80000000, &RegEax, NULL, NULL, NULL);
-  if (RegEax >= 0x80000008) {
-    AsmCpuid (0x80000008, &RegEax, NULL, NULL, NULL);
-    PlatformInfoHob->PhysMemAddressWidth = (UINT8)RegEax;
-  } else {
-    PlatformInfoHob->PhysMemAddressWidth = 36;
+  AsmCpuid (0x80000000, &RegEax, &RegEbx, &RegEcx, &RegEdx);
+  *(UINT32 *)(Signature + 0) = RegEbx;
+  *(UINT32 *)(Signature + 4) = RegEdx;
+  *(UINT32 *)(Signature + 8) = RegEcx;
+  Max                        = RegEax;
+
+  if (Max >= 0x80000001) {
+    AsmCpuid (0x80000001, NULL, NULL, NULL, &RegEdx);
+    if ((RegEdx & BIT26) != 0) {
+      Page1GSupport = TRUE;
+    }
   }
 
-  PlatformInfoHob->FirstNonAddress = LShiftU64 (1, PlatformInfoHob->PhysMemAddressWidth);
+  if (Max >= 0x80000008) {
+    AsmCpuid (0x80000008, &RegEax, NULL, NULL, NULL);
+    PhysBits = (UINT8)RegEax;
+  } else {
+    PhysBits = 36;
+  }
+
+  if (!QemuQuirk) {
+    Valid = TRUE;
+  } else if (PhysBits >= 41) {
+    Valid = TRUE;
+  } else if (AsciiStrCmp (Signature, "GenuineIntel") == 0) {
+    if ((PhysBits == 36) || (PhysBits == 39)) {
+      Valid = TRUE;
+    }
+  } else if (AsciiStrCmp (Signature, "AuthenticAMD") == 0) {
+    if (PhysBits == 40) {
+      Valid = TRUE;
+    }
+  }
 
   DEBUG ((
     DEBUG_INFO,
-    "%a: cpuid: phys-bits is %d\n",
+    "%a: Signature: '%a', PhysBits: %d, QemuQuirk: %a, Valid: %a\n",
     __FUNCTION__,
-    PlatformInfoHob->PhysMemAddressWidth
+    Signature,
+    PhysBits,
+    QemuQuirk ? "On" : "Off",
+    Valid ? "Yes" : "No"
     ));
+
+  if (Valid) {
+    if (PhysBits > 47) {
+      /*
+       * Avoid 5-level paging altogether for now, which limits
+       * PhysBits to 48.  Also avoid using address bit 48, due to sign
+       * extension we can't identity-map these addresses (and lots of
+       * places in edk2 assume we have everything identity-mapped).
+       * So the actual limit is 47.
+       */
+      DEBUG ((DEBUG_INFO, "%a: limit PhysBits to 47 (avoid 5-level paging)\n", __func__));
+      PhysBits = 47;
+    }
+
+    if (!Page1GSupport && (PhysBits > 40)) {
+      DEBUG ((DEBUG_INFO, "%a: limit PhysBits to 40 (no 1G pages available)\n", __func__));
+      PhysBits = 40;
+    }
+
+    PlatformInfoHob->PhysMemAddressWidth = PhysBits;
+    PlatformInfoHob->FirstNonAddress     = LShiftU64 (1, PlatformInfoHob->PhysMemAddressWidth);
+  }
+}
+
+VOID
+EFIAPI
+PlatformDynamicMmioWindow (
+  IN OUT EFI_HOB_PLATFORM_INFO  *PlatformInfoHob
+  )
+{
+  UINT64  AddrSpace, MmioSpace;
+
+  AddrSpace = LShiftU64 (1, PlatformInfoHob->PhysMemAddressWidth);
+  MmioSpace = LShiftU64 (1, PlatformInfoHob->PhysMemAddressWidth - 3);
+
+  if ((PlatformInfoHob->PcdPciMmio64Size < MmioSpace) &&
+      (PlatformInfoHob->PcdPciMmio64Base + MmioSpace < AddrSpace))
+  {
+    DEBUG ((DEBUG_INFO, "%a: using dynamic mmio window\n", __func__));
+    DEBUG ((DEBUG_INFO, "%a:   Addr Space 0x%Lx (%Ld GB)\n", __func__, AddrSpace, RShiftU64 (AddrSpace, 30)));
+    DEBUG ((DEBUG_INFO, "%a:   MMIO Space 0x%Lx (%Ld GB)\n", __func__, MmioSpace, RShiftU64 (MmioSpace, 30)));
+    PlatformInfoHob->PcdPciMmio64Size = MmioSpace;
+    PlatformInfoHob->PcdPciMmio64Base = AddrSpace - MmioSpace;
+  } else {
+    DEBUG ((DEBUG_INFO, "%a: using classic mmio window\n", __func__));
+  }
+
+  DEBUG ((DEBUG_INFO, "%a:   Pci64 Base 0x%Lx\n", __func__, PlatformInfoHob->PcdPciMmio64Base));
+  DEBUG ((DEBUG_INFO, "%a:   Pci64 Size 0x%Lx\n", __func__, PlatformInfoHob->PcdPciMmio64Size));
 }
 
 /**
@@ -662,7 +767,7 @@ PlatformAddressWidthInitialization (
   EFI_STATUS  Status;
 
   if (PlatformInfoHob->HostBridgeDevId == 0xffff /* microvm */) {
-    PlatformAddressWidthFromCpuid (PlatformInfoHob);
+    PlatformAddressWidthFromCpuid (PlatformInfoHob, FALSE);
     return;
   }
 
@@ -685,6 +790,20 @@ PlatformAddressWidthInitialization (
     FirstNonAddress = PlatformGetFirstNonAddress (PlatformInfoHob);
   }
 
+  PlatformAddressWidthFromCpuid (PlatformInfoHob, TRUE);
+  if (PlatformInfoHob->PhysMemAddressWidth != 0) {
+    // physical address width is known
+    PlatformInfoHob->FirstNonAddress = FirstNonAddress;
+    PlatformDynamicMmioWindow (PlatformInfoHob);
+    return;
+  }
+
+  //
+  // physical address width is NOT known
+  //   -> do some guess work, mostly based on installed memory
+  //   -> try be conservstibe to stay below the guaranteed minimum of
+  //      36 phys bits (aka 64 GB).
+  //
   PhysMemAddressWidth = (UINT8)HighBitSet64 (FirstNonAddress);
 
   //

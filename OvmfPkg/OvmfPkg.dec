@@ -101,6 +101,10 @@
   #                  transports.
   VirtioMmioDeviceLib|Include/Library/VirtioMmioDeviceLib.h
 
+  ##  @libraryclass  Provides a Nor flash interface.
+  #
+  VirtNorFlashPlatformLib|Include/Library/VirtNorFlashPlatformLib.h
+
   ##  @libraryclass  Invoke Xen hypercalls
   #
   XenHypercallLib|Include/Library/XenHypercallLib.h
@@ -146,6 +150,7 @@
   gConfidentialComputingSecretGuid      = {0xadf956ad, 0xe98c, 0x484c, {0xae, 0x11, 0xb5, 0x1c, 0x7d, 0x33, 0x64, 0x47}}
   gConfidentialComputingSevSnpBlobGuid  = {0x067b1f5f, 0xcf26, 0x44c5, {0x85, 0x54, 0x93, 0xd7, 0x77, 0x91, 0x2d, 0x42}}
   gUefiOvmfPkgPlatformInfoGuid          = {0xdec9b486, 0x1f16, 0x47c7, {0x8f, 0x68, 0xdf, 0x1a, 0x41, 0x88, 0x8b, 0xa5}}
+  gVMMBootOrderGuid                     = {0x668f4529, 0x63d0, 0x4bb5, {0xb6, 0x5d, 0x6f, 0xbb, 0x9d, 0x36, 0xa4, 0x4a}}
 
 [Ppis]
   # PPI whose presence in the PPI database signals that the TPM base address
@@ -398,6 +403,10 @@
 
   ## The Tdx accept page size. 0x1000(4k),0x200000(2M)
   gUefiOvmfPkgTokenSpaceGuid.PcdTdxAcceptPageSize|0x200000|UINT32|0x65
+
+  ## The QEMU fw_cfg variable that UefiDriverEntryPointFwCfgOverrideLib will
+  #  check to decide whether to abort dispatch of the driver it is linked into.
+  gUefiOvmfPkgTokenSpaceGuid.PcdEntryPointOverrideFwCfgVarName|""|VOID*|0x68
 
 [PcdsDynamic, PcdsDynamicEx]
   gUefiOvmfPkgTokenSpaceGuid.PcdEmuVariableEvent|0|UINT64|2
