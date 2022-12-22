@@ -19,15 +19,16 @@ jobs:
         verbose: "2"       # description: "Verbosity level: 0 (default), 1 or 2. Ignore for sccache."
         variant: "ccache"  # description: 'Ccache variant to use. Either "ccache" (the default) or "sccache" (see https://github.com/mozilla/sccache)'
     - run: sudo ln --symbolic --relative --verbose /usr/lib/ccache/* /usr/local/sbin/
-    - run: ccache -s
+    - run: ccache -s -v
     - run: "gcc ||:"
-    - run: ccache -s
+    - run: ccache -s -v
     - id: debianise
       uses: berlin4apk/action-debianise@HEAD
       with:
         create_changelog: true
         install_build_depends: false
         debug: true
+    - run: ccache -s -v
     - id: action-gh-release
       uses: softprops/action-gh-release@v0.1.14
       env:
