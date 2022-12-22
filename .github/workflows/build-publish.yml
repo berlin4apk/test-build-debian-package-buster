@@ -1,5 +1,36 @@
 name: Build & publish
-on: {push: {branches: [master]}, pull_request: {branches: [master]}, workflow_dispatch}
+###on: {push: {branches: [master]}, pull_request: {branches: [master]}, workflow_dispatch}
+
+# https://stackoverflow.com/questions/72037313/use-selected-branch-on-workflow-dispatch-in-github-actions
+on:
+  push: {branches: [master]},
+  pull_request: {branches: [master]}, 
+#  release:
+#      types: [published]
+  workflow_dispatch:
+    inputs:
+#      AWS_REGION:
+#        description: 'AWS Region to deploy in'
+#        required: true
+#        default: 'ap-south-1'
+#        type: choice
+#        options:
+#        - ap-south-1
+#        - ap-south-2
+#        - ....
+#      ECR_REPO:
+#        description: 'ECR repository'
+#        required: true
+#        type: string
+      BRANCH:
+        description: 'Branch to use'
+        required: true
+        default: 'debian'
+        type: choice
+        options:
+        - debian
+        - master
+        - develop
 
 # see https://github.com/twojstaryzdomu/log2ram/blob/master/.github/workflows/build-publish.yml
 # and https://github.com/twojstaryzdomu/debianise
@@ -11,6 +42,7 @@ jobs:
     - uses: actions/checkout@v3.2.0
       with:
         fetch-depth: '0'
+        ref: '${{ inputs.BRANCH }}'
     - name: ccache, hendrikmuhs/ccache-action
       uses: hendrikmuhs/ccache-action@v1.2
       with:
