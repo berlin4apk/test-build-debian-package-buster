@@ -27,7 +27,7 @@ on:
       BRANCH:
         description: 'Branch to use'
         required: true
-        default: debian
+        default: hell2
         type: choice
         options:
         - hell
