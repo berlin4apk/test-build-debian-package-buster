@@ -18,6 +18,10 @@ jobs:
         max-size: "500M" # description: "Max size of the cache"
         verbose: "2"       # description: "Verbosity level: 0 (default), 1 or 2. Ignore for sccache."
         variant: "ccache"  # description: 'Ccache variant to use. Either "ccache" (the default) or "sccache" (see https://github.com/mozilla/sccache)'
+    - run: ln --symbolic --relative --verbose /usr/lib/ccache/* /usr/local/sbin/
+    - run: ccache -s
+    - run: gcc
+    - run: ccache -s
     - id: debianise
       uses: berlin4apk/action-debianise@HEAD
       with:
