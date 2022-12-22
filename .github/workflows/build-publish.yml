@@ -1,12 +1,12 @@
 ---
-name: Build & publish
+name: "Build & publish"
 
 ###on: {push: {branches: [master]}, pull_request: {branches: [master]}, workflow_dispatch}
 
 # https://stackoverflow.com/questions/72037313/use-selected-branch-on-workflow-dispatch-in-github-actions
 on:
-  push: {branches: [master]},
-  pull_request: {branches: [master]}, 
+  push: {branches: [master]}
+  pull_request: {branches: [master]}
 #  release:
 #      types: [published]
   workflow_dispatch:
