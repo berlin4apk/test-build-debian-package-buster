@@ -30,6 +30,8 @@ on:
         default: debian
         type: choice
         options:
+        - hell
+        - hello-world
         - debian
         - master
         - develop
