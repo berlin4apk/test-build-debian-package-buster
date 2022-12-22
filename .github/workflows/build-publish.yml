@@ -20,7 +20,7 @@ jobs:
         variant: "ccache"  # description: 'Ccache variant to use. Either "ccache" (the default) or "sccache" (see https://github.com/mozilla/sccache)'
     - run: sudo ln --symbolic --relative --verbose /usr/lib/ccache/* /usr/local/sbin/
     - run: ccache -s
-    - run: gcc
+    - run: "gcc ||:"
     - run: ccache -s
     - id: debianise
       uses: berlin4apk/action-debianise@HEAD
