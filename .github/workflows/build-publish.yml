@@ -27,7 +27,7 @@ on:
       BRANCH:
         description: 'Branch to use'
         required: true
-        default: 'debian'
+        default: debian
         type: choice
         options:
         - debian
@@ -62,8 +62,8 @@ jobs:
         #create_changelog: true
         create_changelog: false
         install_build_depends: false
-        #debug: false
-        debug: true
+        debug: false
+        #debug: true
       continue-on-error: true
     - run: ccache -s -v
     - id: action-gh-release
