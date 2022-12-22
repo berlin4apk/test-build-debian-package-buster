@@ -1,0 +1,4 @@
+usr/lib/*/qemu/ui-gtk.so
+usr/share/locale/*/LC_MESSAGES/qemu.mo
+# pulseaudio audio driver pulls X
+usr/lib/*/qemu/audio-pa.so
