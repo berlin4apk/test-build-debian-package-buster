@@ -1,0 +1,30 @@
+name: Build & publish
+on: {push: {branches: [master]}, pull_request: {branches: [master]}, workflow_dispatch}
+
+# see https://github.com/twojstaryzdomu/log2ram/blob/master/.github/workflows/build-publish.yml
+# and https://github.com/twojstaryzdomu/debianise
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: '0'
+    - id: debianise
+      uses: berlin4apk/action-debianise@HEAD
+      with:
+        create_changelog: true
+        install_build_depends: false
+        debug: true
+    - id: action-gh-release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        files: ${{ steps.debianise.outputs.files }}
+        name: ${{ steps.debianise.outputs.release_name }}
+        tag_name: ${{ steps.debianise.outputs.tag_name }}
+        fail_on_unmatched_files: true
+        draft: true
+        prerelease: true
