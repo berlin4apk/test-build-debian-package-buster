@@ -1,0 +1,3 @@
+from https://wiki.opf-labs.org/display/SP/The+Hello+World+Debian+Package
+https://wiki.opf-labs.org/display/SP/The+Hello+World+Debian+Package#TheHelloWorldDebianPackage-buildProcess
+https://wiki.opf-labs.org/download/attachments/12059958/hello.tar.gz?version=1&modificationDate=1331071013000
