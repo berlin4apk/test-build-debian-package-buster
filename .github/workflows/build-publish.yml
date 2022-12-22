@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v2.0.0
       with:
         fetch-depth: '0'
     - id: debianise
@@ -18,7 +18,7 @@ jobs:
         install_build_depends: false
         debug: true
     - id: action-gh-release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v1.0.0
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
