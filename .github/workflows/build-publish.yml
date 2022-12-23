@@ -70,7 +70,7 @@ jobs:
       continue-on-error: true
     - run: ccache -s -v
     - id: action-gh-release
-      uses: softprops/action-gh-release@v0.1.14
+      uses: softprops/action-gh-release@v0.1.15
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
